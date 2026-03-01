@@ -587,40 +587,66 @@ class RalphLoopManager {
 
     /**
      * Send prompt to Antigravity agent — FULLY CDP-BASED
-     * Strategy:
-     *   1. CDP Ctrl+L → new chat session (appears in task history)
-     *   2. CDP Runtime.evaluate → find & focus chat textarea in DOM
-     *   3. CDP Input.insertText → insert prompt text directly (NO clipboard)
-     *   4. CDP Input.dispatchKeyEvent → Enter to submit
-     *
-     * This avoids clipboard/Ctrl+V entirely, preventing text from going
-     * to the active editor instead of the chat input.
+     * 1. Get CDP target matching CURRENT workspace name
+     * 2. CDP Ctrl+L → new chat session
+     * 3. Runtime.evaluate → find chat textarea + focus + insert text (all in one call)
+     * 4. CDP Enter → submit
      */
     async _sendToAgent(prompt) {
         const cdpPort = this._getCdpPort();
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        // ─── Step 1: Get CDP target ───
+        // ─── Step 1: Get CDP target matching CURRENT workspace ───
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
         } catch (e) {
-            throw new Error(`CDP 타겟 조회 실패 (port ${cdpPort}): ${e.message}`);
+            throw new Error('CDP 타겟 조회 실패 (port ' + cdpPort + '): ' + e.message);
         }
 
-        const mainTarget = targets.find(t =>
-            t.type === 'page' &&
-            t.url && t.url.includes('workbench.html') &&
-            !t.url.includes('jetski-agent')
-        );
-        const targetWsUrl = (mainTarget || targets.find(t => t.type === 'page' && t.webSocketDebuggerUrl))?.webSocketDebuggerUrl;
+        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
+            ? vscode.workspace.workspaceFolders[0].name : '';
 
+        this._addLog('[Ralph] 워크스페이스: "' + workspaceName + '", CDP 타겟 수: ' + targets.length);
+
+        const pageTargets = targets.filter(function (t) { return t.type === 'page'; });
+        for (const t of pageTargets) {
+            this._addLog('[Ralph]   타겟: ' + (t.title || 'no-title').substring(0, 70));
+        }
+
+        // Prefer target whose title contains current workspace name
+        let mainTarget = null;
+        if (workspaceName) {
+            mainTarget = targets.find(function (t) {
+                return t.type === 'page' &&
+                    t.url && t.url.includes('workbench.html') &&
+                    !t.url.includes('jetski-agent') &&
+                    t.title && t.title.includes(workspaceName);
+            });
+        }
+
+        if (!mainTarget) {
+            mainTarget = targets.find(function (t) {
+                return t.type === 'page' &&
+                    t.url && t.url.includes('workbench.html') &&
+                    !t.url.includes('jetski-agent');
+            });
+            if (mainTarget) {
+                this._addLog('[Ralph] ⚠ 워크스페이스 매칭 실패 — 첫 번째 workbench 타겟 사용', 'warn');
+            }
+        }
+
+        if (!mainTarget) {
+            mainTarget = targets.find(function (t) { return t.type === 'page' && t.webSocketDebuggerUrl; });
+        }
+
+        const targetWsUrl = mainTarget && mainTarget.webSocketDebuggerUrl;
         if (!targetWsUrl) {
-            throw new Error(`메인 윈도우 CDP 타겟을 찾을 수 없습니다. (${targets.length}개 타겟 중 page 없음)`);
+            throw new Error('CDP 타겟 없음 (' + targets.length + '개 중 page 없음)');
         }
-        this._addLog(`[Ralph] 메인 윈도우 타겟: ${((mainTarget || {}).title || '').substring(0, 60)}`);
 
-        // Helper: send key event via CDP
+        this._addLog('[Ralph] ✅ 선택된 타겟: ' + (mainTarget.title || '').substring(0, 60));
+
         const sendKey = async (type, params) => {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
@@ -637,72 +663,81 @@ class RalphLoopManager {
                 windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
                 modifiers: 2,
             });
-            this._addLog('[Ralph] 🆕 새 채팅 세션 생성 (CDP Ctrl+L)');
+            this._addLog('[Ralph] 🆕 새 채팅 (Ctrl+L)');
         } catch (e) {
-            this._addLog(`[Ralph] ⚠ CDP Ctrl+L 실패: ${e.message}`, 'warn');
+            this._addLog('[Ralph] ⚠ Ctrl+L 실패: ' + e.message, 'warn');
         }
 
-        // Wait for new chat to fully initialize
         await delay(2000);
 
-        // ─── Step 3: Find and focus chat textarea via CDP Runtime.evaluate ───
+        // ─── Step 3: Store prompt → find textarea → focus → insert text ───
+        // All done via Runtime.evaluate to prevent focus from being stolen
         try {
-            const focusResult = await this._cdpEvaluateOnTarget(targetWsUrl, `
-                (function() {
-                    var selectors = [
-                        '.interactive-input-part .monaco-editor textarea',
-                        '.interactive-input-editor .monaco-editor textarea',
-                        '.chat-input-part .monaco-editor textarea',
-                        '.interactive-input-part textarea',
-                        '.chat-editor-input textarea',
-                    ];
-                    for (var i = 0; i < selectors.length; i++) {
-                        var el = document.querySelector(selectors[i]);
-                        if (el) {
-                            el.focus();
-                            el.click();
-                            return 'focused: ' + selectors[i];
-                        }
-                    }
-                    var panels = document.querySelectorAll('.part.panel .monaco-editor textarea');
-                    if (panels.length > 0) {
-                        var last = panels[panels.length - 1];
-                        last.focus();
-                        last.click();
-                        return 'focused: panel textarea (fallback, count=' + panels.length + ')';
-                    }
-                    var all = document.querySelectorAll('textarea');
-                    var info = [];
-                    for (var j = 0; j < Math.min(all.length, 10); j++) {
-                        var parent = all[j].closest('[class]');
-                        info.push((parent ? parent.className : 'no-class').substring(0, 80));
-                    }
-                    return 'NOT_FOUND (textareas=' + all.length + ') classes=' + info.join(' | ');
-                })()
-            `, 5000);
-            this._addLog('[Ralph] 채팅 입력 포커스: ' + (focusResult && focusResult.result ? (focusResult.result.value || JSON.stringify(focusResult.result)) : JSON.stringify(focusResult)));
+            await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: 'window.__ralphPrompt = ' + JSON.stringify(prompt) + ';',
+                returnByValue: true
+            }, 5000);
         } catch (e) {
-            this._addLog('[Ralph] ⚠ 채팅 textarea 포커스 실패: ' + e.message, 'warn');
+            throw new Error('프롬프트 전달 실패: ' + e.message);
         }
 
-        await delay(300);
-
-        // ─── Step 4: Insert prompt text via CDP Input.insertText ───
-        // This inserts text at the cursor position in the currently focused input.
-        // Unlike Ctrl+V, this does NOT use the clipboard and does NOT depend on
-        // which element "Ctrl+V" would target. It acts like IME input.
         try {
-            await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
-                text: prompt
+            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: [
+                    '(function() {',
+                    '  var text = window.__ralphPrompt;',
+                    '  delete window.__ralphPrompt;',
+                    '  if (!text) return "ERROR:no_prompt";',
+                    '  var selectors = [',
+                    '    ".interactive-input-part .monaco-editor textarea",',
+                    '    ".interactive-input-editor .monaco-editor textarea",',
+                    '    ".chat-input-part .monaco-editor textarea",',
+                    '    ".interactive-input-part textarea",',
+                    '    ".chat-editor-input textarea",',
+                    '    ".part.panel .interactive-session .monaco-editor textarea",',
+                    '  ];',
+                    '  var ta = null, sel = "";',
+                    '  for (var i = 0; i < selectors.length; i++) {',
+                    '    ta = document.querySelector(selectors[i]);',
+                    '    if (ta) { sel = selectors[i]; break; }',
+                    '  }',
+                    '  if (!ta) {',
+                    '    var pts = document.querySelectorAll(".part.panel textarea");',
+                    '    if (pts.length > 0) { ta = pts[pts.length - 1]; sel = "panel-fb(" + pts.length + ")"; }',
+                    '  }',
+                    '  if (!ta) {',
+                    '    var all = document.querySelectorAll("textarea");',
+                    '    var d = [];',
+                    '    for (var j = 0; j < Math.min(all.length, 10); j++) {',
+                    '      var p = all[j].parentElement;',
+                    '      d.push((p ? p.className : "null").substring(0, 60));',
+                    '    }',
+                    '    return "NOT_FOUND(" + all.length + "):" + d.join("|");',
+                    '  }',
+                    '  ta.focus();',
+                    '  var ok = document.execCommand("insertText", false, text);',
+                    '  if (ok) return "OK:execCmd:" + sel;',
+                    '  ta.value = text;',
+                    '  ta.dispatchEvent(new Event("input", { bubbles: true }));',
+                    '  return "OK:setValue:" + sel;',
+                    '})()',
+                ].join('\n'),
+                returnByValue: true
             }, 15000);
-            this._addLog('[Ralph] ✅ CDP Input.insertText 완료');
+
+            const val = (result && result.result) ? result.result.value : JSON.stringify(result);
+            this._addLog('[Ralph] 텍스트 삽입: ' + val);
+
+            if (typeof val === 'string' && (val.startsWith('NOT_FOUND') || val.startsWith('ERROR'))) {
+                throw new Error(val);
+            }
         } catch (e) {
-            throw new Error('CDP Input.insertText 실패: ' + e.message);
+            throw new Error('텍스트 삽입 실패: ' + e.message);
         }
 
         await delay(500);
 
-        // ─── Step 5: Submit via Enter ───
+        // ─── Step 4: Submit via Enter ───
         try {
             await sendKey('keyDown', {
                 key: 'Enter', code: 'Enter',
@@ -714,11 +749,12 @@ class RalphLoopManager {
                 windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                 modifiers: 0,
             });
-            this._addLog('[Ralph] ✅ CDP Enter 전송 완료');
+            this._addLog('[Ralph] ✅ Enter 전송 완료');
         } catch (e) {
-            throw new Error('CDP Enter 전송 실패: ' + e.message);
+            throw new Error('Enter 전송 실패: ' + e.message);
         }
     }
+
 
     /**
      * Wait for the agent to finish working
