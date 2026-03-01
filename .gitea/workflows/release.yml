@@ -26,13 +26,17 @@ jobs:
       - name: Package VSIX
         run: vsce package --no-dependencies --baseContentUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master" --baseImagesUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master"
 
-      - name: Get version info
+      - name: Find VSIX file
         id: pkg
         run: |
+          VSIX_FILE=$(ls -1 *.vsix | head -1)
           VERSION=$(node -p "require('./package.json').version")
+          echo "vsix_file=${VSIX_FILE}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Found VSIX: ${VSIX_FILE}"
+          ls -la *.vsix
 
-      - name: Create Release via Gitea API
+      - name: Create Release
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
@@ -40,10 +44,8 @@ jobs:
         run: |
           GITEA_URL="http://office.trollgames.co.kr:3000"
           REPO="trollgames/AutoAntigravity"
-          VSIX_FILE="auto-antigravity-${VERSION}.vsix"
 
-          # Create Release
-          RELEASE_RESPONSE=$(curl -s -X POST \
+          curl -s -X POST \
             "${GITEA_URL}/api/v1/repos/${REPO}/releases" \
             -H "Authorization: token ${RELEASE_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -53,17 +55,26 @@ jobs:
               \"body\": \"## AutoAntigravity ${VERSION}\n\n### 설치 방법\n1. 아래 .vsix 파일을 다운로드합니다.\n2. VS Code에서 Extensions: Install from VSIX... 명령을 실행합니다.\n3. 다운로드한 .vsix 파일을 선택하여 설치합니다.\",
               \"draft\": false,
               \"prerelease\": false
-            }")
+            }" -o release_response.json
 
-          # Extract release ID
-          RELEASE_ID=$(echo "$RELEASE_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-          echo "Created release ID: ${RELEASE_ID}"
+          cat release_response.json
 
-          # Upload VSIX as attachment
-          curl -s -X POST \
+      - name: Upload VSIX to Release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VSIX_FILE: ${{ steps.pkg.outputs.vsix_file }}
+        run: |
+          GITEA_URL="http://office.trollgames.co.kr:3000"
+          REPO="trollgames/AutoAntigravity"
+
+          RELEASE_ID=$(python3 -c "import json; print(json.load(open('release_response.json'))['id'])")
+          echo "Release ID: ${RELEASE_ID}"
+          echo "Uploading: ${VSIX_FILE}"
+
+          curl -v -X POST \
             "${GITEA_URL}/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${VSIX_FILE}" \
             -H "Authorization: token ${RELEASE_TOKEN}" \
-            -H "Content-Type: multipart/form-data" \
-            -F "attachment=@${VSIX_FILE}" 
+            -F "attachment=@./${VSIX_FILE};type=application/octet-stream"
 
-          echo "✅ Release ${TAG_NAME} created with ${VSIX_FILE} attached!"
+          echo "✅ Done!"
+
