@@ -581,7 +581,7 @@ class RalphLoopManager {
                     '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
                     '    }',
                     '    if (combined.includes("thinking") || combined.includes("thought")) {',
-                    '      if (combined.match(/think(ing|ed)\\s+for\\s+\\d/) || combined.match(/thought\\s+for\\s+\\d/)) continue;',
+                    '      if (combined.includes(" for ")) continue;',
                     '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
                     '    }',
                     '  }',
