@@ -587,22 +587,43 @@ class RalphLoopManager {
 
     /**
      * Send prompt to Antigravity agent
-     * Strategy: New Chat → Focus chat → Clipboard → CDP Input events (Ctrl+A, Ctrl+V, Enter)
+     * Strategy: New Chat (via command or Ctrl+L) → Focus chat → Clipboard → CDP Ctrl+V → Enter
      * Each iteration starts a NEW chat session so it appears in task history.
-     * This approach doesn't depend on DOM structure and works with any chat UI.
+     * IMPORTANT: Does NOT use Ctrl+A to avoid selecting/overwriting active editor content.
      */
     async _sendToAgent(prompt) {
         const cdpPort = this._getCdpPort();
 
-        // ─── Step 1: Start a NEW chat session ───
-        // This ensures each task gets its own conversation in the history
+        // ─── Step 1: Find CDP target first (needed for CDP keyboard fallback) ───
+        let targets;
+        try {
+            targets = await this._getTargets(cdpPort);
+        } catch (e) {
+            throw new Error(`CDP 타겟 조회 실패 (port ${cdpPort}): ${e.message}`);
+        }
+
+        const mainTarget = targets.find(t =>
+            t.type === 'page' &&
+            t.url && t.url.includes('workbench.html') &&
+            !t.url.includes('jetski-agent')
+        );
+        const targetWsUrl = (mainTarget || targets.find(t => t.type === 'page' && t.webSocketDebuggerUrl))?.webSocketDebuggerUrl;
+
+        if (!targetWsUrl) {
+            throw new Error(`메인 윈도우 CDP 타겟을 찾을 수 없습니다. (${targets.length}개 타겟 중 page 없음)`);
+        }
+        this._addLog(`[Ralph] 메인 윈도우 타겟: ${((mainTarget || {}).title || '').substring(0, 60)}`);
+
+        // ─── Step 2: Start a NEW chat session ───
+        // This ensures each task gets its own conversation in task history.
+        // Method A: VS Code commands
+        let newChatCreated = false;
         const newChatCommands = [
-            'workbench.action.chat.new',           // Standard VS Code chat new
-            'workbench.action.chat.newChat',        // Alternative name
-            'workbench.action.chat.open',           // Open new chat panel
+            'workbench.action.chat.new',
+            'workbench.action.chat.newChat',
+            'workbench.action.chat.clear',
         ];
 
-        let newChatCreated = false;
         for (const cmd of newChatCommands) {
             try {
                 await vscode.commands.executeCommand(cmd);
@@ -614,6 +635,29 @@ class RalphLoopManager {
             }
         }
 
+        // Method B: CDP Ctrl+L shortcut (standard VS Code new chat shortcut)
+        if (!newChatCreated) {
+            try {
+                const sendKeyRaw = async (type, params) => {
+                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
+                };
+                await sendKeyRaw('keyDown', {
+                    key: 'l', code: 'KeyL',
+                    windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
+                    modifiers: 2, // Ctrl
+                });
+                await sendKeyRaw('keyUp', {
+                    key: 'l', code: 'KeyL',
+                    windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
+                    modifiers: 2,
+                });
+                this._addLog('[Ralph] 🆕 새 채팅 세션 생성 (CDP Ctrl+L)');
+                newChatCreated = true;
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ CDP Ctrl+L 실패: ${e.message}`, 'warn');
+            }
+        }
+
         if (!newChatCreated) {
             this._addLog('[Ralph] ⚠ 새 채팅 세션 생성 실패 — 기존 세션 사용', 'warn');
         }
@@ -621,7 +665,7 @@ class RalphLoopManager {
         // Wait for the new chat session to fully initialize
         await new Promise(r => setTimeout(r, 1500));
 
-        // ─── Step 2: Focus the chat panel ───
+        // ─── Step 3: Focus the chat panel ───
         const focusCommands = [
             'workbench.panel.chat.view.copilot.focus',
             'workbench.action.chat.openInEditor',
@@ -646,43 +690,20 @@ class RalphLoopManager {
         // Wait for chat panel to be fully focused
         await new Promise(r => setTimeout(r, 800));
 
-        // ─── Step 3: Write prompt to clipboard ───
+        // ─── Step 4: Write prompt to clipboard ───
         await vscode.env.clipboard.writeText(prompt);
         this._addLog('[Ralph] 📋 클립보드에 프롬프트 복사 완료');
 
-        // ─── Step 4: Find the main window CDP target ───
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            throw new Error(`CDP 타겟 조회 실패 (port ${cdpPort}): ${e.message}`);
-        }
-
-        // Find the main workbench page target (the one with the active window title)
-        // It's the page type with workbench.html URL, and NOT jetski-agent
-        const mainTarget = targets.find(t =>
-            t.type === 'page' &&
-            t.url && t.url.includes('workbench.html') &&
-            !t.url.includes('jetski-agent')
-        );
-
-        if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
-            // Fall back: try any page target
-            const anyPage = targets.find(t => t.type === 'page' && t.webSocketDebuggerUrl);
-            if (!anyPage) {
-                throw new Error(`메인 윈도우 CDP 타겟을 찾을 수 없습니다. (${targets.length}개 타겟 중 page 없음)`);
-            }
-            this._addLog(`[Ralph] ⚠ 메인 타겟 미확인, 대체 page 사용: ${(anyPage.title || '').substring(0, 50)}`, 'warn');
-            return this._cdpInputSequence(anyPage.webSocketDebuggerUrl);
-        }
-
-        this._addLog(`[Ralph] 메인 윈도우 타겟: ${(mainTarget.title || '').substring(0, 60)}`);
-        return this._cdpInputSequence(mainTarget.webSocketDebuggerUrl);
+        // ─── Step 5: Paste and submit via CDP ───
+        return this._cdpInputSequence(targetWsUrl);
     }
 
     /**
      * Send keyboard input sequence via CDP to paste from clipboard and submit
-     * Sequence: Ctrl+A (select all) → Ctrl+V (paste) → wait → Enter (submit)
+     * Sequence: Ctrl+V (paste) → wait → Enter (submit)
+     * NOTE: Ctrl+A is intentionally NOT used — it was selecting text in the active
+     * editor (e.g. package.json) instead of the chat input, causing file overwrites.
+     * Since we create a new chat session each time, the input is already empty.
      */
     async _cdpInputSequence(targetWsUrl) {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
@@ -696,24 +717,7 @@ class RalphLoopManager {
         };
 
         try {
-            // Ctrl+A — select all existing text in chat input
-            await sendKey('keyDown', {
-                key: 'a',
-                code: 'KeyA',
-                windowsVirtualKeyCode: 65,
-                nativeVirtualKeyCode: 65,
-                modifiers: 2, // Ctrl
-            });
-            await sendKey('keyUp', {
-                key: 'a',
-                code: 'KeyA',
-                windowsVirtualKeyCode: 65,
-                nativeVirtualKeyCode: 65,
-                modifiers: 2,
-            });
-            await delay(100);
-
-            // Ctrl+V — paste from clipboard
+            // Ctrl+V — paste from clipboard (NO Ctrl+A to avoid editor text selection)
             await sendKey('keyDown', {
                 key: 'v',
                 code: 'KeyV',
