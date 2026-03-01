@@ -651,28 +651,50 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // --- Step 2: Create new conversation ---
-        // Use discovered Antigravity-specific commands
-        const newChatCmds = [
-            'antigravity.startNewConversation',
-            'antigravity.prioritized.chat.openNewConversation',
-            'welcome.newWorkspaceChat',
-        ];
-        let newChatOk = false;
-        for (const cmd of newChatCmds) {
-            try {
-                await vscode.commands.executeCommand(cmd);
-                this._addLog('[Ralph] 🆕 새 대화 시작: ' + cmd);
-                newChatOk = true;
-                break;
-            } catch (e) {
-                // try next
-            }
-        }
-        if (!newChatOk) {
-            this._addLog('[Ralph] ⚠ 새 대화 생성 실패', 'warn');
-        }
-
+        // --- Step 2: Create new conversation ---
+
+        // Use discovered Antigravity-specific commands
+
+        const newChatCmds = [
+
+            'antigravity.startNewConversation',
+
+            'antigravity.prioritized.chat.openNewConversation',
+
+            'welcome.newWorkspaceChat',
+
+        ];
+
+        let newChatOk = false;
+
+        for (const cmd of newChatCmds) {
+
+            try {
+
+                await vscode.commands.executeCommand(cmd);
+
+                this._addLog('[Ralph] 🆕 새 대화 시작: ' + cmd);
+
+                newChatOk = true;
+
+                break;
+
+            } catch (e) {
+
+                // try next
+
+            }
+
+        }
+
+        if (!newChatOk) {
+
+            this._addLog('[Ralph] ⚠ 새 대화 생성 실패', 'warn');
+
+        }
+
+
+
         await delay(2000);
 
         // ─── Step 3: Store prompt → find textarea → focus → insert text ───
@@ -693,82 +715,53 @@ class RalphLoopManager {
                     '  var text = window.__ralphPrompt;',
                     '  delete window.__ralphPrompt;',
                     '  if (!text) return "ERROR:no_prompt";',
-                    '',
-                    '  // Phase 1: Try textarea selectors (standard VS Code chat)',
-                    '  var taSelectors = [',
-                    '    ".interactive-input-part .monaco-editor textarea",',
-                    '    ".interactive-input-editor .monaco-editor textarea",',
-                    '    ".chat-input-part .monaco-editor textarea",',
-                    '    ".interactive-input-part textarea",',
-                    '    ".chat-editor-input textarea",',
-                    '    ".part.panel .interactive-session .monaco-editor textarea",',
-                    '    ".part.panel textarea",',
-                    '  ];',
-                    '  for (var i = 0; i < taSelectors.length; i++) {',
-                    '    var el = document.querySelector(taSelectors[i]);',
-                    '    if (el) {',
-                    '      el.focus();',
-                    '      var ok = document.execCommand("insertText", false, text);',
-                    '      if (ok) return "OK:ta:execCmd:" + taSelectors[i];',
-                    '      el.value = text;',
-                    '      el.dispatchEvent(new Event("input", { bubbles: true }));',
-                    '      return "OK:ta:setValue:" + taSelectors[i];',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // Phase 2: Try contenteditable / role="textbox" (Antigravity chat)',
-                    '  var ceSelectors = [',
-                    '    ".cursor-text[contenteditable]",',
-                    '    ".cursor-text[role=\\"textbox\\"]",',
-                    '    "[contenteditable].rounded",',
-                    '    ".chat-input [contenteditable]",',
-                    '    ".interactive-input-part [contenteditable]",',
-                    '    ".part.panel [contenteditable]",',
-                    '    "[role=\\"textbox\\"]",',
-                    '    "[contenteditable=\\"true\\"]:not(.xterm-helper-textarea)",',
-                    '  ];',
-                    '  for (var j = 0; j < ceSelectors.length; j++) {',
-                    '    var ce = document.querySelector(ceSelectors[j]);',
-                    '    if (ce) {',
-                    '      ce.focus();',
-                    '      var ok2 = document.execCommand("insertText", false, text);',
-                    '      if (ok2) return "OK:ce:execCmd:" + ceSelectors[j];',
-                    '      ce.textContent = text;',
-                    '      ce.dispatchEvent(new Event("input", { bubbles: true }));',
-                    '      return "OK:ce:textContent:" + ceSelectors[j];',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // Phase 3: Try any Monaco editor in panel area',
-                    '  var monacoTas = document.querySelectorAll(".part.panel .monaco-editor .inputarea");',
-                    '  if (monacoTas.length > 0) {',
-                    '    var mt = monacoTas[monacoTas.length - 1];',
-                    '    mt.focus();',
-                    '    var ok3 = document.execCommand("insertText", false, text);',
-                    '    if (ok3) return "OK:monaco:execCmd:panel-inputarea(" + monacoTas.length + ")";',
-                    '  }',
-                    '',
-                    '  // NOT FOUND — return comprehensive debug info',
-                    '  var dbg = { textareas: 0, contenteditables: 0, textboxes: 0, info: [] };',
-                    '  dbg.textareas = document.querySelectorAll("textarea").length;',
-                    '  var ces = document.querySelectorAll("[contenteditable=\\"true\\"]");',
-                    '  dbg.contenteditables = ces.length;',
-                    '  for (var k = 0; k < Math.min(ces.length, 5); k++) {',
-                    '    var cls = ces[k].className || "";',
-                    '    var par = ces[k].parentElement ? ces[k].parentElement.className : "";',
-                    '    dbg.info.push("CE:" + cls.substring(0, 40) + "|P:" + par.substring(0, 40));',
-                    '  }',
-                    '  var tbs = document.querySelectorAll("[role=\\"textbox\\"]");',
-                    '  dbg.textboxes = tbs.length;',
-                    '  for (var l = 0; l < Math.min(tbs.length, 5); l++) {',
-                    '    var cls2 = tbs[l].className || "";',
-                    '    var lbl = tbs[l].getAttribute("aria-label") || "";',
-                    '    dbg.info.push("TB:" + cls2.substring(0, 30) + "|L:" + lbl.substring(0, 30));',
-                    '  }',
-                    '  var inputs = document.querySelectorAll(".part.panel input, .part.panel .inputarea");',
-                    '  dbg.info.push("panel-inputs:" + inputs.length);',
-                    '  return "NOT_FOUND|ta=" + dbg.textareas + "|ce=" + dbg.contenteditables + "|tb=" + dbg.textboxes + "|" + dbg.info.join("|");',
-                    '})()',
+                    '',
+                    '  // Phase 1: Try Antigravity contenteditable chat input FIRST',
+                    '  var ceSelectors = [',
+                    '    ".cursor-text[contenteditable]",',
+                    '    ".cursor-text[role]",',
+                    '    "[contenteditable].rounded",',
+                    '    "[role=\"textbox\"]",',
+                    '    "[contenteditable=\"true\"]:not(.xterm-helper-textarea)",',
+                    '  ];',
+                    '  for (var i = 0; i < ceSelectors.length; i++) {',
+                    '    var ce = document.querySelector(ceSelectors[i]);',
+                    '    if (ce) {',
+                    '      ce.focus();',
+                    '      var ok = document.execCommand("insertText", false, text);',
+                    '      if (ok) return "OK:ce:execCmd:" + ceSelectors[i];',
+                    '      ce.textContent = text;',
+                    '      ce.dispatchEvent(new Event("input", { bubbles: true }));',
+                    '      return "OK:ce:textContent:" + ceSelectors[i];',
+                    '    }',
+                    '  }',
+                    '',
+                    '  // Phase 2: Try specific chat textarea selectors (standard VS Code)',
+                    '  var taSelectors = [',
+                    '    ".interactive-input-part .monaco-editor textarea",',
+                    '    ".interactive-input-editor .monaco-editor textarea",',
+                    '    ".chat-input-part .monaco-editor textarea",',
+                    '    ".interactive-input-part textarea",',
+                    '    ".chat-editor-input textarea",',
+                    '    ".part.panel .interactive-session .monaco-editor textarea",',
+                    '  ];',
+                    '  for (var j = 0; j < taSelectors.length; j++) {',
+                    '    var el = document.querySelector(taSelectors[j]);',
+                    '    if (el) {',
+                    '      el.focus();',
+                    '      var ok2 = document.execCommand("insertText", false, text);',
+                    '      if (ok2) return "OK:ta:execCmd:" + taSelectors[j];',
+                    '      el.value = text;',
+                    '      el.dispatchEvent(new Event("input", { bubbles: true }));',
+                    '      return "OK:ta:setValue:" + taSelectors[j];',
+                    '    }',
+                    '  }',
+                    '',
+                    '  // NOT FOUND - debug info',
+                    '  var ta = document.querySelectorAll("textarea").length;',
+                    '  var ce2 = document.querySelectorAll("[contenteditable]").length;',
+                    '  var tb = document.querySelectorAll("[role=\"textbox\"]").length;',
+                    '  return "NOT_FOUND|ta=" + ta + "|ce=" + ce2 + "|tb=" + tb;',
                 ].join('\n'),
                 returnByValue: true
             }, 15000);
