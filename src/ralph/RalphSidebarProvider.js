@@ -352,7 +352,7 @@ class RalphSidebarProvider {
     <!-- ═══ Auto Accept Section ═══ -->
     <div class="section">
         <div class="section-title">⚡ Auto Accept</div>
-        <button id="btnToggleAutoAccept" class="btn btn-toggle" onclick="toggleAutoAccept()">
+        <button id="btnToggleAutoAccept" class="btn btn-toggle">
             <span id="autoAcceptIcon">$(circle-slash)</span>
             <span id="autoAcceptLabel">OFF</span>
         </button>
@@ -385,13 +385,13 @@ class RalphSidebarProvider {
         </div>
 
         <!-- Controls -->
-        <button id="btnStartRalph" class="btn btn-success" onclick="startRalph()">
+        <button id="btnStartRalph" class="btn btn-success">
             ▶ 시작
         </button>
-        <button id="btnStopRalph" class="btn btn-secondary" onclick="stopRalph()" style="display:none;">
+        <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
             ⏹ 정지
         </button>
-        <button id="btnEmergency" class="btn btn-danger" onclick="emergencyStop()" style="display:none;">
+        <button id="btnEmergency" class="btn btn-danger" style="display:none;">
             🛑 긴급 정지
         </button>
     </div>
@@ -400,7 +400,7 @@ class RalphSidebarProvider {
     <div class="section">
         <div class="section-title">📋 작업 파일</div>
         <div id="taskFileName" class="task-file-name">선택되지 않음</div>
-        <button class="btn btn-secondary" onclick="selectTaskFile()">
+        <button id="btnSelectTaskFile" class="btn btn-secondary">
             📂 파일 선택
         </button>
     </div>
@@ -410,15 +410,13 @@ class RalphSidebarProvider {
         <div class="section-title">⚙ 설정</div>
         <div class="form-row">
             <label>최대 반복 횟수</label>
-            <input id="inputMaxIter" type="number" min="1" max="999" value="50"
-                   onchange="setMaxIterations(this.value)" />
+            <input id="inputMaxIter" type="number" min="1" max="999" value="50" />
         </div>
         <div class="form-row">
             <label>반복 간격 (ms)</label>
-            <input id="inputDelay" type="number" min="500" max="60000" step="500" value="3000"
-                   onchange="setIterationDelay(this.value)" />
+            <input id="inputDelay" type="number" min="500" max="60000" step="500" value="3000" />
         </div>
-        <label class="toggle-row" onclick="toggleAutoCommit()">
+        <label id="labelAutoCommit" class="toggle-row">
             <input id="chkAutoCommit" type="checkbox" checked />
             자동 Git 커밋
         </label>
@@ -427,22 +425,33 @@ class RalphSidebarProvider {
 <script nonce="${nonce}">
     const vscodeApi = acquireVsCodeApi();
 
-    // ─── Actions ───────────────────────────────────────────
-    function toggleAutoAccept() { vscodeApi.postMessage({ command: 'toggleAutoAccept' }); }
-    function startRalph()       { vscodeApi.postMessage({ command: 'startRalph' }); }
-    function stopRalph()        { vscodeApi.postMessage({ command: 'stopRalph' }); }
-    function emergencyStop()    { vscodeApi.postMessage({ command: 'emergencyStop' }); }
-    function selectTaskFile()   { vscodeApi.postMessage({ command: 'selectTaskFile' }); }
-
-    function setMaxIterations(val) {
-        vscodeApi.postMessage({ command: 'setMaxIterations', value: parseInt(val, 10) || 50 });
-    }
-    function setIterationDelay(val) {
-        vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(val, 10) || 3000 });
-    }
-    function toggleAutoCommit() {
+    // ─── Event Bindings (CSP-safe, no inline onclick) ─────
+    document.getElementById('btnToggleAutoAccept').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'toggleAutoAccept' });
+    });
+    document.getElementById('btnStartRalph').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'startRalph' });
+    });
+    document.getElementById('btnStopRalph').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'stopRalph' });
+    });
+    document.getElementById('btnEmergency').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'emergencyStop' });
+    });
+    document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'selectTaskFile' });
+    });
+    document.getElementById('inputMaxIter').addEventListener('change', (e) => {
+        vscodeApi.postMessage({ command: 'setMaxIterations', value: parseInt(e.target.value, 10) || 50 });
+    });
+    document.getElementById('inputDelay').addEventListener('change', (e) => {
+        vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(e.target.value, 10) || 3000 });
+    });
+    document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
+        // checkbox 자체 클릭이 아닌 경우에만 처리 (label 클릭 시 checkbox도 토글됨)
+        e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoCommit' });
-    }
+    });
 
     // ─── State Handling ────────────────────────────────────
     window.addEventListener('message', (event) => {
