@@ -586,15 +586,21 @@ class RalphLoopManager {
     }
 
     /**
-     * Send prompt to Antigravity agent
-     * Strategy: New Chat (via command or Ctrl+L) → Focus chat → Clipboard → CDP Ctrl+V → Enter
-     * Each iteration starts a NEW chat session so it appears in task history.
-     * IMPORTANT: Does NOT use Ctrl+A to avoid selecting/overwriting active editor content.
+     * Send prompt to Antigravity agent — FULLY CDP-BASED
+     * Strategy:
+     *   1. CDP Ctrl+L → new chat session (appears in task history)
+     *   2. CDP Runtime.evaluate → find & focus chat textarea in DOM
+     *   3. CDP Input.insertText → insert prompt text directly (NO clipboard)
+     *   4. CDP Input.dispatchKeyEvent → Enter to submit
+     *
+     * This avoids clipboard/Ctrl+V entirely, preventing text from going
+     * to the active editor instead of the chat input.
      */
     async _sendToAgent(prompt) {
         const cdpPort = this._getCdpPort();
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        // ─── Step 1: Find CDP target first (needed for CDP keyboard fallback) ───
+        // ─── Step 1: Get CDP target ───
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
@@ -614,147 +620,103 @@ class RalphLoopManager {
         }
         this._addLog(`[Ralph] 메인 윈도우 타겟: ${((mainTarget || {}).title || '').substring(0, 60)}`);
 
-        // ─── Step 2: Start a NEW chat session ───
-        // This ensures each task gets its own conversation in task history.
-        // Method A: VS Code commands
-        let newChatCreated = false;
-        const newChatCommands = [
-            'workbench.action.chat.new',
-            'workbench.action.chat.newChat',
-            'workbench.action.chat.clear',
-        ];
-
-        for (const cmd of newChatCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd);
-                this._addLog(`[Ralph] 🆕 새 채팅 세션 생성: ${cmd}`);
-                newChatCreated = true;
-                break;
-            } catch (e) {
-                // Try next command
-            }
-        }
-
-        // Method B: CDP Ctrl+L shortcut (standard VS Code new chat shortcut)
-        if (!newChatCreated) {
-            try {
-                const sendKeyRaw = async (type, params) => {
-                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
-                };
-                await sendKeyRaw('keyDown', {
-                    key: 'l', code: 'KeyL',
-                    windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
-                    modifiers: 2, // Ctrl
-                });
-                await sendKeyRaw('keyUp', {
-                    key: 'l', code: 'KeyL',
-                    windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
-                    modifiers: 2,
-                });
-                this._addLog('[Ralph] 🆕 새 채팅 세션 생성 (CDP Ctrl+L)');
-                newChatCreated = true;
-            } catch (e) {
-                this._addLog(`[Ralph] ⚠ CDP Ctrl+L 실패: ${e.message}`, 'warn');
-            }
-        }
-
-        if (!newChatCreated) {
-            this._addLog('[Ralph] ⚠ 새 채팅 세션 생성 실패 — 기존 세션 사용', 'warn');
-        }
-
-        // Wait for the new chat session to fully initialize
-        await new Promise(r => setTimeout(r, 1500));
-
-        // ─── Step 3: Focus the chat panel ───
-        const focusCommands = [
-            'workbench.panel.chat.view.copilot.focus',
-            'workbench.action.chat.openInEditor',
-        ];
-
-        let chatFocused = false;
-        for (const cmd of focusCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd);
-                this._addLog(`[Ralph] 채팅 포커스 성공: ${cmd}`);
-                chatFocused = true;
-                break;
-            } catch (e) {
-                // Try next
-            }
-        }
-
-        if (!chatFocused) {
-            throw new Error('채팅 패널 포커스 실패 — 채팅 패널이 없는 것 같습니다.');
-        }
-
-        // Wait for chat panel to be fully focused
-        await new Promise(r => setTimeout(r, 800));
-
-        // ─── Step 4: Write prompt to clipboard ───
-        await vscode.env.clipboard.writeText(prompt);
-        this._addLog('[Ralph] 📋 클립보드에 프롬프트 복사 완료');
-
-        // ─── Step 5: Paste and submit via CDP ───
-        return this._cdpInputSequence(targetWsUrl);
-    }
-
-    /**
-     * Send keyboard input sequence via CDP to paste from clipboard and submit
-     * Sequence: Ctrl+V (paste) → wait → Enter (submit)
-     * NOTE: Ctrl+A is intentionally NOT used — it was selecting text in the active
-     * editor (e.g. package.json) instead of the chat input, causing file overwrites.
-     * Since we create a new chat session each time, the input is already empty.
-     */
-    async _cdpInputSequence(targetWsUrl) {
-        const delay = (ms) => new Promise(r => setTimeout(r, ms));
-
-        // Helper: send key event
+        // Helper: send key event via CDP
         const sendKey = async (type, params) => {
-            await this._cdpSendCommand(targetWsUrl, `Input.dispatchKeyEvent`, {
-                type,
-                ...params,
-            }, 5000);
+            await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
+        // ─── Step 2: Create new chat via CDP Ctrl+L ───
         try {
-            // Ctrl+V — paste from clipboard (NO Ctrl+A to avoid editor text selection)
             await sendKey('keyDown', {
-                key: 'v',
-                code: 'KeyV',
-                windowsVirtualKeyCode: 86,
-                nativeVirtualKeyCode: 86,
-                modifiers: 2, // Ctrl
-            });
-            await sendKey('keyUp', {
-                key: 'v',
-                code: 'KeyV',
-                windowsVirtualKeyCode: 86,
-                nativeVirtualKeyCode: 86,
+                key: 'l', code: 'KeyL',
+                windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
                 modifiers: 2,
             });
+            await sendKey('keyUp', {
+                key: 'l', code: 'KeyL',
+                windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
+                modifiers: 2,
+            });
+            this._addLog('[Ralph] 🆕 새 채팅 세션 생성 (CDP Ctrl+L)');
+        } catch (e) {
+            this._addLog(`[Ralph] ⚠ CDP Ctrl+L 실패: ${e.message}`, 'warn');
+        }
 
-            this._addLog('[Ralph] ✅ CDP로 붙여넣기 완료 (Ctrl+V)');
-            await delay(500); // Wait for paste to be processed
+        // Wait for new chat to fully initialize
+        await delay(2000);
 
-            // Enter — submit the chat input
+        // ─── Step 3: Find and focus chat textarea via CDP Runtime.evaluate ───
+        try {
+            const focusResult = await this._cdpEvaluateOnTarget(targetWsUrl, `
+                (function() {
+                    var selectors = [
+                        '.interactive-input-part .monaco-editor textarea',
+                        '.interactive-input-editor .monaco-editor textarea',
+                        '.chat-input-part .monaco-editor textarea',
+                        '.interactive-input-part textarea',
+                        '.chat-editor-input textarea',
+                    ];
+                    for (var i = 0; i < selectors.length; i++) {
+                        var el = document.querySelector(selectors[i]);
+                        if (el) {
+                            el.focus();
+                            el.click();
+                            return 'focused: ' + selectors[i];
+                        }
+                    }
+                    var panels = document.querySelectorAll('.part.panel .monaco-editor textarea');
+                    if (panels.length > 0) {
+                        var last = panels[panels.length - 1];
+                        last.focus();
+                        last.click();
+                        return 'focused: panel textarea (fallback, count=' + panels.length + ')';
+                    }
+                    var all = document.querySelectorAll('textarea');
+                    var info = [];
+                    for (var j = 0; j < Math.min(all.length, 10); j++) {
+                        var parent = all[j].closest('[class]');
+                        info.push((parent ? parent.className : 'no-class').substring(0, 80));
+                    }
+                    return 'NOT_FOUND (textareas=' + all.length + ') classes=' + info.join(' | ');
+                })()
+            `, 5000);
+            this._addLog('[Ralph] 채팅 입력 포커스: ' + (focusResult && focusResult.result ? (focusResult.result.value || JSON.stringify(focusResult.result)) : JSON.stringify(focusResult)));
+        } catch (e) {
+            this._addLog('[Ralph] ⚠ 채팅 textarea 포커스 실패: ' + e.message, 'warn');
+        }
+
+        await delay(300);
+
+        // ─── Step 4: Insert prompt text via CDP Input.insertText ───
+        // This inserts text at the cursor position in the currently focused input.
+        // Unlike Ctrl+V, this does NOT use the clipboard and does NOT depend on
+        // which element "Ctrl+V" would target. It acts like IME input.
+        try {
+            await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
+                text: prompt
+            }, 15000);
+            this._addLog('[Ralph] ✅ CDP Input.insertText 완료');
+        } catch (e) {
+            throw new Error('CDP Input.insertText 실패: ' + e.message);
+        }
+
+        await delay(500);
+
+        // ─── Step 5: Submit via Enter ───
+        try {
             await sendKey('keyDown', {
-                key: 'Enter',
-                code: 'Enter',
-                windowsVirtualKeyCode: 13,
-                nativeVirtualKeyCode: 13,
+                key: 'Enter', code: 'Enter',
+                windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                 modifiers: 0,
             });
             await sendKey('keyUp', {
-                key: 'Enter',
-                code: 'Enter',
-                windowsVirtualKeyCode: 13,
-                nativeVirtualKeyCode: 13,
+                key: 'Enter', code: 'Enter',
+                windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                 modifiers: 0,
             });
-
-            this._addLog('[Ralph] ✅ CDP로 Enter 전송 완료');
+            this._addLog('[Ralph] ✅ CDP Enter 전송 완료');
         } catch (e) {
-            throw new Error(`CDP Input 이벤트 전송 실패: ${e.message}`);
+            throw new Error('CDP Enter 전송 실패: ' + e.message);
         }
     }
 
