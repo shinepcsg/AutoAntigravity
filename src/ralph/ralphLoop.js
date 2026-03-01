@@ -539,28 +539,103 @@ class RalphLoopManager {
     }
 
     /**
-     * Send prompt to Antigravity agent via CDP
-     * Finds the chat panel webview via CDP targets, then injects the prompt
-     * into the chat textarea and submits it with a synthetic Enter keypress.
+     * Send prompt to Antigravity agent via VS Code Chat API
+     * Primary: uses workbench.action.chat.open with query parameter
+     * Fallback: CDP injection into chat webview
      */
     async _sendToAgent(prompt) {
-        const cdpPort = this._getCdpPort();
+        // ─── Strategy 1: VS Code Chat Command API (most reliable) ───
+        // workbench.action.chat.open supports { query, isPartialQuery } parameters
+        const chatOpenCommands = [
+            'workbench.action.chat.open',
+            'workbench.action.chat.newChat',
+        ];
 
-        // 1. Get all CDP targets
+        for (const cmd of chatOpenCommands) {
+            try {
+                await vscode.commands.executeCommand(cmd, {
+                    query: prompt,
+                    isPartialQuery: false   // false = auto-submit
+                });
+                this._addLog(`[Ralph] ✅ 채팅 API로 전송 성공: ${cmd}`);
+                return; // Success!
+            } catch (e) {
+                this._addLog(`[Ralph] ℹ ${cmd} 실패: ${e.message}`, 'info');
+                // Try next command
+            }
+        }
+
+        // ─── Strategy 2: Focus chat panel + type via command ───
+        this._addLog('[Ralph] ⚠ chat.open 실패, 채팅 패널 포커스 + 타이핑 시도...', 'warn');
+
+        const focusCommands = [
+            'workbench.panel.chat.view.copilot.focus',
+            'workbench.action.chat.openInEditor',
+        ];
+
+        let chatFocused = false;
+        for (const cmd of focusCommands) {
+            try {
+                await vscode.commands.executeCommand(cmd);
+                this._addLog(`[Ralph] 채팅 포커스 성공: ${cmd}`);
+                chatFocused = true;
+                await new Promise(r => setTimeout(r, 500));
+                break;
+            } catch (e) {
+                // Try next
+            }
+        }
+
+        if (chatFocused) {
+            // Try typing the prompt via the workbench type command
+            try {
+                // First, clear any existing text by selecting all
+                await vscode.commands.executeCommand('editor.action.selectAll');
+                await new Promise(r => setTimeout(r, 100));
+
+                // Type the prompt text
+                await vscode.commands.executeCommand('type', { text: prompt });
+                await new Promise(r => setTimeout(r, 300));
+
+                // Submit by executing the chat accept input command
+                const submitCommands = [
+                    'workbench.action.chat.acceptInput',
+                    'antigravity.chat.submit',
+                    'antigravity.chat.acceptInput',
+                ];
+
+                for (const submitCmd of submitCommands) {
+                    try {
+                        await vscode.commands.executeCommand(submitCmd);
+                        this._addLog(`[Ralph] ✅ 제출 성공: ${submitCmd}`);
+                        return;
+                    } catch (e) {
+                        // Try next submit command
+                    }
+                }
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ 타이핑 방식 실패: ${e.message}`, 'warn');
+            }
+        }
+
+        // ─── Strategy 3: CDP direct injection (fallback) ───
+        this._addLog('[Ralph] ⚠ VS Code API 모두 실패, CDP 직접 주입 시도...', 'warn');
+
+        const cdpPort = this._getCdpPort();
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
         } catch (e) {
-            throw new Error(`CDP 타겟 조회 실패 (port ${cdpPort}): ${e.message}`);
+            throw new Error(`모든 전송 방법 실패. CDP 타겟 조회도 실패 (port ${cdpPort}): ${e.message}`);
         }
 
         if (!targets || targets.length === 0) {
-            throw new Error(`CDP 타겟이 없습니다 (port ${cdpPort})`);
+            throw new Error(`모든 전송 방법 실패. CDP 타겟이 없습니다 (port ${cdpPort})`);
         }
 
         this._addLog(`[Ralph] CDP 타겟 ${targets.length}개 발견`);
 
-        // 2. Escape the prompt for safe injection into JavaScript string
+        // Escape the prompt for safe injection into JavaScript string
         const escapedPrompt = prompt
             .replace(/\\/g, '\\\\')
             .replace(/'/g, "\\'")
@@ -568,10 +643,9 @@ class RalphLoopManager {
             .replace(/\r/g, '\\r')
             .replace(/\t/g, '\\t');
 
-        // 3. Build the injection script that finds and fills the chat input
+        // Build the injection script
         const injectionScript = `
 (function() {
-    // Strategy 1: Look for a textarea or contenteditable in the chat panel
     var selectors = [
         'textarea[class*="chat"]',
         'textarea[class*="input"]',
@@ -601,9 +675,7 @@ class RalphLoopManager {
 
     var promptText = '${escapedPrompt}';
 
-    // Fill the input
     if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-        // For native textarea/input, use nativeInputValueSetter if available
         var nativeSetter = Object.getOwnPropertyDescriptor(
             window.HTMLTextAreaElement.prototype, 'value'
         );
@@ -615,15 +687,12 @@ class RalphLoopManager {
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
-        // contenteditable
         input.textContent = promptText;
         input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // Wait a moment for React/framework to process the input
     return new Promise(function(resolve) {
         setTimeout(function() {
-            // Submit via Enter key
             var enterEvent = new KeyboardEvent('keydown', {
                 key: 'Enter',
                 code: 'Enter',
@@ -634,7 +703,6 @@ class RalphLoopManager {
             });
             input.dispatchEvent(enterEvent);
 
-            // Also try form submit if input is inside a form
             var form = input.closest('form');
             if (form) {
                 try { form.requestSubmit(); } catch(e) { }
@@ -649,14 +717,12 @@ class RalphLoopManager {
     });
 })()`;
 
-        // 4. Try each target to find one with a chat input
+        // Try each CDP target
         let lastError = null;
         const candidateTargets = targets.filter(t =>
             t.type === 'page' ||
             (t.url && (t.url.includes('vscode-webview://') || t.url.includes('webview')))
         );
-
-        // Also try all targets if no candidates matched
         const allTargets = candidateTargets.length > 0 ? candidateTargets : targets;
 
         for (const target of allTargets) {
@@ -677,59 +743,19 @@ class RalphLoopManager {
 
                     if (value && value.success) {
                         this._addLog(`[Ralph] ✅ CDP로 채팅 입력 완료 (${value.element}, target: ${(target.url || '').substring(0, 50)})`);
-                        return; // Success!
+                        return;
                     }
 
                     if (value && value.error === 'chat-input-not-found') {
-                        // This target doesn't have the chat input, try next
                         continue;
                     }
                 }
             } catch (e) {
                 lastError = e.message;
-                // Try next target
             }
         }
 
-        // 5. If CDP injection didn't work, try VS Code command API as fallback
-        this._addLog('[Ralph] ⚠ CDP 직접 주입 실패, VS Code 커맨드 API 폴백 시도...', 'warn');
-
-        // Try various Antigravity-specific commands
-        const chatCommands = [
-            'antigravity.chat.open',
-            'antigravity.chat.new',
-            'antigravity.newConversation',
-            'workbench.panel.chat.view.copilot.focus',
-        ];
-
-        for (const cmd of chatCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd);
-                this._addLog(`[Ralph] 채팅 열기 성공: ${cmd}`);
-                await new Promise(r => setTimeout(r, 1000));
-                break;
-            } catch (e) {
-                // Try next command
-            }
-        }
-
-        // Try to submit via command
-        const submitCommands = [
-            'antigravity.chat.submit',
-            'antigravity.chat.acceptInput',
-        ];
-
-        for (const cmd of submitCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd, { text: prompt });
-                this._addLog(`[Ralph] ✅ 커맨드로 전송 성공: ${cmd}`);
-                return;
-            } catch (e) {
-                // Try next
-            }
-        }
-
-        throw new Error(`채팅 입력 전송 실패 — CDP ${allTargets.length}개 타겟 시도, 마지막 에러: ${lastError || 'unknown'}`);
+        throw new Error(`채팅 입력 전송 실패 — 모든 방법 시도 완료. CDP ${allTargets.length}개 타겟, 마지막 에러: ${lastError || 'unknown'}`);
     }
 
     /**

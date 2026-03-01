@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "AutoAntigravity",
     "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.8.1",
+    "version": "1.8.2",
     "publisher": "TrollGames",
     "icon": "images/icon.png",
     "engines": {
