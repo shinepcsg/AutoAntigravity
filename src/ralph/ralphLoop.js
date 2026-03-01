@@ -601,10 +601,7 @@ class RalphLoopManager {
                     '    if (!svg) continue;',
                     '    var cls2 = b2.className || "";',
                     '    if (cls2.includes("rounded")) {',
-                    '      var ih = (svg.innerHTML || "");',
-                    '      if (ih.includes("rect") || ih.includes("square") || ih.includes("stop")) {',
-                    '        return JSON.stringify({ busy: true, reason: "stop_icon", detail: "svg-rect-icon" });',
-                    '      }',
+                    '      return JSON.stringify({ busy: true, reason: "stop_icon", detail: "icon-only-rounded:" + cls2.substring(0,40) });',
                     '    }',
                     '  }',
                     '  return JSON.stringify({ busy: false });',
@@ -1069,7 +1066,7 @@ class RalphLoopManager {
                 everSeenBusy = true;
 
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
-                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — Stop 버튼 감지 (' +
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' + (status.reason || 'unknown') + ' (' +
                         (status.detail || '') + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                 }
             } else {
