@@ -527,69 +527,68 @@ class RalphLoopManager {
 
     /**
      * Check if the Antigravity agent is currently busy via CDP DOM inspection
-     * Checks for: Stop buttons, loading spinners, progress bars, typing indicators
+     * Focuses ONLY on Stop button existence — simplest and most reliable approach
      * @param {string} targetWsUrl - WebSocket debugger URL
-     * @returns {Promise<{busy: boolean, reason?: string, detail?: string, lastMsgLen?: number}>}
+     * @param {boolean} [diagnostic=false] - If true, log all visible buttons for debugging
+     * @returns {Promise<{busy: boolean, reason?: string, detail?: string}>}
      */
-    async _isAgentBusy(targetWsUrl) {
+    async _isAgentBusy(targetWsUrl, diagnostic = false) {
         try {
-            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-                expression: [
+            const expr = diagnostic
+                ? [
                     '(function() {',
-                    '  // Strategy 1: Stop/Cancel buttons in chat area',
+                    '  var btns = document.querySelectorAll("button");',
+                    '  var all = [];',
+                    '  for (var i = 0; i < btns.length; i++) {',
+                    '    var b = btns[i];',
+                    '    var rect = b.getBoundingClientRect();',
+                    '    if (rect.width === 0 || rect.height === 0) continue;',
+                    '    var label = b.getAttribute("aria-label") || "";',
+                    '    var title = b.getAttribute("title") || "";',
+                    '    var text = (b.textContent || "").trim().substring(0, 20);',
+                    '    var cls = (b.className || "").substring(0, 40);',
+                    '    all.push(label || title || text || cls || "(empty)");',
+                    '  }',
+                    '  return JSON.stringify({ buttons: all });',
+                    '})()',
+                ].join('\n')
+                : [
+                    '(function() {',
                     '  var btns = document.querySelectorAll("button");',
                     '  for (var i = 0; i < btns.length; i++) {',
                     '    var b = btns[i];',
+                    '    var rect = b.getBoundingClientRect();',
+                    '    if (rect.width === 0 || rect.height === 0) continue;',
                     '    var label = (b.getAttribute("aria-label") || "").toLowerCase();',
+                    '    var title = (b.getAttribute("title") || "").toLowerCase();',
                     '    var text = (b.textContent || "").toLowerCase().trim();',
-                    '    var isStop = label.includes("stop") || label.includes("cancel") ||',
-                    '                 text === "stop" || text === "cancel";',
-                    '    var isDebug = label.includes("breakpoint") || label.includes("debug");',
-                    '    if (isStop && !isDebug) {',
-                    '      var rect = b.getBoundingClientRect();',
-                    '      if (rect.width > 0 && rect.height > 0) {',
-                    '        var p = b.closest("[class*=chat],[class*=conversation],[class*=interactive],[class*=panel]");',
-                    '        if (p) return JSON.stringify({ busy: true, reason: "stop_button", detail: label || text });',
-                    '      }',
+                    '    var combined = label + " " + title + " " + text;',
+                    '    if (combined.includes("stop") || combined.includes("cancel") ||',
+                    '        combined.includes("중지") || combined.includes("취소") ||',
+                    '        combined.includes("interrupt")) {',
+                    '      if (combined.includes("breakpoint") || combined.includes("debug") ||',
+                    '          combined.includes("close") || combined.includes("hide")) continue;',
+                    '      return JSON.stringify({ busy: true, reason: "stop_button", detail: (label || title || text).substring(0, 50) });',
                     '    }',
                     '  }',
-                    '  // Strategy 2: Loading spinners in chat area',
-                    '  var spinners = document.querySelectorAll(".codicon-loading,.codicon-sync");',
-                    '  for (var j = 0; j < spinners.length; j++) {',
-                    '    var sp = spinners[j];',
-                    '    var cp = sp.closest("[class*=chat],[class*=conversation],[class*=interactive],[class*=panel]");',
-                    '    if (cp) {',
-                    '      var r2 = sp.getBoundingClientRect();',
-                    '      if (r2.width > 0 && r2.height > 0)',
-                    '        return JSON.stringify({ busy: true, reason: "loading_spinner" });',
-                    '    }',
-                    '  }',
-                    '  // Strategy 3: Streaming/typing/thinking indicators',
-                    '  var inds = document.querySelectorAll("[class*=typing],[class*=streaming],[class*=thinking],[class*=generating]");',
-                    '  for (var m = 0; m < inds.length; m++) {',
-                    '    var r3 = inds[m].getBoundingClientRect();',
-                    '    if (r3.width > 0 && r3.height > 0)',
-                    '      return JSON.stringify({ busy: true, reason: "typing_indicator" });',
-                    '  }',
-                    '  // Strategy 4: Snapshot last message length for change detection',
-                    '  var msgs = document.querySelectorAll("[class*=chat-message],[class*=response],.interactive-item-container,[class*=message-content]");',
-                    '  var last = msgs.length > 0 ? msgs[msgs.length - 1] : null;',
-                    '  var len = last ? last.textContent.length : 0;',
-                    '  return JSON.stringify({ busy: false, lastMsgLen: len });',
+                    '  return JSON.stringify({ busy: false });',
                     '})()',
-                ].join('\n'),
+                ].join('\n');
+
+            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: expr,
                 returnByValue: true
             }, 5000);
 
             var val = result && result.result && result.result.value;
-            if (!val) return { busy: true, reason: 'no_result', lastMsgLen: 0 };
+            if (!val) return diagnostic ? { buttons: [] } : { busy: true, reason: 'no_result' };
             try {
                 return JSON.parse(val);
             } catch (e) {
-                return { busy: true, reason: 'parse_error', lastMsgLen: 0 };
+                return diagnostic ? { buttons: [] } : { busy: true, reason: 'parse_error' };
             }
         } catch (e) {
-            return { busy: true, reason: 'cdp_error', detail: e.message, lastMsgLen: 0 };
+            return diagnostic ? { buttons: [] } : { busy: true, reason: 'cdp_error', detail: e.message };
         }
     }
 
@@ -928,15 +927,13 @@ class RalphLoopManager {
 
     /**
      * Wait for the agent to finish working
-     * Uses CDP DOM polling to detect when the agent stops generating
-     * Checks for: Stop buttons, loading spinners, typing indicators, message stability
+     * Uses CDP to check Stop button existence — when Stop button disappears, agent is done
      */
     async _waitForAgentCompletion() {
         const MAX_WAIT_MS = 300000;       // 5분 최대
         const POLL_INTERVAL_MS = 3000;    // 3초마다 폴링
-        const INITIAL_WAIT_MS = 8000;     // 에이전트 시작 대기 8초
+        const INITIAL_WAIT_MS = 10000;    // 에이전트 시작 대기 10초
         const IDLE_CONFIRMS_NEEDED = 3;   // 연속 3회 idle 확인 필요
-        const MSG_STABLE_CONFIRMS = 3;    // 메시지 내용 안정 3회 필요
 
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -945,7 +942,7 @@ class RalphLoopManager {
         try {
             const target = await this._findMainTarget(false);
             targetWsUrl = target.webSocketDebuggerUrl;
-            this._addLog('[Ralph] 📡 CDP 에이전트 상태 모니터링 시작');
+            this._addLog('[Ralph] 📡 CDP Stop 버튼 모니터링 시작');
         } catch (e) {
             this._addLog('[Ralph] ⚠ CDP 타겟 찾기 실패 — 시간 기반 대기(60초)로 대체: ' + e.message, 'warn');
             await delay(60000);
@@ -956,10 +953,20 @@ class RalphLoopManager {
         this._addLog('[Ralph] ⏳ 에이전트 시작 대기 (' + (INITIAL_WAIT_MS / 1000) + '초)...');
         await delay(INITIAL_WAIT_MS);
 
+        // ── 첫 폴링: 진단 모드로 DOM 버튼 전체 로그 ──
+        const diag = await this._isAgentBusy(targetWsUrl, true);
+        if (diag.buttons && diag.buttons.length > 0) {
+            this._addLog('[Ralph] 🔍 DOM 버튼 진단 (' + diag.buttons.length + '개):');
+            diag.buttons.forEach((btn, idx) => {
+                this._addLog('[Ralph]   [' + idx + '] ' + btn);
+            });
+        } else {
+            this._addLog('[Ralph] 🔍 DOM 버튼 진단: 버튼 없음');
+        }
+
         let elapsed = INITIAL_WAIT_MS;
         let consecutiveIdleCount = 0;
-        let lastMsgLen = 0;
-        let msgStableCount = 0;
+        let everSeenBusy = false;
 
         while (elapsed < MAX_WAIT_MS) {
             // 루프 상태 확인
@@ -968,44 +975,31 @@ class RalphLoopManager {
                 return;
             }
 
-            // CDP로 에이전트 상태 확인
+            // CDP로 Stop 버튼 존재 확인
             const status = await this._isAgentBusy(targetWsUrl);
 
             if (status.busy) {
-                // 에이전트 작업 중 — 카운터 리셋
+                // Stop 버튼 발견 — 에이전트 작업 중
                 consecutiveIdleCount = 0;
-                msgStableCount = 0;
+                everSeenBusy = true;
 
-                // 주기적으로 상태 로그
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
-                    this._addLog('[Ralph] 🔄 에이전트 작업 중 (' + status.reason +
-                        (status.detail ? ': ' + status.detail : '') +
-                        ', ' + Math.round(elapsed / 1000) + '초 경과)');
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — Stop 버튼 감지 (' +
+                        (status.detail || '') + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                 }
             } else {
-                // 에이전트 유휴 상태 — 메시지 안정성 확인
-                if (status.lastMsgLen !== undefined) {
-                    if (status.lastMsgLen === lastMsgLen && lastMsgLen > 0) {
-                        msgStableCount++;
-                    } else {
-                        msgStableCount = 0;
-                    }
-                    lastMsgLen = status.lastMsgLen;
-                } else {
-                    msgStableCount++;
-                }
-
+                // Stop 버튼 없음 — 에이전트 유휴
                 consecutiveIdleCount++;
 
-                // 충분히 확인되면 완료로 판단
-                if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED && msgStableCount >= MSG_STABLE_CONFIRMS) {
-                    this._addLog('[Ralph] ✅ 에이전트 완료 감지 (idle=' + consecutiveIdleCount +
-                        ', stable=' + msgStableCount + ', ' + Math.round(elapsed / 1000) + '초 경과)');
+                if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED) {
+                    this._addLog('[Ralph] ✅ 에이전트 완료 감지 — Stop 버튼 ' +
+                        consecutiveIdleCount + '회 연속 미발견 (' +
+                        Math.round(elapsed / 1000) + '초 경과, everBusy=' + everSeenBusy + ')');
                     return;
                 }
 
-                this._addLog('[Ralph] ⏳ 유휴 확인 중 (idle=' + consecutiveIdleCount + '/' + IDLE_CONFIRMS_NEEDED +
-                    ', stable=' + msgStableCount + '/' + MSG_STABLE_CONFIRMS + ')');
+                this._addLog('[Ralph] ⏳ Stop 버튼 미발견 (' +
+                    consecutiveIdleCount + '/' + IDLE_CONFIRMS_NEEDED + ')');
             }
 
             await delay(POLL_INTERVAL_MS);
