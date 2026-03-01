@@ -103,6 +103,7 @@ class RalphSidebarProvider {
         const config = vscode.workspace.getConfiguration('autoAntigravity');
 
         const state = {
+            version: this._context.extension.packageJSON.version || 'unknown',
             autoAcceptEnabled: this.autoAccept ? this.autoAccept.isEnabled : false,
             ralphState: this.ralphLoop ? this.ralphLoop.getState() : 'idle',
             currentIteration: this.ralphLoop ? this.ralphLoop.currentIteration : 0,
@@ -404,6 +405,24 @@ class RalphSidebarProvider {
         padding: 10px;
         font-size: 11px;
     }
+
+    /* ─── Version Footer ─── */
+    .version-footer {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 10px;
+        opacity: 0.45;
+        transition: opacity 0.2s;
+    }
+    .version-footer:hover { opacity: 0.75; }
+    .version-footer .version-icon {
+        font-size: 12px;
+    }
 </style>
 </head>
 <body>
@@ -492,6 +511,13 @@ class RalphSidebarProvider {
             <input id="chkAutoCommit" type="checkbox" checked />
             자동 Git 커밋
         </label>
+    </div>
+
+    <!-- ═══ Version Footer ═══ -->
+    <div class="version-footer">
+        <span class="version-icon">🚀</span>
+        <span>AutoAntigravity</span>
+        <span id="versionText">v--</span>
     </div>
 
 <script nonce="${nonce}">
@@ -612,6 +638,11 @@ class RalphSidebarProvider {
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
         document.getElementById('chkAutoCommit').checked = s.autoCommit;
+
+        // Version
+        if (s.version) {
+            document.getElementById('versionText').textContent = 'v' + s.version;
+        }
 
         // Logs
         updateLogPanel(s.recentLogs || []);
