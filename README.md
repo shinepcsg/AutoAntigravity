@@ -96,5 +96,6 @@ MIT License — [LICENSE](LICENSE)
 
 ## 🙏 크레딧
 
+- 찬선
 - [AntiGravity-AutoAccept](https://github.com/yazanbaker94/AntiGravity-AutoAccept) by yazanbaker94
 - [ralph-loop-for-antigravity](https://github.com/abhishekbhakat/ralph-loop-for-antigravity) by abhishekbhakat
