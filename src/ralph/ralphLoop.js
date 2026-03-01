@@ -651,55 +651,59 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // --- Step 2: Create new chat --- find button near chat input ---
-        try {
-            const newChatResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-                expression: [
-                    '(function() {',
-                    '  var ci = document.querySelector(".cursor-text[contenteditable]");',
-                    '  if (!ci) return "NO_CHAT_INPUT";',
-                    '  var container = ci;',
-                    '  var allBtns = [];',
-                    '  for (var d = 0; d < 10; d++) {',
-                    '    container = container.parentElement;',
-                    '    if (!container) break;',
-                    '    var btns = container.querySelectorAll("button, [role=\\\"button\\\"]");',
-                    '    if (btns.length > 2) {',
-                    '      for (var i = 0; i < btns.length; i++) {',
-                    '        var b = btns[i];',
-                    '        var txt = (b.textContent || "").trim().toLowerCase();',
-                    '        var ttl = (b.getAttribute("title") || "").toLowerCase();',
-                    '        var lbl = (b.getAttribute("aria-label") || "").toLowerCase();',
-                    '        var all = txt + " " + ttl + " " + lbl;',
-                    '        allBtns.push(all.substring(0, 50));',
-                    '        var kw = ["new chat","new conversation","new thread","new task","new session","start new","clear","reset"];',
-                    '        for (var k = 0; k < kw.length; k++) {',
-                    '          if (all.indexOf(kw[k]) >= 0) { b.click(); return "CLICKED:" + all.substring(0, 60); }',
-                    '        }',
-                    '      }',
-                    '      break;',
-                    '    }',
-                    '  }',
-                    '  if (container) {',
-                    '    var ib = container.querySelectorAll("button, [role=\\\"button\\\"]");',
-                    '    for (var j = 0; j < ib.length; j++) {',
-                    '      var t = (ib[j].getAttribute("title") || ib[j].getAttribute("aria-label") || "").toLowerCase();',
-                    '      if (t && (t.indexOf("new") >= 0 || t.indexOf("add") >= 0 || t.indexOf("create") >= 0)) {',
-                    '        ib[j].click(); return "CLICKED_ICON:" + t.substring(0, 60);',
-                    '      }',
-                    '    }',
-                    '  }',
-                    '  return "NO_BTN(" + allBtns.length + "):" + allBtns.join("|");',
-                    '})()',
-                ].join('\n'),
-                returnByValue: true
-            }, 5000);
-            const v = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
-            this._addLog('[Ralph] \uD83C\uDD95 \uC0C8 \uCC44\uD305: ' + v);
-        } catch (e) {
-            this._addLog('[Ralph] \u26A0 \uC0C8 \uCC44\uD305 \uD0D0\uC0C9 \uC2E4\uD328: ' + e.message, 'warn');
-        }
-
+        // --- Step 2: Create new chat --- climb from chat input to panel header ---
+        try {
+            const newChatResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: [
+                    '(function() {',
+                    '  var ci = document.querySelector(".cursor-text[contenteditable]");',
+                    '  if (!ci) return "NO_CHAT_INPUT";',
+                    '  // Climb all the way up (max 15 levels) collecting ALL buttons',
+                    '  var container = ci;',
+                    '  var allBtns = [];',
+                    '  var prevBtnCount = 0;',
+                    '  for (var d = 0; d < 15; d++) {',
+                    '    container = container.parentElement;',
+                    '    if (!container || container === document.body) break;',
+                    '    var btns = container.querySelectorAll("button, [role=\\"button\\"]");',
+                    '    if (btns.length > prevBtnCount) {',
+                    '      prevBtnCount = btns.length;',
+                    '      // Check all buttons at this level for new chat keywords',
+                    '      for (var i = 0; i < btns.length; i++) {',
+                    '        var b = btns[i];',
+                    '        var txt = (b.textContent || "").trim().toLowerCase().substring(0, 40);',
+                    '        var ttl = (b.getAttribute("title") || "").toLowerCase();',
+                    '        var lbl = (b.getAttribute("aria-label") || "").toLowerCase();',
+                    '        var cls = (b.className || "").toLowerCase().substring(0, 40);',
+                    '        var all = txt + "|" + ttl + "|" + lbl + "|" + cls;',
+                    '        var kw = ["new chat","new conversation","new thread","new task","new session","start new"];',
+                    '        for (var k = 0; k < kw.length; k++) {',
+                    '          if (all.indexOf(kw[k]) >= 0) { b.click(); return "CLICKED:" + all.substring(0, 80); }',
+                    '        }',
+                    '      }',
+                    '    }',
+                    '  }',
+                    '  // Not found by keyword. Gather debug info from the widest container.',
+                    '  if (container) {',
+                    '    var allB = container.querySelectorAll("button, [role=\\"button\\"]");',
+                    '    for (var j = 0; j < allB.length; j++) {',
+                    '      var bb = allB[j];',
+                    '      var info = (bb.getAttribute("title") || bb.getAttribute("aria-label") || bb.textContent || "").trim();',
+                    '      var cn = (bb.className || "").substring(0, 30);',
+                    '      if (info || cn) allBtns.push((info || "[no-text]").substring(0, 35) + "~" + cn);',
+                    '    }',
+                    '  }',
+                    '  return "NO_BTN(" + allBtns.length + "):" + allBtns.slice(0, 30).join("|");',
+                    '})()',
+                ].join('\n'),
+                returnByValue: true
+            }, 5000);
+            const v = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
+            this._addLog('[Ralph] 새 채팅: ' + v);
+        } catch (e) {
+            this._addLog('[Ralph] ⚠ 새 채팅 탐색 실패: ' + e.message, 'warn');
+        }
+
         await delay(2000);
 
         // ─── Step 3: Store prompt → find textarea → focus → insert text ───
