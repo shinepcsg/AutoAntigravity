@@ -75,7 +75,9 @@ function activate(context) {
 
     // ─── Initialize Ralph Loop ────────────────────────────────────────
     ralphLoop = new RalphLoopManager(log);
+    ralphLoop.setContext(context);
     ralphLoop.setConnectionManager(autoAccept.connectionManager);
+    ralphLoop.restoreTaskFile();
     ralphLoop.onStateChange = () => {
         updateRalphStatusBar();
     };

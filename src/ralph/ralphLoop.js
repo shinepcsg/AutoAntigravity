@@ -41,6 +41,9 @@ class RalphLoopManager {
 
         // CDP 관련
         this._connectionManager = null; // shared from AutoAccept
+
+        // ExtensionContext — globalState 영속 저장용
+        this._context = null;
     }
 
     /**
@@ -84,6 +87,31 @@ class RalphLoopManager {
     }
 
     /**
+     * Set the ExtensionContext for globalState persistence
+     * @param {vscode.ExtensionContext} context
+     */
+    setContext(context) {
+        this._context = context;
+    }
+
+    /**
+     * Restore task file from globalState (call on activation)
+     */
+    restoreTaskFile() {
+        if (!this._context) return;
+        const savedPath = this._context.globalState.get('autoAntigravity.lastTaskFilePath');
+        if (savedPath) {
+            const fs = require('fs');
+            if (fs.existsSync(savedPath)) {
+                this.taskManager.setTaskFile(savedPath);
+                this.log(`[Ralph] Restored task file: ${savedPath}`);
+            } else {
+                this.log(`[Ralph] Saved task file no longer exists: ${savedPath}`);
+            }
+        }
+    }
+
+    /**
      * Select task file via file picker
      */
     async selectTaskFile() {
@@ -106,7 +134,14 @@ class RalphLoopManager {
         });
 
         if (files && files.length > 0) {
-            this.taskManager.setTaskFile(files[0].fsPath);
+            const filePath = files[0].fsPath;
+            this.taskManager.setTaskFile(filePath);
+
+            // globalState에 경로 영속 저장
+            if (this._context) {
+                this._context.globalState.update('autoAntigravity.lastTaskFilePath', filePath);
+            }
+
             const progress = this.taskManager.getProgress();
             const msg = `📋 Task file loaded: ${progress.total} tasks (${progress.completed} done, ${progress.remaining} remaining)`;
             vscode.window.showInformationMessage(msg);
