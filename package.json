@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "AutoAntigravity",
     "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "publisher": "TrollGames",
     "icon": "images/icon.png",
     "engines": {
@@ -119,8 +119,5 @@
         "type": "git",
         "url": "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity.git"
     },
-    "license": "MIT",
-    "dependencies": {
-        "ws": "^8.19.0"
-    }
+    "license": "MIT"
 }

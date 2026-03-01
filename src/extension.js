@@ -63,7 +63,7 @@ function updateRalphStatusBar() {
 // ─── Activation ───────────────────────────────────────────────────────
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('AutoAntigravity');
-    log('AutoAntigravity extension activating (v1.3.0)');
+    log('AutoAntigravity extension activating (v1.4.0)');
 
     // ─── Initialize Auto Accept ───────────────────────────────────────
     autoAccept = new AutoAcceptManager(log);
@@ -81,8 +81,8 @@ function activate(context) {
     sidebarProvider.ralphLoop = ralphLoop;
 
     // Wire sidebar actions
-    sidebarProvider.onToggleAutoAccept = () => {
-        vscode.commands.executeCommand('autoAntigravity.toggleAutoAccept');
+    sidebarProvider.onToggleAutoAccept = async () => {
+        await vscode.commands.executeCommand('autoAntigravity.toggleAutoAccept');
     };
     sidebarProvider.onStartRalph = () => {
         vscode.commands.executeCommand('autoAntigravity.startRalphLoop');

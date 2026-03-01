@@ -1,9 +1,205 @@
 // AutoAntigravity — CDP Connection Manager
 // Persistent browser-level WebSocket connection with session pooling.
+// Uses a minimal built-in WebSocket client (no external dependencies).
 
 const http = require('http');
-const WebSocket = require('ws');
+const crypto = require('crypto');
+const { EventEmitter } = require('events');
 const { buildDOMObserverScript } = require('../scripts/DOMObserver');
+
+// ─── Minimal WebSocket Client (Node.js built-in only) ──────────────────
+class MiniWebSocket extends EventEmitter {
+    constructor(url) {
+        super();
+        this.readyState = 0; // CONNECTING
+        this._fragments = [];
+
+        const parsed = new URL(url);
+        const key = crypto.randomBytes(16).toString('base64');
+        const port = parsed.port || 80;
+
+        const net = require('net');
+        this._socket = net.createConnection({ host: parsed.hostname, port }, () => {
+            const path = parsed.pathname + parsed.search;
+            const req = [
+                `GET ${path} HTTP/1.1`,
+                `Host: ${parsed.hostname}:${port}`,
+                `Upgrade: websocket`,
+                `Connection: Upgrade`,
+                `Sec-WebSocket-Key: ${key}`,
+                `Sec-WebSocket-Version: 13`,
+                '',
+                ''
+            ].join('\r\n');
+            this._socket.write(req);
+        });
+
+        this._upgraded = false;
+        this._buffer = Buffer.alloc(0);
+
+        this._socket.on('data', (data) => {
+            if (!this._upgraded) {
+                this._buffer = Buffer.concat([this._buffer, data]);
+                const headerEnd = this._buffer.indexOf('\r\n\r\n');
+                if (headerEnd === -1) return;
+
+                const header = this._buffer.slice(0, headerEnd).toString();
+                if (!header.includes('101')) {
+                    this.readyState = 3;
+                    this.emit('error', new Error('WebSocket upgrade failed'));
+                    this._socket.destroy();
+                    return;
+                }
+
+                this._upgraded = true;
+                this.readyState = 1; // OPEN
+                this.emit('open');
+
+                const remaining = this._buffer.slice(headerEnd + 4);
+                this._buffer = Buffer.alloc(0);
+                if (remaining.length > 0) {
+                    this._processData(remaining);
+                }
+            } else {
+                this._processData(data);
+            }
+        });
+
+        this._socket.on('close', () => {
+            if (this.readyState !== 3) {
+                this.readyState = 3; // CLOSED
+                this.emit('close');
+            }
+        });
+
+        this._socket.on('error', (err) => {
+            this.emit('error', err);
+        });
+    }
+
+    _processData(data) {
+        this._buffer = Buffer.concat([this._buffer, data]);
+
+        while (this._buffer.length >= 2) {
+            const firstByte = this._buffer[0];
+            const secondByte = this._buffer[1];
+            const fin = (firstByte & 0x80) !== 0;
+            const opcode = firstByte & 0x0f;
+            const masked = (secondByte & 0x80) !== 0;
+            let payloadLen = secondByte & 0x7f;
+            let offset = 2;
+
+            if (payloadLen === 126) {
+                if (this._buffer.length < 4) return;
+                payloadLen = this._buffer.readUInt16BE(2);
+                offset = 4;
+            } else if (payloadLen === 127) {
+                if (this._buffer.length < 10) return;
+                payloadLen = Number(this._buffer.readBigUInt64BE(2));
+                offset = 10;
+            }
+
+            if (masked) offset += 4;
+
+            if (this._buffer.length < offset + payloadLen) return;
+
+            let payload = this._buffer.slice(offset, offset + payloadLen);
+
+            if (masked) {
+                const mask = this._buffer.slice(offset - 4, offset);
+                for (let i = 0; i < payload.length; i++) {
+                    payload[i] ^= mask[i & 3];
+                }
+            }
+
+            this._buffer = this._buffer.slice(offset + payloadLen);
+
+            // Handle opcodes
+            if (opcode === 0x8) {
+                // Close frame
+                this.close();
+                return;
+            } else if (opcode === 0x9) {
+                // Ping → Pong
+                this._sendFrame(0xa, payload);
+            } else if (opcode === 0xa) {
+                // Pong — ignore
+            } else if (opcode === 0x0) {
+                // Continuation
+                this._fragments.push(payload);
+                if (fin) {
+                    const full = Buffer.concat(this._fragments);
+                    this._fragments = [];
+                    this.emit('message', full);
+                }
+            } else if (opcode === 0x1 || opcode === 0x2) {
+                // Text or Binary
+                if (fin) {
+                    this.emit('message', payload);
+                } else {
+                    this._fragments = [payload];
+                }
+            }
+        }
+    }
+
+    send(data) {
+        if (this.readyState !== 1) return;
+        const payload = Buffer.from(data, 'utf-8');
+        this._sendFrame(0x1, payload, true);
+    }
+
+    _sendFrame(opcode, payload, mask = true) {
+        if (!this._socket || this._socket.destroyed) return;
+
+        const fin = 0x80;
+        const firstByte = fin | opcode;
+        const maskBit = mask ? 0x80 : 0x00;
+        let header;
+
+        if (payload.length < 126) {
+            header = Buffer.alloc(2);
+            header[0] = firstByte;
+            header[1] = maskBit | payload.length;
+        } else if (payload.length < 65536) {
+            header = Buffer.alloc(4);
+            header[0] = firstByte;
+            header[1] = maskBit | 126;
+            header.writeUInt16BE(payload.length, 2);
+        } else {
+            header = Buffer.alloc(10);
+            header[0] = firstByte;
+            header[1] = maskBit | 127;
+            header.writeBigUInt64BE(BigInt(payload.length), 2);
+        }
+
+        if (mask) {
+            const maskKey = crypto.randomBytes(4);
+            const masked = Buffer.alloc(payload.length);
+            for (let i = 0; i < payload.length; i++) {
+                masked[i] = payload[i] ^ maskKey[i & 3];
+            }
+            this._socket.write(Buffer.concat([header, maskKey, masked]));
+        } else {
+            this._socket.write(Buffer.concat([header, payload]));
+        }
+    }
+
+    close() {
+        if (this.readyState === 3) return;
+        this.readyState = 3;
+        try {
+            this._sendFrame(0x8, Buffer.alloc(0), true);
+            this._socket.end();
+        } catch (e) { }
+        this.emit('close');
+    }
+}
+
+// WebSocket readyState constants
+MiniWebSocket.OPEN = 1;
+
+// ─── Connection Manager ────────────────────────────────────────────────
 
 class ConnectionManager {
     /**
@@ -64,7 +260,7 @@ class ConnectionManager {
 
     async connect() {
         if (!this.isRunning || this.isConnecting) return;
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+        if (this.ws && this.ws.readyState === MiniWebSocket.OPEN) return;
         this.isConnecting = true;
 
         try {
@@ -91,7 +287,7 @@ class ConnectionManager {
 
     _establishConnection(wsUrl) {
         return new Promise((resolve, reject) => {
-            const ws = new WebSocket(wsUrl);
+            const ws = new MiniWebSocket(wsUrl);
             const timeout = setTimeout(() => {
                 try { ws.close(); } catch (e) { }
                 reject(new Error('Connection timeout'));
@@ -280,7 +476,7 @@ class ConnectionManager {
 
     _send(method, params = {}, sessionId = null) {
         return new Promise((resolve, reject) => {
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            if (!this.ws || this.ws.readyState !== MiniWebSocket.OPEN) {
                 reject(new Error('not connected'));
                 return;
             }

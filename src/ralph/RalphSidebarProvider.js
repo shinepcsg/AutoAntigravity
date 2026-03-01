@@ -48,7 +48,11 @@ class RalphSidebarProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'toggleAutoAccept':
-                    if (this.onToggleAutoAccept) this.onToggleAutoAccept();
+                    if (this.onToggleAutoAccept) {
+                        await this.onToggleAutoAccept();
+                    }
+                    // 명시적으로 상태를 다시 전송하여 UI가 즉시 반영되도록 함
+                    this.updateState();
                     break;
                 case 'startRalph':
                     if (this.onStartRalph) this.onStartRalph();
