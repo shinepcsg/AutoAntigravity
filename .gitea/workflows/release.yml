@@ -2,20 +2,43 @@ name: Release VSIX
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
 
 jobs:
   release:
+    # [skip ci] 커밋은 무시 (무한 루프 방지)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: macos-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Setup Git
+        run: |
+          git config user.name "CI Bot"
+          git config user.email "ci@trollgames.co.kr"
+
+      - name: Bump patch version
+        id: version
+        run: |
+          NEW_VERSION=$(npm version patch --no-git-tag-version)
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to ${NEW_VERSION}"
+
+      - name: Commit version bump
+        run: |
+          git add package.json
+          git commit -m "chore: bump to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin master --tags
 
       - name: Install dependencies
         run: npm install
@@ -34,12 +57,11 @@ jobs:
           echo "vsix_file=${VSIX_FILE}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Found VSIX: ${VSIX_FILE}"
-          ls -la *.vsix
 
       - name: Create Release
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ steps.version.outputs.new_version }}
           VERSION: ${{ steps.pkg.outputs.version }}
         run: |
           GITEA_URL="http://office.trollgames.co.kr:3000"
@@ -77,4 +99,3 @@ jobs:
             -F "attachment=@./${VSIX_FILE};type=application/octet-stream"
 
           echo "✅ Done!"
-
