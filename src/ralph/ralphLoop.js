@@ -587,13 +587,41 @@ class RalphLoopManager {
 
     /**
      * Send prompt to Antigravity agent
-     * Strategy: Focus chat → Clipboard → CDP Input events (Ctrl+A, Ctrl+V, Enter)
+     * Strategy: New Chat → Focus chat → Clipboard → CDP Input events (Ctrl+A, Ctrl+V, Enter)
+     * Each iteration starts a NEW chat session so it appears in task history.
      * This approach doesn't depend on DOM structure and works with any chat UI.
      */
     async _sendToAgent(prompt) {
         const cdpPort = this._getCdpPort();
 
-        // ─── Step 1: Focus the chat panel ───
+        // ─── Step 1: Start a NEW chat session ───
+        // This ensures each task gets its own conversation in the history
+        const newChatCommands = [
+            'workbench.action.chat.new',           // Standard VS Code chat new
+            'workbench.action.chat.newChat',        // Alternative name
+            'workbench.action.chat.open',           // Open new chat panel
+        ];
+
+        let newChatCreated = false;
+        for (const cmd of newChatCommands) {
+            try {
+                await vscode.commands.executeCommand(cmd);
+                this._addLog(`[Ralph] 🆕 새 채팅 세션 생성: ${cmd}`);
+                newChatCreated = true;
+                break;
+            } catch (e) {
+                // Try next command
+            }
+        }
+
+        if (!newChatCreated) {
+            this._addLog('[Ralph] ⚠ 새 채팅 세션 생성 실패 — 기존 세션 사용', 'warn');
+        }
+
+        // Wait for the new chat session to fully initialize
+        await new Promise(r => setTimeout(r, 1500));
+
+        // ─── Step 2: Focus the chat panel ───
         const focusCommands = [
             'workbench.panel.chat.view.copilot.focus',
             'workbench.action.chat.openInEditor',
@@ -618,11 +646,11 @@ class RalphLoopManager {
         // Wait for chat panel to be fully focused
         await new Promise(r => setTimeout(r, 800));
 
-        // ─── Step 2: Write prompt to clipboard ───
+        // ─── Step 3: Write prompt to clipboard ───
         await vscode.env.clipboard.writeText(prompt);
         this._addLog('[Ralph] 📋 클립보드에 프롬프트 복사 완료');
 
-        // ─── Step 3: Find the main window CDP target ───
+        // ─── Step 4: Find the main window CDP target ───
         let targets;
         try {
             targets = await this._getTargets(cdpPort);

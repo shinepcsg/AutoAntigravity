@@ -1,130 +1,15 @@
-{
-    "name": "auto-antigravity",
-    "displayName": "AutoAntigravity",
-    "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.8.4",
-    "publisher": "TrollGames",
-    "icon": "images/icon.png",
-    "engines": {
-        "vscode": "^1.75.0"
-    },
-    "categories": [
-        "Other"
-    ],
-    "activationEvents": [
-        "*"
-    ],
-    "main": "./src/extension.js",
-    "contributes": {
-        "commands": [
-            {
-                "command": "autoAntigravity.toggleAutoAccept",
-                "title": "AutoAntigravity: Toggle Auto Accept"
-            },
-            {
-                "command": "autoAntigravity.startRalphLoop",
-                "title": "AutoAntigravity: Start Ralph Loop"
-            },
-            {
-                "command": "autoAntigravity.stopRalphLoop",
-                "title": "AutoAntigravity: Stop Ralph Loop"
-            },
-            {
-                "command": "autoAntigravity.emergencyStop",
-                "title": "AutoAntigravity: Emergency Stop"
-            },
-            {
-                "command": "autoAntigravity.selectTaskFile",
-                "title": "AutoAntigravity: Select Task File"
-            },
-            {
-                "command": "autoAntigravity.checkForUpdates",
-                "title": "AutoAntigravity: Check for Updates"
-            }
-        ],
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "autoAntigravity",
-                    "title": "AutoAntigravity",
-                    "icon": "images/sidebar-icon.svg"
-                }
-            ]
-        },
-        "views": {
-            "autoAntigravity": [
-                {
-                    "type": "webview",
-                    "id": "autoAntigravity.ralphSidebar",
-                    "name": "Ralph Loop"
-                }
-            ]
-        },
-        "keybindings": [
-            {
-                "command": "autoAntigravity.toggleAutoAccept",
-                "key": "ctrl+alt+shift+u",
-                "mac": "cmd+alt+shift+u"
-            }
-        ],
-        "configuration": {
-            "title": "AutoAntigravity",
-            "properties": {
-                "autoAntigravity.autoAccept.pollInterval": {
-                    "type": "number",
-                    "default": 500,
-                    "description": "Auto Accept polling interval in milliseconds"
-                },
-                "autoAntigravity.autoAccept.customButtonTexts": {
-                    "type": "array",
-                    "default": [],
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "Extra button texts to auto-click (for i18n or custom UI)"
-                },
-                "autoAntigravity.autoAccept.cdpPort": {
-                    "type": "number",
-                    "default": 9333,
-                    "description": "CDP remote-debugging-port (default 9333 avoids browser control conflict)"
-                },
-                "autoAntigravity.ralphLoop.maxIterations": {
-                    "type": "number",
-                    "default": 50,
-                    "description": "Maximum Ralph Loop iterations before auto-stop"
-                },
-                "autoAntigravity.ralphLoop.taskFile": {
-                    "type": "string",
-                    "default": "PRD.md",
-                    "description": "Task file name (relative to workspace root)"
-                },
-                "autoAntigravity.ralphLoop.progressFile": {
-                    "type": "string",
-                    "default": "progress.txt",
-                    "description": "Progress file name (relative to workspace root)"
-                },
-                "autoAntigravity.ralphLoop.autoCommit": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically git commit after each iteration"
-                },
-                "autoAntigravity.ralphLoop.iterationDelayMs": {
-                    "type": "number",
-                    "default": 3000,
-                    "description": "Delay between iterations in milliseconds"
-                }
-            }
-        }
-    },
-    "scripts": {
-        "package": "vsce package",
-        "release:patch": "npm version patch && git push origin master --tags",
-        "release:minor": "npm version minor && git push origin master --tags",
-        "release:major": "npm version major && git push origin master --tags"
-    },
-    "repository": {
-        "type": "git",
-        "url": "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity.git"
-    },
-    "license": "MIT"
-}
+# Ralph Loop — Iteration 62
+
+## Current Task
+P1-T01: gh-push-service 구현 — `CppServer/PushServer/` 소스 분석. axum REST API로 푸시 알림 전송 엔드포인트 구현. reqwest로 FCM/OneSignal HTTP API 호출. 설정 파일에서 FCM 키 로드
+
+## Progress
+- Completed: 8/80
+- Remaining: 72
+
+## Instructions
+1. Read the task file at `d:\GIT\MonoGH\CppServer\PRD.md` for full context
+2. Check progress at `d:\GIT\MonoGH\progress.txt` for what's been done
+3. Complete EXACTLY ONE task: "P1-T01: gh-push-service 구현 — `CppServer/PushServer/` 소스 분석. axum REST API로 푸시 알림 전송 엔드포인트 구현. reqwest로 FCM/OneSignal HTTP API 호출. 설정 파일에서 FCM 키 로드"
+4. Do NOT modify the progress file — it is managed automatically
+5. When done, verify your changes work correctly
