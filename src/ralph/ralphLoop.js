@@ -42,7 +42,7 @@ class RalphLoopManager {
         // CDP 관련
         this._connectionManager = null; // shared from AutoAccept
 
-        // ExtensionContext — globalState 영속 저장용
+        // ExtensionContext — workspaceState 영속 저장용 (워크스페이스별)
         this._context = null;
     }
 
@@ -87,7 +87,7 @@ class RalphLoopManager {
     }
 
     /**
-     * Set the ExtensionContext for globalState persistence
+     * Set the ExtensionContext for workspaceState persistence
      * @param {vscode.ExtensionContext} context
      */
     setContext(context) {
@@ -95,11 +95,11 @@ class RalphLoopManager {
     }
 
     /**
-     * Restore task file from globalState (call on activation)
+     * Restore task file from workspaceState (call on activation)
      */
     restoreTaskFile() {
         if (!this._context) return;
-        const savedPath = this._context.globalState.get('autoAntigravity.lastTaskFilePath');
+        const savedPath = this._context.workspaceState.get('autoAntigravity.lastTaskFilePath');
         if (savedPath) {
             const fs = require('fs');
             if (fs.existsSync(savedPath)) {
@@ -137,9 +137,9 @@ class RalphLoopManager {
             const filePath = files[0].fsPath;
             this.taskManager.setTaskFile(filePath);
 
-            // globalState에 경로 영속 저장
+            // workspaceState에 경로 영속 저장 (워크스페이스별)
             if (this._context) {
-                this._context.globalState.update('autoAntigravity.lastTaskFilePath', filePath);
+                this._context.workspaceState.update('autoAntigravity.lastTaskFilePath', filePath);
             }
 
             const progress = this.taskManager.getProgress();
