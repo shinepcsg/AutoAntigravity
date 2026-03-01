@@ -651,21 +651,56 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // ─── Step 2: Create new chat via CDP Ctrl+L ───
+        // ─── Step 2: Create new chat via Runtime.evaluate (click "New Chat" button) ───
         try {
-            await sendKey('keyDown', {
-                key: 'l', code: 'KeyL',
-                windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
-                modifiers: 2,
-            });
-            await sendKey('keyUp', {
-                key: 'l', code: 'KeyL',
-                windowsVirtualKeyCode: 76, nativeVirtualKeyCode: 76,
-                modifiers: 2,
-            });
-            this._addLog('[Ralph] 🆕 새 채팅 (Ctrl+L)');
+            const newChatResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: [
+                    '(function() {',
+                    '  var elems = document.querySelectorAll("button, [role=\\"button\\"], a, [class*=\\"button\\"]");',
+                    '  var keywords = ["new chat", "new conversation", "start new", "clear chat", "new thread"];',
+                    '  for (var i = 0; i < elems.length; i++) {',
+                    '    var el = elems[i];',
+                    '    var text = (el.textContent || "").trim().toLowerCase();',
+                    '    var title = (el.getAttribute("title") || "").toLowerCase();',
+                    '    var ariaLabel = (el.getAttribute("aria-label") || "").toLowerCase();',
+                    '    var all = text + " " + title + " " + ariaLabel;',
+                    '    for (var k = 0; k < keywords.length; k++) {',
+                    '      if (all.indexOf(keywords[k]) >= 0) {',
+                    '        el.click();',
+                    '        return "CLICKED:" + all.substring(0, 60);',
+                    '      }',
+                    '    }',
+                    '  }',
+                    '  // Fallback: look for + icon buttons near chat area',
+                    '  var svgBtns = document.querySelectorAll("button svg, [role=\\"button\\"] svg");',
+                    '  var plusBtns = [];',
+                    '  for (var j = 0; j < svgBtns.length; j++) {',
+                    '    var btn = svgBtns[j].closest("button, [role=\\"button\\"]");',
+                    '    if (btn) {',
+                    '      var t = (btn.getAttribute("title") || btn.getAttribute("aria-label") || "").toLowerCase();',
+                    '      if (t.indexOf("new") >= 0 || t.indexOf("add") >= 0 || t.indexOf("plus") >= 0 || t.indexOf("create") >= 0) {',
+                    '        btn.click();',
+                    '        return "CLICKED_ICON:" + t.substring(0, 60);',
+                    '      }',
+                    '    }',
+                    '  }',
+                    '  // Debug: list all buttons for next iteration',
+                    '  var dbg = [];',
+                    '  for (var m = 0; m < Math.min(elems.length, 20); m++) {',
+                    '    var e = elems[m];',
+                    '    var info = (e.getAttribute("title") || e.getAttribute("aria-label") || e.textContent || "").trim().substring(0, 40);',
+                    '    if (info) dbg.push(info);',
+                    '  }',
+                    '  return "NO_BTN_FOUND(" + elems.length + "):" + dbg.join("|");',
+                    '})()',
+                ].join('\n'),
+                returnByValue: true
+            }, 5000);
+
+            const newChatVal = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
+            this._addLog('[Ralph] 새 채팅: ' + newChatVal);
         } catch (e) {
-            this._addLog('[Ralph] ⚠ Ctrl+L 실패: ' + e.message, 'warn');
+            this._addLog('[Ralph] ⚠ 새 채팅 버튼 탐색 실패: ' + e.message, 'warn');
         }
 
         await delay(2000);
