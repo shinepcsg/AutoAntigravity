@@ -268,11 +268,14 @@ class RalphLoopManager {
     }
 
     /**
-     * Send a CDP command to a target via HTTP (one-shot, no persistent WS needed)
-     * Uses the /json endpoint to find pages, then connects via WS for a single eval
+     * Send a CDP command to a target via WebSocket (one-shot connection)
+     * General-purpose: supports any CDP method (Runtime.evaluate, Input.insertText, etc.)
+     * @param {string} targetWsUrl - WebSocket debugger URL
+     * @param {string} method - CDP method name (e.g. 'Runtime.evaluate', 'Input.insertText')
+     * @param {object} params - CDP method parameters
+     * @param {number} timeout - Timeout in ms
      */
-    async _cdpEvaluateOnTarget(targetWsUrl, expression, timeout = 10000) {
-        // Use the MiniWebSocket from ConnectionManager, or a simple net-based approach
+    async _cdpSendCommand(targetWsUrl, method, params, timeout = 10000) {
         return new Promise((resolve, reject) => {
             const net = require('net');
             const crypto = require('crypto');
@@ -299,8 +302,35 @@ class RalphLoopManager {
             let msgId = 1;
             const timer = setTimeout(() => {
                 try { socket.destroy(); } catch (e) { }
-                reject(new Error('CDP evaluate timeout'));
+                reject(new Error(`CDP ${method} timeout`));
             }, timeout);
+
+            const sendWsFrame = (data) => {
+                const crypto2 = require('crypto');
+                const payload = Buffer.from(data, 'utf-8');
+                const maskKey = crypto2.randomBytes(4);
+                let header;
+                if (payload.length < 126) {
+                    header = Buffer.alloc(2);
+                    header[0] = 0x81;
+                    header[1] = 0x80 | payload.length;
+                } else if (payload.length < 65536) {
+                    header = Buffer.alloc(4);
+                    header[0] = 0x81;
+                    header[1] = 0x80 | 126;
+                    header.writeUInt16BE(payload.length, 2);
+                } else {
+                    header = Buffer.alloc(10);
+                    header[0] = 0x81;
+                    header[1] = 0x80 | 127;
+                    header.writeBigUInt64BE(BigInt(payload.length), 2);
+                }
+                const masked = Buffer.alloc(payload.length);
+                for (let i = 0; i < payload.length; i++) {
+                    masked[i] = payload[i] ^ maskKey[i & 3];
+                }
+                socket.write(Buffer.concat([header, maskKey, masked]));
+            };
 
             socket.on('data', (data) => {
                 buffer = Buffer.concat([buffer, data]);
@@ -318,37 +348,10 @@ class RalphLoopManager {
                     upgraded = true;
                     buffer = buffer.slice(headerEnd + 4);
 
-                    // Send Runtime.evaluate command
-                    const cmd = JSON.stringify({
-                        id: msgId,
-                        method: 'Runtime.evaluate',
-                        params: { expression, returnByValue: true }
-                    });
-                    const payload = Buffer.from(cmd, 'utf-8');
-                    const maskKey = crypto.randomBytes(4);
-                    let header2;
-                    if (payload.length < 126) {
-                        header2 = Buffer.alloc(2);
-                        header2[0] = 0x81; // FIN + text
-                        header2[1] = 0x80 | payload.length;
-                    } else if (payload.length < 65536) {
-                        header2 = Buffer.alloc(4);
-                        header2[0] = 0x81;
-                        header2[1] = 0x80 | 126;
-                        header2.writeUInt16BE(payload.length, 2);
-                    } else {
-                        header2 = Buffer.alloc(10);
-                        header2[0] = 0x81;
-                        header2[1] = 0x80 | 127;
-                        header2.writeBigUInt64BE(BigInt(payload.length), 2);
-                    }
-                    const masked = Buffer.alloc(payload.length);
-                    for (let i = 0; i < payload.length; i++) {
-                        masked[i] = payload[i] ^ maskKey[i & 3];
-                    }
-                    socket.write(Buffer.concat([header2, maskKey, masked]));
+                    // Send the CDP command
+                    const cmd = JSON.stringify({ id: msgId, method, params });
+                    sendWsFrame(cmd);
 
-                    // Process any remaining data in buffer
                     if (buffer.length > 0) {
                         tryParseResponse();
                     }
@@ -360,9 +363,8 @@ class RalphLoopManager {
 
             function tryParseResponse() {
                 while (buffer.length >= 2) {
-                    const firstByte = buffer[0];
                     const secondByte = buffer[1];
-                    const masked = (secondByte & 0x80) !== 0;
+                    const isMasked = (secondByte & 0x80) !== 0;
                     let payloadLen = secondByte & 0x7f;
                     let offset = 2;
 
@@ -376,11 +378,11 @@ class RalphLoopManager {
                         offset = 10;
                     }
 
-                    if (masked) offset += 4;
+                    if (isMasked) offset += 4;
                     if (buffer.length < offset + payloadLen) return;
 
                     let payload = buffer.slice(offset, offset + payloadLen);
-                    if (masked) {
+                    if (isMasked) {
                         const mask = buffer.slice(offset - 4, offset);
                         for (let i = 0; i < payload.length; i++) {
                             payload[i] ^= mask[i & 3];
@@ -414,6 +416,16 @@ class RalphLoopManager {
                 reject(new Error('Connection closed before response'));
             });
         });
+    }
+
+    /**
+     * Shorthand: evaluate JS expression on a CDP target
+     */
+    async _cdpEvaluateOnTarget(targetWsUrl, expression, timeout = 10000) {
+        return this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+            expression,
+            returnByValue: true
+        }, timeout);
     }
 
     // ─── Internal Loop Logic ──────────────────────────────────────────
@@ -539,35 +551,14 @@ class RalphLoopManager {
     }
 
     /**
-     * Send prompt to Antigravity agent via VS Code Chat API
-     * Primary: uses workbench.action.chat.open with query parameter
-     * Fallback: CDP injection into chat webview
+     * Send prompt to Antigravity agent
+     * Strategy: Focus chat → Clipboard → CDP Input events (Ctrl+A, Ctrl+V, Enter)
+     * This approach doesn't depend on DOM structure and works with any chat UI.
      */
     async _sendToAgent(prompt) {
-        // ─── Strategy 1: VS Code Chat Command API (most reliable) ───
-        // workbench.action.chat.open supports { query, isPartialQuery } parameters
-        const chatOpenCommands = [
-            'workbench.action.chat.open',
-            'workbench.action.chat.newChat',
-        ];
+        const cdpPort = this._getCdpPort();
 
-        for (const cmd of chatOpenCommands) {
-            try {
-                await vscode.commands.executeCommand(cmd, {
-                    query: prompt,
-                    isPartialQuery: false   // false = auto-submit
-                });
-                this._addLog(`[Ralph] ✅ 채팅 API로 전송 성공: ${cmd}`);
-                return; // Success!
-            } catch (e) {
-                this._addLog(`[Ralph] ℹ ${cmd} 실패: ${e.message}`, 'info');
-                // Try next command
-            }
-        }
-
-        // ─── Strategy 2: Focus chat panel + type via command ───
-        this._addLog('[Ralph] ⚠ chat.open 실패, 채팅 패널 포커스 + 타이핑 시도...', 'warn');
-
+        // ─── Step 1: Focus the chat panel ───
         const focusCommands = [
             'workbench.panel.chat.view.copilot.focus',
             'workbench.action.chat.openInEditor',
@@ -579,183 +570,125 @@ class RalphLoopManager {
                 await vscode.commands.executeCommand(cmd);
                 this._addLog(`[Ralph] 채팅 포커스 성공: ${cmd}`);
                 chatFocused = true;
-                await new Promise(r => setTimeout(r, 500));
                 break;
             } catch (e) {
                 // Try next
             }
         }
 
-        if (chatFocused) {
-            // Try typing the prompt via the workbench type command
-            try {
-                // First, clear any existing text by selecting all
-                await vscode.commands.executeCommand('editor.action.selectAll');
-                await new Promise(r => setTimeout(r, 100));
-
-                // Type the prompt text
-                await vscode.commands.executeCommand('type', { text: prompt });
-                await new Promise(r => setTimeout(r, 300));
-
-                // Submit by executing the chat accept input command
-                const submitCommands = [
-                    'workbench.action.chat.acceptInput',
-                    'antigravity.chat.submit',
-                    'antigravity.chat.acceptInput',
-                ];
-
-                for (const submitCmd of submitCommands) {
-                    try {
-                        await vscode.commands.executeCommand(submitCmd);
-                        this._addLog(`[Ralph] ✅ 제출 성공: ${submitCmd}`);
-                        return;
-                    } catch (e) {
-                        // Try next submit command
-                    }
-                }
-            } catch (e) {
-                this._addLog(`[Ralph] ⚠ 타이핑 방식 실패: ${e.message}`, 'warn');
-            }
+        if (!chatFocused) {
+            throw new Error('채팅 패널 포커스 실패 — 채팅 패널이 없는 것 같습니다.');
         }
 
-        // ─── Strategy 3: CDP direct injection (fallback) ───
-        this._addLog('[Ralph] ⚠ VS Code API 모두 실패, CDP 직접 주입 시도...', 'warn');
+        // Wait for chat panel to be fully focused
+        await new Promise(r => setTimeout(r, 800));
 
-        const cdpPort = this._getCdpPort();
+        // ─── Step 2: Write prompt to clipboard ───
+        await vscode.env.clipboard.writeText(prompt);
+        this._addLog('[Ralph] 📋 클립보드에 프롬프트 복사 완료');
+
+        // ─── Step 3: Find the main window CDP target ───
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
         } catch (e) {
-            throw new Error(`모든 전송 방법 실패. CDP 타겟 조회도 실패 (port ${cdpPort}): ${e.message}`);
+            throw new Error(`CDP 타겟 조회 실패 (port ${cdpPort}): ${e.message}`);
         }
 
-        if (!targets || targets.length === 0) {
-            throw new Error(`모든 전송 방법 실패. CDP 타겟이 없습니다 (port ${cdpPort})`);
-        }
-
-        this._addLog(`[Ralph] CDP 타겟 ${targets.length}개 발견`);
-
-        // Escape the prompt for safe injection into JavaScript string
-        const escapedPrompt = prompt
-            .replace(/\\/g, '\\\\')
-            .replace(/'/g, "\\'")
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-
-        // Build the injection script
-        const injectionScript = `
-(function() {
-    var selectors = [
-        'textarea[class*="chat"]',
-        'textarea[class*="input"]',
-        'textarea[placeholder]',
-        'div[contenteditable="true"][class*="chat"]',
-        'div[contenteditable="true"][class*="input"]',
-        'div[contenteditable="true"]',
-        'textarea'
-    ];
-
-    var input = null;
-    for (var i = 0; i < selectors.length; i++) {
-        var candidates = document.querySelectorAll(selectors[i]);
-        for (var j = 0; j < candidates.length; j++) {
-            var el = candidates[j];
-            if (el.offsetParent !== null && !el.disabled && !el.readOnly) {
-                input = el;
-                break;
-            }
-        }
-        if (input) break;
-    }
-
-    if (!input) {
-        return JSON.stringify({ success: false, error: 'chat-input-not-found', selectors: selectors.length });
-    }
-
-    var promptText = '${escapedPrompt}';
-
-    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
-        var nativeSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLTextAreaElement.prototype, 'value'
+        // Find the main workbench page target (the one with the active window title)
+        // It's the page type with workbench.html URL, and NOT jetski-agent
+        const mainTarget = targets.find(t =>
+            t.type === 'page' &&
+            t.url && t.url.includes('workbench.html') &&
+            !t.url.includes('jetski-agent')
         );
-        if (nativeSetter && nativeSetter.set) {
-            nativeSetter.set.call(input, promptText);
-        } else {
-            input.value = promptText;
+
+        if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
+            // Fall back: try any page target
+            const anyPage = targets.find(t => t.type === 'page' && t.webSocketDebuggerUrl);
+            if (!anyPage) {
+                throw new Error(`메인 윈도우 CDP 타겟을 찾을 수 없습니다. (${targets.length}개 타겟 중 page 없음)`);
+            }
+            this._addLog(`[Ralph] ⚠ 메인 타겟 미확인, 대체 page 사용: ${(anyPage.title || '').substring(0, 50)}`, 'warn');
+            return this._cdpInputSequence(anyPage.webSocketDebuggerUrl);
         }
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-    } else {
-        input.textContent = promptText;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        this._addLog(`[Ralph] 메인 윈도우 타겟: ${(mainTarget.title || '').substring(0, 60)}`);
+        return this._cdpInputSequence(mainTarget.webSocketDebuggerUrl);
     }
 
-    return new Promise(function(resolve) {
-        setTimeout(function() {
-            var enterEvent = new KeyboardEvent('keydown', {
+    /**
+     * Send keyboard input sequence via CDP to paste from clipboard and submit
+     * Sequence: Ctrl+A (select all) → Ctrl+V (paste) → wait → Enter (submit)
+     */
+    async _cdpInputSequence(targetWsUrl) {
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // Helper: send key event
+        const sendKey = async (type, params) => {
+            await this._cdpSendCommand(targetWsUrl, `Input.dispatchKeyEvent`, {
+                type,
+                ...params,
+            }, 5000);
+        };
+
+        try {
+            // Ctrl+A — select all existing text in chat input
+            await sendKey('keyDown', {
+                key: 'a',
+                code: 'KeyA',
+                windowsVirtualKeyCode: 65,
+                nativeVirtualKeyCode: 65,
+                modifiers: 2, // Ctrl
+            });
+            await sendKey('keyUp', {
+                key: 'a',
+                code: 'KeyA',
+                windowsVirtualKeyCode: 65,
+                nativeVirtualKeyCode: 65,
+                modifiers: 2,
+            });
+            await delay(100);
+
+            // Ctrl+V — paste from clipboard
+            await sendKey('keyDown', {
+                key: 'v',
+                code: 'KeyV',
+                windowsVirtualKeyCode: 86,
+                nativeVirtualKeyCode: 86,
+                modifiers: 2, // Ctrl
+            });
+            await sendKey('keyUp', {
+                key: 'v',
+                code: 'KeyV',
+                windowsVirtualKeyCode: 86,
+                nativeVirtualKeyCode: 86,
+                modifiers: 2,
+            });
+
+            this._addLog('[Ralph] ✅ CDP로 붙여넣기 완료 (Ctrl+V)');
+            await delay(500); // Wait for paste to be processed
+
+            // Enter — submit the chat input
+            await sendKey('keyDown', {
                 key: 'Enter',
                 code: 'Enter',
-                keyCode: 13,
-                which: 13,
-                bubbles: true,
-                cancelable: true
+                windowsVirtualKeyCode: 13,
+                nativeVirtualKeyCode: 13,
+                modifiers: 0,
             });
-            input.dispatchEvent(enterEvent);
+            await sendKey('keyUp', {
+                key: 'Enter',
+                code: 'Enter',
+                windowsVirtualKeyCode: 13,
+                nativeVirtualKeyCode: 13,
+                modifiers: 0,
+            });
 
-            var form = input.closest('form');
-            if (form) {
-                try { form.requestSubmit(); } catch(e) { }
-            }
-
-            resolve(JSON.stringify({
-                success: true,
-                element: input.tagName,
-                className: (input.className || '').substring(0, 100)
-            }));
-        }, 300);
-    });
-})()`;
-
-        // Try each CDP target
-        let lastError = null;
-        const candidateTargets = targets.filter(t =>
-            t.type === 'page' ||
-            (t.url && (t.url.includes('vscode-webview://') || t.url.includes('webview')))
-        );
-        const allTargets = candidateTargets.length > 0 ? candidateTargets : targets;
-
-        for (const target of allTargets) {
-            if (!target.webSocketDebuggerUrl) continue;
-
-            try {
-                const result = await this._cdpEvaluateOnTarget(
-                    target.webSocketDebuggerUrl,
-                    injectionScript,
-                    8000
-                );
-
-                if (result && result.result) {
-                    let value = result.result.value;
-                    if (typeof value === 'string') {
-                        try { value = JSON.parse(value); } catch (e) { }
-                    }
-
-                    if (value && value.success) {
-                        this._addLog(`[Ralph] ✅ CDP로 채팅 입력 완료 (${value.element}, target: ${(target.url || '').substring(0, 50)})`);
-                        return;
-                    }
-
-                    if (value && value.error === 'chat-input-not-found') {
-                        continue;
-                    }
-                }
-            } catch (e) {
-                lastError = e.message;
-            }
+            this._addLog('[Ralph] ✅ CDP로 Enter 전송 완료');
+        } catch (e) {
+            throw new Error(`CDP Input 이벤트 전송 실패: ${e.message}`);
         }
-
-        throw new Error(`채팅 입력 전송 실패 — 모든 방법 시도 완료. CDP ${allTargets.length}개 타겟, 마지막 에러: ${lastError || 'unknown'}`);
     }
 
     /**
