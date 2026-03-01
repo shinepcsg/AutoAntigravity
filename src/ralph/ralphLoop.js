@@ -651,57 +651,61 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // --- Step 2: Create new chat --- climb from chat input to panel header ---
+        // --- Step 2: Create new chat via VS Code command discovery ---
+        // Search all registered commands for chat/agent/conversation related ones
         try {
-            const newChatResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-                expression: [
-                    '(function() {',
-                    '  var ci = document.querySelector(".cursor-text[contenteditable]");',
-                    '  if (!ci) return "NO_CHAT_INPUT";',
-                    '  // Climb all the way up (max 15 levels) collecting ALL buttons',
-                    '  var container = ci;',
-                    '  var allBtns = [];',
-                    '  var prevBtnCount = 0;',
-                    '  for (var d = 0; d < 15; d++) {',
-                    '    container = container.parentElement;',
-                    '    if (!container || container === document.body) break;',
-                    '    var btns = container.querySelectorAll("button, [role=\\"button\\"]");',
-                    '    if (btns.length > prevBtnCount) {',
-                    '      prevBtnCount = btns.length;',
-                    '      // Check all buttons at this level for new chat keywords',
-                    '      for (var i = 0; i < btns.length; i++) {',
-                    '        var b = btns[i];',
-                    '        var txt = (b.textContent || "").trim().toLowerCase().substring(0, 40);',
-                    '        var ttl = (b.getAttribute("title") || "").toLowerCase();',
-                    '        var lbl = (b.getAttribute("aria-label") || "").toLowerCase();',
-                    '        var cls = (b.className || "").toLowerCase().substring(0, 40);',
-                    '        var all = txt + "|" + ttl + "|" + lbl + "|" + cls;',
-                    '        var kw = ["new chat","new conversation","new thread","new task","new session","start new"];',
-                    '        for (var k = 0; k < kw.length; k++) {',
-                    '          if (all.indexOf(kw[k]) >= 0) { b.click(); return "CLICKED:" + all.substring(0, 80); }',
-                    '        }',
-                    '      }',
-                    '    }',
-                    '  }',
-                    '  // Not found by keyword. Gather debug info from the widest container.',
-                    '  if (container) {',
-                    '    var allB = container.querySelectorAll("button, [role=\\"button\\"]");',
-                    '    for (var j = 0; j < allB.length; j++) {',
-                    '      var bb = allB[j];',
-                    '      var info = (bb.getAttribute("title") || bb.getAttribute("aria-label") || bb.textContent || "").trim();',
-                    '      var cn = (bb.className || "").substring(0, 30);',
-                    '      if (info || cn) allBtns.push((info || "[no-text]").substring(0, 35) + "~" + cn);',
-                    '    }',
-                    '  }',
-                    '  return "NO_BTN(" + allBtns.length + "):" + allBtns.slice(0, 30).join("|");',
-                    '})()',
-                ].join('\n'),
-                returnByValue: true
-            }, 5000);
-            const v = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
-            this._addLog('[Ralph] 새 채팅: ' + v);
+            const allCommands = await vscode.commands.getCommands(true);
+            const chatCmds = allCommands.filter(c => {
+                const cl = c.toLowerCase();
+                return (cl.includes('chat') || cl.includes('agent') || cl.includes('conversation') || cl.includes('thread'))
+                    && (cl.includes('new') || cl.includes('create') || cl.includes('clear') || cl.includes('reset') || cl.includes('start'));
+            });
+            this._addLog('[Ralph] 새 채팅 후보 커맨드: ' + chatCmds.join(', '));
+
+            let newChatOk = false;
+            for (const cmd of chatCmds) {
+                try {
+                    await vscode.commands.executeCommand(cmd);
+                    this._addLog('[Ralph] 🆕 새 채팅 성공: ' + cmd);
+                    newChatOk = true;
+                    break;
+                } catch (e) {
+                    // try next
+                }
+            }
+
+            if (!newChatOk) {
+                // Fallback: try known VS Code chat commands
+                const fallbackCmds = [
+                    'workbench.action.chat.new',
+                    'workbench.action.chat.newChat',
+                    'workbench.action.chat.clear',
+                    'workbench.action.chat.newEditSession',
+                    'aichat.newchat',
+                    'aichat.new',
+                ];
+                for (const cmd of fallbackCmds) {
+                    try {
+                        await vscode.commands.executeCommand(cmd);
+                        this._addLog('[Ralph] 🆕 새 채팅 (fallback): ' + cmd);
+                        newChatOk = true;
+                        break;
+                    } catch (e) {
+                        // try next
+                    }
+                }
+            }
+
+            if (!newChatOk) {
+                // Log ALL agent/chat related commands for debugging
+                const relatedCmds = allCommands.filter(c => {
+                    const cl = c.toLowerCase();
+                    return cl.includes('chat') || cl.includes('agent') || cl.includes('antigravity') || cl.includes('conversation');
+                });
+                this._addLog('[Ralph] ⚠ 관련 커맨드 목록: ' + relatedCmds.slice(0, 20).join(', '));
+            }
         } catch (e) {
-            this._addLog('[Ralph] ⚠ 새 채팅 탐색 실패: ' + e.message, 'warn');
+            this._addLog('[Ralph] ⚠ 커맨드 탐색 실패: ' + e.message, 'warn');
         }
 
         await delay(2000);
