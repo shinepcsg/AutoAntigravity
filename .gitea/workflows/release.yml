@@ -24,7 +24,7 @@ jobs:
         run: npm install -g @vscode/vsce
 
       - name: Package VSIX
-        run: vsce package --no-dependencies --baseContentUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master" --baseImagesUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master"
+        run: vsce package --no-dependencies --allow-star-activation --baseContentUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master" --baseImagesUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master"
 
       - name: Find VSIX file
         id: pkg
