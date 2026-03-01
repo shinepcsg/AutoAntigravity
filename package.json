@@ -1,0 +1,101 @@
+{
+    "name": "auto-antigravity",
+    "displayName": "AutoAntigravity",
+    "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
+    "version": "1.0.0",
+    "publisher": "TrollGames",
+    "icon": "images/icon.png",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./src/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "autoAntigravity.toggleAutoAccept",
+                "title": "AutoAntigravity: Toggle Auto Accept"
+            },
+            {
+                "command": "autoAntigravity.startRalphLoop",
+                "title": "AutoAntigravity: Start Ralph Loop"
+            },
+            {
+                "command": "autoAntigravity.stopRalphLoop",
+                "title": "AutoAntigravity: Stop Ralph Loop"
+            },
+            {
+                "command": "autoAntigravity.emergencyStop",
+                "title": "AutoAntigravity: Emergency Stop"
+            },
+            {
+                "command": "autoAntigravity.selectTaskFile",
+                "title": "AutoAntigravity: Select Task File"
+            }
+        ],
+        "configuration": {
+            "title": "AutoAntigravity",
+            "properties": {
+                "autoAntigravity.autoAccept.pollInterval": {
+                    "type": "number",
+                    "default": 500,
+                    "description": "Auto Accept polling interval in milliseconds"
+                },
+                "autoAntigravity.autoAccept.customButtonTexts": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Extra button texts to auto-click (for i18n or custom UI)"
+                },
+                "autoAntigravity.autoAccept.cdpPort": {
+                    "type": "number",
+                    "default": 9333,
+                    "description": "CDP remote-debugging-port (default 9333 avoids browser control conflict)"
+                },
+                "autoAntigravity.ralphLoop.maxIterations": {
+                    "type": "number",
+                    "default": 50,
+                    "description": "Maximum Ralph Loop iterations before auto-stop"
+                },
+                "autoAntigravity.ralphLoop.taskFile": {
+                    "type": "string",
+                    "default": "PRD.md",
+                    "description": "Task file name (relative to workspace root)"
+                },
+                "autoAntigravity.ralphLoop.progressFile": {
+                    "type": "string",
+                    "default": "progress.txt",
+                    "description": "Progress file name (relative to workspace root)"
+                },
+                "autoAntigravity.ralphLoop.autoCommit": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically git commit after each iteration"
+                },
+                "autoAntigravity.ralphLoop.iterationDelayMs": {
+                    "type": "number",
+                    "default": 3000,
+                    "description": "Delay between iterations in milliseconds"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "package": "vsce package --no-dependencies"
+    },
+    "repository": {
+        "type": "git",
+        "url": "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity.git"
+    },
+    "license": "MIT",
+    "dependencies": {
+        "ws": "^8.19.0"
+    }
+}
