@@ -554,6 +554,13 @@ class RalphLoopManager {
                 ].join('\n')
                 : [
                     '(function() {',
+                    '  var bodyText = document.body.innerText || "";',
+                    '  if (bodyText.includes("Model quota reached") && bodyText.includes("refresh on")) {',
+                    '    var match = bodyText.match(/refresh on (.*?)\\./);',
+                    '    if (match) {',
+                    '      return JSON.stringify({ busy: true, reason: "quota", refreshTime: match[1] });',
+                    '    }',
+                    '  }',
                     '  var btns = document.querySelectorAll("button");',
                     '  for (var i = 0; i < btns.length; i++) {',
                     '    var b = btns[i];',
@@ -675,17 +682,25 @@ class RalphLoopManager {
             this.lastError = null;
 
         } catch (e) {
-            this.consecutiveErrors++;
-            this.lastError = e.message;
-            const errMsg = `반복 ${this.currentIteration} 에러: ${e.message}`;
-            this._addLog(`[Ralph] ❌ ${errMsg}`, 'error');
-            vscode.window.showErrorMessage(`Ralph Loop 에러: ${errMsg}`);
-            this.progressTracker.appendProgress(
-                this.currentIteration,
-                task.text,
-                'failed',
-                e.message
-            );
+            if (e.message === 'QUOTA_REACHED') {
+                // Quota 제한으로 인해 대기한 경우
+                this._addLog(`[Ralph] 🔄 동일한 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다 (${task.text})`);
+                this.currentIteration--;
+                this.lastError = null;
+                this.consecutiveErrors = 0;
+            } else {
+                this.consecutiveErrors++;
+                this.lastError = e.message;
+                const errMsg = `반복 ${this.currentIteration} 에러: ${e.message}`;
+                this._addLog(`[Ralph] ❌ ${errMsg}`, 'error');
+                vscode.window.showErrorMessage(`Ralph Loop 에러: ${errMsg}`);
+                this.progressTracker.appendProgress(
+                    this.currentIteration,
+                    task.text,
+                    'failed',
+                    e.message
+                );
+            }
         }
 
         this._notifyStateChange();
@@ -983,6 +998,47 @@ class RalphLoopManager {
             const status = await this._isAgentBusy(targetWsUrl);
 
             if (status.busy) {
+                // Quota reached 처리
+                if (status.reason === 'quota' && status.refreshTime) {
+                    const parsedDate = new Date(status.refreshTime);
+                    const now = new Date();
+                    let waitMs = parsedDate.getTime() - now.getTime();
+
+                    if (isNaN(waitMs)) {
+                        this._addLog(`[Ralph] ⚠ 할당량(Quota) 시간 파싱 실패: ${status.refreshTime} - 기본 5분 대기합니다.`, 'warn');
+                        waitMs = 5 * 60 * 1000;
+                    } else if (waitMs < 0) {
+                        waitMs = 60 * 1000; // 이미 시간이 지났다면 1분 뒤 재시도
+                    } else {
+                        // 실제 갱신이 반영될 수 있도록 10초(10000ms) 여유를 추가
+                        waitMs += 10000;
+                    }
+
+                    const waitMinutes = (waitMs / 60000).toFixed(1);
+                    this._addLog(`[Ralph] ⏳ 모델 할당량 초과(Model quota reached). ${status.refreshTime} 까지 약 ${waitMinutes}분 대기합니다...`, 'warn');
+                    vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 대기합니다.`);
+
+                    // 해당 시간만큼 대기
+                    await delay(waitMs);
+
+                    this._addLog(`[Ralph] 🔄 할당량 갱신 대기 완료. 대화창을 초기화하고 작업을 재시도합니다.`);
+
+                    // Dismiss 버튼 클릭 시도 (UI 정리)
+                    try {
+                        await this._cdpEvaluateOnTarget(targetWsUrl, `
+                            var btns = document.querySelectorAll('button');
+                            for (var i=0; i<btns.length; i++) {
+                                if (btns[i].textContent.includes('Dismiss')) {
+                                    btns[i].click();
+                                }
+                            }
+                        `);
+                    } catch (e) { }
+
+                    // 에러를 던져서 _runNextIteration에서 재시도하도록 함
+                    throw new Error('QUOTA_REACHED');
+                }
+
                 // Stop 버튼 발견 — 에이전트 작업 중
                 consecutiveIdleCount = 0;
                 everSeenBusy = true;
