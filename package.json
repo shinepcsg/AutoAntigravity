@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "AutoAntigravity",
     "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.7.1",
+    "version": "1.8.0",
     "publisher": "TrollGames",
     "icon": "images/icon.png",
     "engines": {
@@ -36,6 +36,10 @@
             {
                 "command": "autoAntigravity.selectTaskFile",
                 "title": "AutoAntigravity: Select Task File"
+            },
+            {
+                "command": "autoAntigravity.checkForUpdates",
+                "title": "AutoAntigravity: Check for Updates"
             }
         ],
         "viewsContainers": {

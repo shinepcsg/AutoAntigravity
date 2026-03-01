@@ -1,14 +1,17 @@
 // AutoAntigravity — Unified Extension Entry Point
 // Combines Auto Accept (CDP button clicking) + Ralph Loop (iterative agent execution)
+// + Self-Updater (Gitea release auto-update)
 
 const vscode = require('vscode');
 const { AutoAcceptManager } = require('./autoAccept');
 const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
 const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
+const { AutoUpdater } = require('./updater');
 
 let autoAccept = null;
 let ralphLoop = null;
 let sidebarProvider = null;
+let autoUpdater = null;
 let statusBarAutoAccept = null;
 let statusBarRalph = null;
 let outputChannel = null;
@@ -63,7 +66,8 @@ function updateRalphStatusBar() {
 // ─── Activation ───────────────────────────────────────────────────────
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('AutoAntigravity');
-    log('AutoAntigravity extension activating (v1.4.0)');
+    const currentVersion = context.extension.packageJSON.version;
+    log(`AutoAntigravity extension activating (v${currentVersion})`);
 
     // ─── Initialize Auto Accept ───────────────────────────────────────
     autoAccept = new AutoAcceptManager(log);
@@ -71,6 +75,7 @@ function activate(context) {
 
     // ─── Initialize Ralph Loop ────────────────────────────────────────
     ralphLoop = new RalphLoopManager(log);
+    ralphLoop.setConnectionManager(autoAccept.connectionManager);
     ralphLoop.onStateChange = () => {
         updateRalphStatusBar();
     };
@@ -170,6 +175,15 @@ function activate(context) {
         })
     );
 
+    // Manual update check
+    context.subscriptions.push(
+        vscode.commands.registerCommand('autoAntigravity.checkForUpdates', () => {
+            if (autoUpdater) {
+                autoUpdater.checkForUpdates();
+            }
+        })
+    );
+
     // ─── Initial StatusBar Update (immediate, before CDP check) ─────
     updateAutoAcceptStatusBar();
     updateRalphStatusBar();
@@ -192,9 +206,15 @@ function activate(context) {
         updateAutoAcceptStatusBar();
         updateRalphStatusBar();
     });
+
+    // ─── Auto Updater ─────────────────────────────────────────────────
+    autoUpdater = new AutoUpdater(context, log);
+    autoUpdater.start();
+    context.subscriptions.push({ dispose: () => autoUpdater.dispose() });
 }
 
 function deactivate() {
+    if (autoUpdater) autoUpdater.dispose();
     if (autoAccept) autoAccept.dispose();
     if (ralphLoop) ralphLoop.dispose();
     if (outputChannel) outputChannel.dispose();
