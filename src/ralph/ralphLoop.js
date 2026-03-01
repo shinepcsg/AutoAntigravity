@@ -651,56 +651,53 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // ─── Step 2: Create new chat via Runtime.evaluate (click "New Chat" button) ───
+        // --- Step 2: Create new chat --- find button near chat input ---
         try {
             const newChatResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
                 expression: [
                     '(function() {',
-                    '  var elems = document.querySelectorAll("button, [role=\\"button\\"], a, [class*=\\"button\\"]");',
-                    '  var keywords = ["new chat", "new conversation", "start new", "clear chat", "new thread"];',
-                    '  for (var i = 0; i < elems.length; i++) {',
-                    '    var el = elems[i];',
-                    '    var text = (el.textContent || "").trim().toLowerCase();',
-                    '    var title = (el.getAttribute("title") || "").toLowerCase();',
-                    '    var ariaLabel = (el.getAttribute("aria-label") || "").toLowerCase();',
-                    '    var all = text + " " + title + " " + ariaLabel;',
-                    '    for (var k = 0; k < keywords.length; k++) {',
-                    '      if (all.indexOf(keywords[k]) >= 0) {',
-                    '        el.click();',
-                    '        return "CLICKED:" + all.substring(0, 60);',
+                    '  var ci = document.querySelector(".cursor-text[contenteditable]");',
+                    '  if (!ci) return "NO_CHAT_INPUT";',
+                    '  var container = ci;',
+                    '  var allBtns = [];',
+                    '  for (var d = 0; d < 10; d++) {',
+                    '    container = container.parentElement;',
+                    '    if (!container) break;',
+                    '    var btns = container.querySelectorAll("button, [role=\\\"button\\\"]");',
+                    '    if (btns.length > 2) {',
+                    '      for (var i = 0; i < btns.length; i++) {',
+                    '        var b = btns[i];',
+                    '        var txt = (b.textContent || "").trim().toLowerCase();',
+                    '        var ttl = (b.getAttribute("title") || "").toLowerCase();',
+                    '        var lbl = (b.getAttribute("aria-label") || "").toLowerCase();',
+                    '        var all = txt + " " + ttl + " " + lbl;',
+                    '        allBtns.push(all.substring(0, 50));',
+                    '        var kw = ["new chat","new conversation","new thread","new task","new session","start new","clear","reset"];',
+                    '        for (var k = 0; k < kw.length; k++) {',
+                    '          if (all.indexOf(kw[k]) >= 0) { b.click(); return "CLICKED:" + all.substring(0, 60); }',
+                    '        }',
+                    '      }',
+                    '      break;',
+                    '    }',
+                    '  }',
+                    '  if (container) {',
+                    '    var ib = container.querySelectorAll("button, [role=\\\"button\\\"]");',
+                    '    for (var j = 0; j < ib.length; j++) {',
+                    '      var t = (ib[j].getAttribute("title") || ib[j].getAttribute("aria-label") || "").toLowerCase();',
+                    '      if (t && (t.indexOf("new") >= 0 || t.indexOf("add") >= 0 || t.indexOf("create") >= 0)) {',
+                    '        ib[j].click(); return "CLICKED_ICON:" + t.substring(0, 60);',
                     '      }',
                     '    }',
                     '  }',
-                    '  // Fallback: look for + icon buttons near chat area',
-                    '  var svgBtns = document.querySelectorAll("button svg, [role=\\"button\\"] svg");',
-                    '  var plusBtns = [];',
-                    '  for (var j = 0; j < svgBtns.length; j++) {',
-                    '    var btn = svgBtns[j].closest("button, [role=\\"button\\"]");',
-                    '    if (btn) {',
-                    '      var t = (btn.getAttribute("title") || btn.getAttribute("aria-label") || "").toLowerCase();',
-                    '      if (t.indexOf("new") >= 0 || t.indexOf("add") >= 0 || t.indexOf("plus") >= 0 || t.indexOf("create") >= 0) {',
-                    '        btn.click();',
-                    '        return "CLICKED_ICON:" + t.substring(0, 60);',
-                    '      }',
-                    '    }',
-                    '  }',
-                    '  // Debug: list all buttons for next iteration',
-                    '  var dbg = [];',
-                    '  for (var m = 0; m < Math.min(elems.length, 20); m++) {',
-                    '    var e = elems[m];',
-                    '    var info = (e.getAttribute("title") || e.getAttribute("aria-label") || e.textContent || "").trim().substring(0, 40);',
-                    '    if (info) dbg.push(info);',
-                    '  }',
-                    '  return "NO_BTN_FOUND(" + elems.length + "):" + dbg.join("|");',
+                    '  return "NO_BTN(" + allBtns.length + "):" + allBtns.join("|");',
                     '})()',
                 ].join('\n'),
                 returnByValue: true
             }, 5000);
-
-            const newChatVal = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
-            this._addLog('[Ralph] 새 채팅: ' + newChatVal);
+            const v = (newChatResult && newChatResult.result) ? newChatResult.result.value : JSON.stringify(newChatResult);
+            this._addLog('[Ralph] \uD83C\uDD95 \uC0C8 \uCC44\uD305: ' + v);
         } catch (e) {
-            this._addLog('[Ralph] ⚠ 새 채팅 버튼 탐색 실패: ' + e.message, 'warn');
+            this._addLog('[Ralph] \u26A0 \uC0C8 \uCC44\uD305 \uD0D0\uC0C9 \uC2E4\uD328: ' + e.message, 'warn');
         }
 
         await delay(2000);
