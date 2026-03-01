@@ -28,6 +28,14 @@ class RalphLoopManager {
         this.currentIteration = 0;
         this.loopTimer = null;
         this.onStateChange = null; // callback for UI updates
+
+        // 로그 버퍼 — 사이드바에 표시
+        this._logBuffer = [];
+        this._maxLogLines = 100;
+
+        // 에러 추적
+        this.lastError = null;
+        this.consecutiveErrors = 0;
     }
 
     /**
@@ -36,6 +44,30 @@ class RalphLoopManager {
      */
     getState() {
         return this.state;
+    }
+
+    /**
+     * Get recent log lines for sidebar display
+     * @param {number} [count=20] - Number of lines to return
+     * @returns {Array<{time: string, msg: string, level: string}>}
+     */
+    getRecentLogs(count = 20) {
+        return this._logBuffer.slice(-count);
+    }
+
+    /**
+     * Add a log entry to the internal buffer and output channel
+     * @param {string} msg - Message
+     * @param {'info'|'warn'|'error'} [level='info']
+     */
+    _addLog(msg, level = 'info') {
+        const time = new Date().toLocaleTimeString();
+        this._logBuffer.push({ time, msg, level });
+        if (this._logBuffer.length > this._maxLogLines) {
+            this._logBuffer.shift();
+        }
+        this.log(msg);
+        this._notifyStateChange();
     }
 
     /**
@@ -63,9 +95,9 @@ class RalphLoopManager {
         if (files && files.length > 0) {
             this.taskManager.setTaskFile(files[0].fsPath);
             const progress = this.taskManager.getProgress();
-            vscode.window.showInformationMessage(
-                `📋 Task file loaded: ${progress.total} tasks (${progress.completed} done, ${progress.remaining} remaining)`
-            );
+            const msg = `📋 Task file loaded: ${progress.total} tasks (${progress.completed} done, ${progress.remaining} remaining)`;
+            vscode.window.showInformationMessage(msg);
+            this._addLog(`[Ralph] ${msg}`);
         }
     }
 
@@ -82,6 +114,7 @@ class RalphLoopManager {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             vscode.window.showErrorMessage('No workspace folder open.');
+            this._addLog('[Ralph] ❌ 워크스페이스 폴더가 열려있지 않습니다.', 'error');
             return;
         }
 
@@ -96,25 +129,30 @@ class RalphLoopManager {
                 if (action === 'Select File') {
                     await this.selectTaskFile();
                 }
-                if (!this.taskManager.getTaskFile()) return;
+                if (!this.taskManager.getTaskFile()) {
+                    this._addLog('[Ralph] ❌ 작업 파일이 선택되지 않았습니다.', 'error');
+                    return;
+                }
             }
         }
 
         // Check if there are tasks to do
         if (this.taskManager.allTasksCompleted()) {
             vscode.window.showInformationMessage('🎉 All tasks are already completed!');
+            this._addLog('[Ralph] ✅ 모든 작업이 이미 완료되었습니다!');
             return;
         }
 
         this.state = LoopState.RUNNING;
+        this.consecutiveErrors = 0;
+        this.lastError = null;
         this.progressTracker.initializeProgressFile();
         this.currentIteration = this.progressTracker.getLastIteration();
 
         const progress = this.taskManager.getProgress();
-        this.log(`[Ralph] Loop started — ${progress.remaining} tasks remaining`);
-        vscode.window.showInformationMessage(
-            `🔄 Ralph Loop started — ${progress.remaining} tasks remaining`
-        );
+        const startMsg = `🔄 Ralph Loop started — ${progress.remaining} tasks remaining`;
+        this._addLog(`[Ralph] ${startMsg}`);
+        vscode.window.showInformationMessage(startMsg);
 
         this._notifyStateChange();
         this._runNextIteration();
@@ -127,7 +165,8 @@ class RalphLoopManager {
         if (this.state === LoopState.IDLE) return;
 
         this.state = LoopState.STOPPING;
-        this.log('[Ralph] Loop stop requested — finishing current iteration...');
+        this._addLog('[Ralph] ⏹ 루프 정지 요청 — 현재 반복 마무리 중...');
+        this._notifyStateChange();
 
         if (this.loopTimer) {
             clearTimeout(this.loopTimer);
@@ -136,6 +175,7 @@ class RalphLoopManager {
 
         this.state = LoopState.IDLE;
         vscode.window.showInformationMessage('⏹ Ralph Loop stopped.');
+        this._addLog('[Ralph] ⏹ 루프가 정지되었습니다.');
         this._notifyStateChange();
     }
 
@@ -143,7 +183,7 @@ class RalphLoopManager {
      * Emergency stop — immediate halt
      */
     emergencyStop() {
-        this.log('[Ralph] ⚠ EMERGENCY STOP');
+        this._addLog('[Ralph] ⚠ 긴급 정지!', 'error');
 
         if (this.loopTimer) {
             clearTimeout(this.loopTimer);
@@ -172,10 +212,19 @@ class RalphLoopManager {
         const maxIterations = config.get('ralphLoop.maxIterations', 50);
 
         if (this.currentIteration >= maxIterations) {
-            this.log(`[Ralph] Max iterations (${maxIterations}) reached — stopping`);
-            vscode.window.showInformationMessage(
-                `🏁 Ralph Loop reached max iterations (${maxIterations}). Stopping.`
-            );
+            const msg = `🏁 Ralph Loop reached max iterations (${maxIterations}). Stopping.`;
+            this._addLog(`[Ralph] ${msg}`, 'warn');
+            vscode.window.showInformationMessage(msg);
+            this.state = LoopState.IDLE;
+            this._notifyStateChange();
+            return;
+        }
+
+        // Check consecutive errors — stop after 3
+        if (this.consecutiveErrors >= 3) {
+            const msg = `❌ 연속 ${this.consecutiveErrors}회 에러 발생 — 루프를 자동 정지합니다.`;
+            this._addLog(`[Ralph] ${msg}`, 'error');
+            vscode.window.showErrorMessage(`Ralph Loop: ${msg}\n마지막 에러: ${this.lastError}`);
             this.state = LoopState.IDLE;
             this._notifyStateChange();
             return;
@@ -184,7 +233,7 @@ class RalphLoopManager {
         // Get next task
         const task = this.taskManager.getNextTask();
         if (!task) {
-            this.log('[Ralph] All tasks completed!');
+            this._addLog('[Ralph] ✅ 모든 작업이 완료되었습니다!');
             vscode.window.showInformationMessage('🎉 Ralph Loop: All tasks completed!');
             this.state = LoopState.IDLE;
             this._notifyStateChange();
@@ -193,16 +242,24 @@ class RalphLoopManager {
 
         this.currentIteration++;
         const progress = this.taskManager.getProgress();
-        this.log(`[Ralph] ═══ Iteration ${this.currentIteration} ═══`);
-        this.log(`[Ralph] Task: ${task.text}`);
-        this.log(`[Ralph] Progress: ${progress.completed}/${progress.total}`);
+        this._addLog(`[Ralph] ═══ 반복 ${this.currentIteration} ═══`);
+        this._addLog(`[Ralph] 작업: ${task.text}`);
+        this._addLog(`[Ralph] 진행: ${progress.completed}/${progress.total}`);
+        this._notifyStateChange();
 
         try {
             // Build the prompt for the agent
             const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
             // Send to Antigravity agent via chat
+            this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
             await this._sendToAgent(prompt);
+            this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
+
+            // Wait for the agent to complete
+            this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기 중...');
+            await this._waitForAgentCompletion();
+            this._addLog('[Ralph] ✅ 에이전트 작업 완료 감지');
 
             // Mark task as complete and record progress
             this.taskManager.markTaskComplete(task.line);
@@ -211,12 +268,24 @@ class RalphLoopManager {
                 task.text,
                 'completed'
             );
+            this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
             // Auto-commit
-            await this.progressTracker.autoCommit(this.currentIteration, task.text);
+            const committed = await this.progressTracker.autoCommit(this.currentIteration, task.text);
+            if (committed) {
+                this._addLog('[Ralph] 📦 Git 커밋 완료');
+            }
+
+            // Reset consecutive errors on success
+            this.consecutiveErrors = 0;
+            this.lastError = null;
 
         } catch (e) {
-            this.log(`[Ralph] Iteration ${this.currentIteration} error: ${e.message}`);
+            this.consecutiveErrors++;
+            this.lastError = e.message;
+            const errMsg = `반복 ${this.currentIteration} 에러: ${e.message}`;
+            this._addLog(`[Ralph] ❌ ${errMsg}`, 'error');
+            vscode.window.showErrorMessage(`Ralph Loop 에러: ${errMsg}`);
             this.progressTracker.appendProgress(
                 this.currentIteration,
                 task.text,
@@ -225,10 +294,12 @@ class RalphLoopManager {
             );
         }
 
+        this._notifyStateChange();
+
         // Schedule next iteration
         if (this.state === LoopState.RUNNING) {
             const delay = config.get('ralphLoop.iterationDelayMs', 3000);
-            this.log(`[Ralph] Next iteration in ${delay}ms...`);
+            this._addLog(`[Ralph] ⏱ 다음 반복까지 ${delay}ms 대기...`);
             this.loopTimer = setTimeout(() => this._runNextIteration(), delay);
         }
     }
@@ -255,25 +326,46 @@ class RalphLoopManager {
 
     /**
      * Send prompt to Antigravity agent
-     * Uses VS Code chat API to spawn a new session
+     * Opens a new chat and actually SUBMITS the prompt (not just filling the input)
      */
     async _sendToAgent(prompt) {
         try {
-            // Try using the Antigravity chat participant API
-            // This creates a new chat session with fresh context
+            // 1. 새 채팅을 열고 프롬프트를 입력란에 채움
             await vscode.commands.executeCommand(
                 'workbench.action.chat.open',
                 { query: prompt }
             );
 
-            this.log('[Ralph] Prompt sent to agent');
+            // 잠시 대기 — 채팅 패널이 열리고 입력이 채워질 때까지
+            await new Promise(r => setTimeout(r, 1500));
 
-            // Wait for the agent to complete (monitor via heuristic)
-            await this._waitForAgentCompletion();
+            // 2. 입력을 실제로 전송 (Accept Input = Enter 키 역할)
+            try {
+                await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
+                this._addLog('[Ralph] ✅ 채팅 입력 전송됨 (acceptInput)');
+            } catch (e1) {
+                // acceptInput이 안 되면 submit 시도
+                this._addLog(`[Ralph] ⚠ acceptInput 실패: ${e1.message}, submit 대체 시도...`, 'warn');
+                try {
+                    await vscode.commands.executeCommand('workbench.action.chat.submit');
+                    this._addLog('[Ralph] ✅ 채팅 입력 전송됨 (submit)');
+                } catch (e2) {
+                    // 마지막 시도: 키바인딩으로 Enter 입력
+                    this._addLog(`[Ralph] ⚠ submit도 실패: ${e2.message}, Enter 키 시뮬레이션 시도...`, 'warn');
+                    try {
+                        await vscode.commands.executeCommand('type', { text: '\n' });
+                        this._addLog('[Ralph] ✅ Enter 키 시뮬레이션으로 전송됨');
+                    } catch (e3) {
+                        throw new Error(`채팅 전송 실패 — 모든 방법 시도함: acceptInput(${e1.message}), submit(${e2.message}), type(${e3.message})`);
+                    }
+                }
+            }
 
         } catch (e) {
-            this.log(`[Ralph] Failed to send to agent: ${e.message}`);
-            // Fallback: try alternative command
+            this._addLog(`[Ralph] ❌ 에이전트 전송 실패: ${e.message}`, 'error');
+
+            // Fallback: 새 채팅 생성 후 재시도
+            this._addLog('[Ralph] 🔄 대체 방법으로 재시도 중...', 'warn');
             try {
                 await vscode.commands.executeCommand('workbench.action.chat.newChat');
                 await new Promise(r => setTimeout(r, 1000));
@@ -281,10 +373,14 @@ class RalphLoopManager {
                     'workbench.action.chat.open',
                     { query: prompt }
                 );
-                await this._waitForAgentCompletion();
+                await new Promise(r => setTimeout(r, 1500));
+                await vscode.commands.executeCommand('workbench.action.chat.acceptInput');
+                this._addLog('[Ralph] ✅ 대체 방법으로 전송 성공');
             } catch (e2) {
-                this.log(`[Ralph] Fallback also failed: ${e2.message}`);
-                throw e2;
+                const errorMsg = `에이전트 전송 완전 실패: ${e2.message}`;
+                this._addLog(`[Ralph] ❌ ${errorMsg}`, 'error');
+                vscode.window.showErrorMessage(`Ralph Loop: ${errorMsg}`);
+                throw new Error(errorMsg);
             }
         }
     }
@@ -295,7 +391,6 @@ class RalphLoopManager {
      */
     async _waitForAgentCompletion() {
         const config = vscode.workspace.getConfiguration('autoAntigravity');
-        const iterationDelay = config.get('ralphLoop.iterationDelayMs', 3000);
 
         // Simple heuristic: wait for a minimum period, then check for inactivity
         // The agent's Auto Accept feature will handle the step-by-step acceptance
@@ -329,13 +424,14 @@ class RalphLoopManager {
                 if (this.state !== LoopState.RUNNING) {
                     clearInterval(checkInterval);
                     watcher.dispose();
+                    this._addLog('[Ralph] ⚠ 루프 상태 변경 — 대기 취소');
                     resolve();
                     return;
                 }
 
                 // Past minimum wait and agent seems idle
                 if (elapsed >= MIN_WAIT_MS && timeSinceActivity >= INACTIVITY_THRESHOLD_MS) {
-                    this.log(`[Ralph] Agent appears idle (${Math.round(timeSinceActivity / 1000)}s inactive)`);
+                    this._addLog(`[Ralph] 에이전트 유휴 감지 (${Math.round(timeSinceActivity / 1000)}초 비활성)`);
                     clearInterval(checkInterval);
                     watcher.dispose();
                     resolve();
@@ -344,15 +440,15 @@ class RalphLoopManager {
 
                 // Maximum wait exceeded
                 if (elapsed >= MAX_WAIT_MS) {
-                    this.log('[Ralph] Max wait time exceeded — proceeding to next iteration');
+                    this._addLog('[Ralph] ⚠ 최대 대기 시간 초과 — 다음 반복으로 이동', 'warn');
                     clearInterval(checkInterval);
                     watcher.dispose();
                     resolve();
                     return;
                 }
 
-                if (elapsed % 30000 === 0) {
-                    this.log(`[Ralph] Waiting for agent... (${Math.round(elapsed / 1000)}s elapsed)`);
+                if (elapsed % 15000 === 0) {
+                    this._addLog(`[Ralph] ⏳ 에이전트 대기 중... (${Math.round(elapsed / 1000)}초 경과)`);
                 }
             }, CHECK_INTERVAL_MS);
         });

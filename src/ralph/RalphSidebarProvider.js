@@ -38,10 +38,6 @@ class RalphSidebarProvider {
             localResourceRoots: [this._context.extensionUri]
         };
 
-        // Retain webview content when hidden (tab switch, etc.)
-        // Note: WebviewView does not support retainContextWhenHidden directly,
-        // but we ensure re-render on visibility change below.
-
         webviewView.webview.html = this._getHtml(webviewView.webview);
 
         // Handle messages from the webview
@@ -51,7 +47,6 @@ class RalphSidebarProvider {
                     if (this.onToggleAutoAccept) {
                         await this.onToggleAutoAccept();
                     }
-                    // 명시적으로 상태를 다시 전송하여 UI가 즉시 반영되도록 함
                     this.updateState();
                     break;
                 case 'startRalph':
@@ -119,7 +114,11 @@ class RalphSidebarProvider {
                 : null,
             progress: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getProgress()
-                : { total: 0, completed: 0, remaining: 0 }
+                : { total: 0, completed: 0, remaining: 0 },
+            // 새로 추가: 로그, 에러 정보
+            recentLogs: this.ralphLoop ? this.ralphLoop.getRecentLogs(30) : [],
+            lastError: this.ralphLoop ? this.ralphLoop.lastError : null,
+            consecutiveErrors: this.ralphLoop ? this.ralphLoop.consecutiveErrors : 0
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -346,9 +345,74 @@ class RalphSidebarProvider {
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
     }
+
+    /* ─── Error Banner ─── */
+    .error-banner {
+        display: none;
+        background: rgba(244, 67, 54, 0.15);
+        border: 1px solid var(--danger);
+        border-radius: 4px;
+        padding: 8px 10px;
+        margin-bottom: 10px;
+        font-size: 11px;
+    }
+    .error-banner.visible { display: block; }
+    .error-banner .error-title {
+        font-weight: 600;
+        color: var(--danger);
+        margin-bottom: 4px;
+    }
+    .error-banner .error-msg {
+        opacity: 0.85;
+        word-break: break-word;
+    }
+
+    /* ─── Log Panel ─── */
+    .log-panel {
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--input-bg);
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-size: 10px;
+        font-family: var(--vscode-editor-font-family, monospace);
+        line-height: 1.5;
+    }
+    .log-panel::-webkit-scrollbar {
+        width: 5px;
+    }
+    .log-panel::-webkit-scrollbar-thumb {
+        background: rgba(128,128,128,0.4);
+        border-radius: 3px;
+    }
+    .log-line {
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding: 1px 0;
+    }
+    .log-line .log-time {
+        opacity: 0.5;
+        margin-right: 4px;
+    }
+    .log-line.log-error { color: var(--danger); }
+    .log-line.log-warn { color: var(--warning); }
+    .log-line.log-info { opacity: 0.85; }
+
+    .log-empty {
+        opacity: 0.4;
+        text-align: center;
+        padding: 10px;
+        font-size: 11px;
+    }
 </style>
 </head>
 <body>
+    <!-- ═══ Error Banner ═══ -->
+    <div id="errorBanner" class="error-banner">
+        <div class="error-title">❌ 에러 발생</div>
+        <div id="errorMsg" class="error-msg"></div>
+    </div>
+
     <!-- ═══ Auto Accept Section ═══ -->
     <div class="section">
         <div class="section-title">⚡ Auto Accept</div>
@@ -405,6 +469,14 @@ class RalphSidebarProvider {
         </button>
     </div>
 
+    <!-- ═══ Log Panel Section ═══ -->
+    <div class="section">
+        <div class="section-title">📜 실시간 로그</div>
+        <div id="logPanel" class="log-panel">
+            <div class="log-empty">아직 로그가 없습니다</div>
+        </div>
+    </div>
+
     <!-- ═══ Settings Section ═══ -->
     <div class="section">
         <div class="section-title">⚙ 설정</div>
@@ -448,7 +520,6 @@ class RalphSidebarProvider {
         vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(e.target.value, 10) || 3000 });
     });
     document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
-        // checkbox 자체 클릭이 아닌 경우에만 처리 (label 클릭 시 checkbox도 토글됨)
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoCommit' });
     });
@@ -471,6 +542,16 @@ class RalphSidebarProvider {
         } else {
             btn.classList.remove('active');
             label.textContent = 'OFF';
+        }
+
+        // Error Banner
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMsg = document.getElementById('errorMsg');
+        if (s.lastError) {
+            errorBanner.classList.add('visible');
+            errorMsg.textContent = s.lastError + (s.consecutiveErrors > 1 ? ' (연속 ' + s.consecutiveErrors + '회)' : '');
+        } else {
+            errorBanner.classList.remove('visible');
         }
 
         // Ralph Status
@@ -531,6 +612,35 @@ class RalphSidebarProvider {
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
         document.getElementById('chkAutoCommit').checked = s.autoCommit;
+
+        // Logs
+        updateLogPanel(s.recentLogs || []);
+    }
+
+    function updateLogPanel(logs) {
+        const panel = document.getElementById('logPanel');
+        if (!logs || logs.length === 0) {
+            panel.innerHTML = '<div class="log-empty">아직 로그가 없습니다</div>';
+            return;
+        }
+
+        let html = '';
+        for (const entry of logs) {
+            const levelClass = 'log-' + (entry.level || 'info');
+            const escapedMsg = escapeHtml(entry.msg);
+            html += '<div class="log-line ' + levelClass + '">'
+                + '<span class="log-time">' + escapeHtml(entry.time) + '</span>'
+                + escapedMsg
+                + '</div>';
+        }
+        panel.innerHTML = html;
+        // Auto-scroll to bottom
+        panel.scrollTop = panel.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     // Request initial state
