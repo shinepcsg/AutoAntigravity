@@ -24,7 +24,7 @@ jobs:
         run: npm install -g @vscode/vsce
 
       - name: Package VSIX
-        run: vsce package --no-dependencies
+        run: vsce package --no-dependencies --allow-missing-repository
 
       - name: Get version info
         id: pkg
