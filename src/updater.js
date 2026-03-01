@@ -7,6 +7,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const cp = require('child_process');
 
 // ─── Configuration ────────────────────────────────────────────────────
 const GITEA_URL = 'http://office.trollgames.co.kr:3000';
@@ -23,6 +24,7 @@ class AutoUpdater {
         this.log = log;
         this.checkTimer = null;
         this._checking = false;
+        this._authHeader = null; // cached Basic Auth header
     }
 
     /**
@@ -57,6 +59,61 @@ class AutoUpdater {
     }
 
     /**
+     * Get or build the Authorization header from Git credentials
+     * Uses `git credential fill` to fetch stored credentials for the Gitea server
+     * @returns {string|null} Authorization header value, e.g. "Basic base64..."
+     */
+    async _getAuthHeader() {
+        if (this._authHeader) return this._authHeader;
+
+        try {
+            const parsed = new URL(GITEA_URL);
+            // Build credential query input
+            const input = `protocol=${parsed.protocol.replace(':', '')}\nhost=${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}\n`;
+
+            const result = await new Promise((resolve, reject) => {
+                const proc = cp.spawn('git', ['credential', 'fill'], {
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                    windowsHide: true,
+                    timeout: 5000
+                });
+
+                let stdout = '';
+                let stderr = '';
+                proc.stdout.on('data', d => stdout += d.toString());
+                proc.stderr.on('data', d => stderr += d.toString());
+                proc.on('close', (code) => {
+                    if (code === 0) resolve(stdout);
+                    else reject(new Error(`git credential failed (code ${code}): ${stderr}`));
+                });
+                proc.on('error', reject);
+                proc.stdin.write(input);
+                proc.stdin.end();
+            });
+
+            // Parse the response
+            const lines = result.split('\n');
+            let username = '', password = '';
+            for (const line of lines) {
+                if (line.startsWith('username=')) username = line.substring(9).trim();
+                if (line.startsWith('password=')) password = line.substring(9).trim();
+            }
+
+            if (username && password) {
+                this._authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+                this.log(`[Updater] Git credential loaded for ${parsed.hostname}`);
+                return this._authHeader;
+            }
+
+            this.log('[Updater] ⚠ No credentials found in git credential store');
+            return null;
+        } catch (e) {
+            this.log(`[Updater] ⚠ Git credential lookup failed: ${e.message}`);
+            return null;
+        }
+    }
+
+    /**
      * Check for updates from Gitea releases
      */
     async checkForUpdates() {
@@ -67,8 +124,11 @@ class AutoUpdater {
             const currentVersion = this.getCurrentVersion();
             this.log(`[Updater] Checking for updates... (current: v${currentVersion})`);
 
+            // Ensure we have auth
+            const authHeader = await this._getAuthHeader();
+
             // 1. Fetch latest release from Gitea API
-            const release = await this._fetchLatestRelease();
+            const release = await this._fetchLatestRelease(authHeader);
             if (!release) {
                 this.log('[Updater] No releases found');
                 return;
@@ -103,7 +163,7 @@ class AutoUpdater {
             );
 
             if (action === '지금 업데이트') {
-                await this._performUpdate(vsixAsset, latestVersion);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader);
             } else {
                 this.log('[Updater] User postponed update');
             }
@@ -118,7 +178,7 @@ class AutoUpdater {
     /**
      * Download and install the VSIX update
      */
-    async _performUpdate(vsixAsset, version) {
+    async _performUpdate(vsixAsset, version, authHeader) {
         try {
             // Show progress
             await vscode.window.withProgress(
@@ -132,11 +192,28 @@ class AutoUpdater {
                     progress.report({ message: 'VSIX 다운로드 중...' });
                     const tmpDir = os.tmpdir();
                     const vsixPath = path.join(tmpDir, vsixAsset.name);
-                    const downloadUrl = vsixAsset.browser_download_url;
+
+                    // Use the download URL from the asset
+                    // Gitea may return browser_download_url with a different hostname
+                    // Reconstruct the download URL using our known GITEA_URL
+                    const downloadUrl = `${GITEA_URL}/${REPO}/releases/download/${vsixAsset.name.includes(version) ? 'v' + version : vsixAsset.name}/${vsixAsset.name}`;
+                    const fallbackUrl = vsixAsset.browser_download_url;
 
                     this.log(`[Updater] Downloading: ${downloadUrl}`);
-                    await this._downloadFile(downloadUrl, vsixPath);
+                    try {
+                        await this._downloadFile(downloadUrl, vsixPath, authHeader);
+                    } catch (e) {
+                        this.log(`[Updater] Primary download failed, trying fallback URL: ${fallbackUrl}`);
+                        await this._downloadFile(fallbackUrl, vsixPath, authHeader);
+                    }
                     this.log(`[Updater] Downloaded to: ${vsixPath}`);
+
+                    // Verify file was actually downloaded
+                    const stats = fs.statSync(vsixPath);
+                    if (stats.size < 1000) {
+                        throw new Error(`Downloaded file too small (${stats.size} bytes) — possibly an error page`);
+                    }
+                    this.log(`[Updater] VSIX size: ${(stats.size / 1024).toFixed(1)} KB`);
 
                     // 2. Install VSIX
                     progress.report({ message: '확장 설치 중...' });
@@ -178,15 +255,16 @@ class AutoUpdater {
 
     /**
      * Fetch latest release from Gitea API
+     * @param {string|null} authHeader
      * @returns {Object|null}
      */
-    _fetchLatestRelease() {
+    _fetchLatestRelease(authHeader) {
         return new Promise((resolve, reject) => {
             const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases/latest`;
-            this._httpGet(url, (err, data) => {
+            this._httpGet(url, authHeader, (err, data) => {
                 if (err) {
                     // If /latest 404s, try listing releases
-                    this._fetchReleasesList().then(resolve).catch(reject);
+                    this._fetchReleasesList(authHeader).then(resolve).catch(reject);
                     return;
                 }
                 try {
@@ -200,12 +278,13 @@ class AutoUpdater {
 
     /**
      * Fallback: fetch list of releases and return the newest non-draft one
+     * @param {string|null} authHeader
      * @returns {Object|null}
      */
-    _fetchReleasesList() {
+    _fetchReleasesList(authHeader) {
         return new Promise((resolve, reject) => {
             const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases?limit=5`;
-            this._httpGet(url, (err, data) => {
+            this._httpGet(url, authHeader, (err, data) => {
                 if (err) {
                     reject(err);
                     return;
@@ -227,9 +306,13 @@ class AutoUpdater {
     }
 
     /**
-     * Simple HTTP GET (follows redirects)
+     * HTTP GET with optional auth and redirect following
+     * @param {string} url
+     * @param {string|null} authHeader - Authorization header value
+     * @param {Function} callback - (err, data)
+     * @param {number} maxRedirects
      */
-    _httpGet(url, callback, maxRedirects = 5) {
+    _httpGet(url, authHeader, callback, maxRedirects = 5) {
         if (maxRedirects <= 0) {
             callback(new Error('Too many redirects'));
             return;
@@ -238,15 +321,28 @@ class AutoUpdater {
         const parsed = new URL(url);
         const client = parsed.protocol === 'https:' ? https : http;
 
-        const req = client.get(url, { timeout: 10000 }, (res) => {
-            // Handle redirects
+        const options = {
+            hostname: parsed.hostname,
+            port: parsed.port,
+            path: parsed.pathname + parsed.search,
+            timeout: 10000,
+            headers: {}
+        };
+
+        if (authHeader) {
+            options.headers['Authorization'] = authHeader;
+        }
+
+        const req = client.get(options, (res) => {
+            // Handle redirects — carry auth only if same host
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                 let redirectUrl = res.headers.location;
                 if (!redirectUrl.startsWith('http')) {
                     redirectUrl = `${parsed.protocol}//${parsed.host}${redirectUrl}`;
                 }
-                res.resume(); // consume response
-                this._httpGet(redirectUrl, callback, maxRedirects - 1);
+                res.resume();
+                // Carry auth header even to redirected host (same Gitea server, different DNS)
+                this._httpGet(redirectUrl, authHeader, callback, maxRedirects - 1);
                 return;
             }
 
@@ -269,17 +365,18 @@ class AutoUpdater {
     }
 
     /**
-     * Download a file (follows redirects)
+     * Download a file with auth (follows redirects)
      * @param {string} url
      * @param {string} destPath
+     * @param {string|null} authHeader
      */
-    _downloadFile(url, destPath) {
+    _downloadFile(url, destPath, authHeader) {
         return new Promise((resolve, reject) => {
-            this._downloadFileInternal(url, destPath, 5, resolve, reject);
+            this._downloadFileInternal(url, destPath, authHeader, 5, resolve, reject);
         });
     }
 
-    _downloadFileInternal(url, destPath, maxRedirects, resolve, reject) {
+    _downloadFileInternal(url, destPath, authHeader, maxRedirects, resolve, reject) {
         if (maxRedirects <= 0) {
             reject(new Error('Too many redirects'));
             return;
@@ -288,7 +385,19 @@ class AutoUpdater {
         const parsed = new URL(url);
         const client = parsed.protocol === 'https:' ? https : http;
 
-        const req = client.get(url, { timeout: 30000 }, (res) => {
+        const options = {
+            hostname: parsed.hostname,
+            port: parsed.port,
+            path: parsed.pathname + parsed.search,
+            timeout: 30000,
+            headers: {}
+        };
+
+        if (authHeader) {
+            options.headers['Authorization'] = authHeader;
+        }
+
+        const req = client.get(options, (res) => {
             // Handle redirects
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
                 let redirectUrl = res.headers.location;
@@ -296,7 +405,7 @@ class AutoUpdater {
                     redirectUrl = `${parsed.protocol}//${parsed.host}${redirectUrl}`;
                 }
                 res.resume();
-                this._downloadFileInternal(redirectUrl, destPath, maxRedirects - 1, resolve, reject);
+                this._downloadFileInternal(redirectUrl, destPath, authHeader, maxRedirects - 1, resolve, reject);
                 return;
             }
 
