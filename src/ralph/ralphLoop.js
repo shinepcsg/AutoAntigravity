@@ -463,6 +463,136 @@ class RalphLoopManager {
         }, timeout);
     }
 
+    /**
+     * Find the main CDP target matching the current workspace
+     * @param {boolean} [verbose=false] - Log detailed target information
+     * @returns {Promise<Object>} CDP target object with webSocketDebuggerUrl
+     */
+    async _findMainTarget(verbose = false) {
+        const cdpPort = this._getCdpPort();
+        let targets;
+        try {
+            targets = await this._getTargets(cdpPort);
+        } catch (e) {
+            throw new Error('CDP 타겟 조회 실패 (port ' + cdpPort + '): ' + e.message);
+        }
+
+        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
+            ? vscode.workspace.workspaceFolders[0].name : '';
+
+        if (verbose) {
+            this._addLog('[Ralph] 워크스페이스: "' + workspaceName + '", CDP 타겟 수: ' + targets.length);
+        }
+
+        const pageTargets = targets.filter(function (t) { return t.type === 'page'; });
+        if (verbose) {
+            for (const t of pageTargets) {
+                this._addLog('[Ralph]   타겟: ' + (t.title || 'no-title').substring(0, 70));
+            }
+        }
+
+        let mainTarget = null;
+        if (workspaceName) {
+            mainTarget = pageTargets.find(function (t) {
+                return t.url && t.url.includes('workbench.html') &&
+                    !t.url.includes('jetski-agent') &&
+                    t.title && t.title.includes(workspaceName);
+            });
+        }
+
+        if (!mainTarget) {
+            mainTarget = pageTargets.find(function (t) {
+                return t.url && t.url.includes('workbench.html') &&
+                    !t.url.includes('jetski-agent');
+            });
+            if (mainTarget && verbose) {
+                this._addLog('[Ralph] ⚠ 워크스페이스 매칭 실패 — 첫 번째 workbench 타겟 사용', 'warn');
+            }
+        }
+
+        if (!mainTarget) {
+            mainTarget = pageTargets.find(function (t) { return t.webSocketDebuggerUrl; });
+        }
+
+        if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
+            throw new Error('CDP 타겟 없음 (' + targets.length + '개 중 page 없음)');
+        }
+
+        if (verbose) {
+            this._addLog('[Ralph] ✅ 선택된 타겟: ' + (mainTarget.title || '').substring(0, 60));
+        }
+
+        return mainTarget;
+    }
+
+    /**
+     * Check if the Antigravity agent is currently busy via CDP DOM inspection
+     * Checks for: Stop buttons, loading spinners, progress bars, typing indicators
+     * @param {string} targetWsUrl - WebSocket debugger URL
+     * @returns {Promise<{busy: boolean, reason?: string, detail?: string, lastMsgLen?: number}>}
+     */
+    async _isAgentBusy(targetWsUrl) {
+        try {
+            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+                expression: [
+                    '(function() {',
+                    '  // Strategy 1: Stop/Cancel buttons in chat area',
+                    '  var btns = document.querySelectorAll("button");',
+                    '  for (var i = 0; i < btns.length; i++) {',
+                    '    var b = btns[i];',
+                    '    var label = (b.getAttribute("aria-label") || "").toLowerCase();',
+                    '    var text = (b.textContent || "").toLowerCase().trim();',
+                    '    var isStop = label.includes("stop") || label.includes("cancel") ||',
+                    '                 text === "stop" || text === "cancel";',
+                    '    var isDebug = label.includes("breakpoint") || label.includes("debug");',
+                    '    if (isStop && !isDebug) {',
+                    '      var rect = b.getBoundingClientRect();',
+                    '      if (rect.width > 0 && rect.height > 0) {',
+                    '        var p = b.closest("[class*=chat],[class*=conversation],[class*=interactive],[class*=panel]");',
+                    '        if (p) return JSON.stringify({ busy: true, reason: "stop_button", detail: label || text });',
+                    '      }',
+                    '    }',
+                    '  }',
+                    '  // Strategy 2: Loading spinners in chat area',
+                    '  var spinners = document.querySelectorAll(".codicon-loading,.codicon-sync");',
+                    '  for (var j = 0; j < spinners.length; j++) {',
+                    '    var sp = spinners[j];',
+                    '    var cp = sp.closest("[class*=chat],[class*=conversation],[class*=interactive],[class*=panel]");',
+                    '    if (cp) {',
+                    '      var r2 = sp.getBoundingClientRect();',
+                    '      if (r2.width > 0 && r2.height > 0)',
+                    '        return JSON.stringify({ busy: true, reason: "loading_spinner" });',
+                    '    }',
+                    '  }',
+                    '  // Strategy 3: Streaming/typing/thinking indicators',
+                    '  var inds = document.querySelectorAll("[class*=typing],[class*=streaming],[class*=thinking],[class*=generating]");',
+                    '  for (var m = 0; m < inds.length; m++) {',
+                    '    var r3 = inds[m].getBoundingClientRect();',
+                    '    if (r3.width > 0 && r3.height > 0)',
+                    '      return JSON.stringify({ busy: true, reason: "typing_indicator" });',
+                    '  }',
+                    '  // Strategy 4: Snapshot last message length for change detection',
+                    '  var msgs = document.querySelectorAll("[class*=chat-message],[class*=response],.interactive-item-container,[class*=message-content]");',
+                    '  var last = msgs.length > 0 ? msgs[msgs.length - 1] : null;',
+                    '  var len = last ? last.textContent.length : 0;',
+                    '  return JSON.stringify({ busy: false, lastMsgLen: len });',
+                    '})()',
+                ].join('\n'),
+                returnByValue: true
+            }, 5000);
+
+            var val = result && result.result && result.result.value;
+            if (!val) return { busy: true, reason: 'no_result', lastMsgLen: 0 };
+            try {
+                return JSON.parse(val);
+            } catch (e) {
+                return { busy: true, reason: 'parse_error', lastMsgLen: 0 };
+            }
+        } catch (e) {
+            return { busy: true, reason: 'cdp_error', detail: e.message, lastMsgLen: 0 };
+        }
+    }
+
     // ─── Internal Loop Logic ──────────────────────────────────────────
 
     async _runNextIteration() {
@@ -593,59 +723,11 @@ class RalphLoopManager {
      * 4. CDP Enter → submit
      */
     async _sendToAgent(prompt) {
-        const cdpPort = this._getCdpPort();
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
         // ─── Step 1: Get CDP target matching CURRENT workspace ───
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            throw new Error('CDP 타겟 조회 실패 (port ' + cdpPort + '): ' + e.message);
-        }
-
-        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
-            ? vscode.workspace.workspaceFolders[0].name : '';
-
-        this._addLog('[Ralph] 워크스페이스: "' + workspaceName + '", CDP 타겟 수: ' + targets.length);
-
-        const pageTargets = targets.filter(function (t) { return t.type === 'page'; });
-        for (const t of pageTargets) {
-            this._addLog('[Ralph]   타겟: ' + (t.title || 'no-title').substring(0, 70));
-        }
-
-        // Prefer target whose title contains current workspace name
-        let mainTarget = null;
-        if (workspaceName) {
-            mainTarget = targets.find(function (t) {
-                return t.type === 'page' &&
-                    t.url && t.url.includes('workbench.html') &&
-                    !t.url.includes('jetski-agent') &&
-                    t.title && t.title.includes(workspaceName);
-            });
-        }
-
-        if (!mainTarget) {
-            mainTarget = targets.find(function (t) {
-                return t.type === 'page' &&
-                    t.url && t.url.includes('workbench.html') &&
-                    !t.url.includes('jetski-agent');
-            });
-            if (mainTarget) {
-                this._addLog('[Ralph] ⚠ 워크스페이스 매칭 실패 — 첫 번째 workbench 타겟 사용', 'warn');
-            }
-        }
-
-        if (!mainTarget) {
-            mainTarget = targets.find(function (t) { return t.type === 'page' && t.webSocketDebuggerUrl; });
-        }
-
-        const targetWsUrl = mainTarget && mainTarget.webSocketDebuggerUrl;
-        if (!targetWsUrl) {
-            throw new Error('CDP 타겟 없음 (' + targets.length + '개 중 page 없음)');
-        }
-
-        this._addLog('[Ralph] ✅ 선택된 타겟: ' + (mainTarget.title || '').substring(0, 60));
+        const mainTarget = await this._findMainTarget(true);
+        const targetWsUrl = mainTarget.webSocketDebuggerUrl;
 
         const sendKey = async (type, params) => {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
@@ -846,71 +928,91 @@ class RalphLoopManager {
 
     /**
      * Wait for the agent to finish working
-     * Uses a heuristic: monitor file system activity to detect completion
+     * Uses CDP DOM polling to detect when the agent stops generating
+     * Checks for: Stop buttons, loading spinners, typing indicators, message stability
      */
     async _waitForAgentCompletion() {
-        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const MAX_WAIT_MS = 300000;       // 5분 최대
+        const POLL_INTERVAL_MS = 3000;    // 3초마다 폴링
+        const INITIAL_WAIT_MS = 8000;     // 에이전트 시작 대기 8초
+        const IDLE_CONFIRMS_NEEDED = 3;   // 연속 3회 idle 확인 필요
+        const MSG_STABLE_CONFIRMS = 3;    // 메시지 내용 안정 3회 필요
 
-        // Simple heuristic: wait for a minimum period, then check for inactivity
-        // The agent's Auto Accept feature will handle the step-by-step acceptance
-        const MIN_WAIT_MS = 30000; // 30s minimum per task
-        const MAX_WAIT_MS = 300000; // 5 min maximum per task
-        const CHECK_INTERVAL_MS = 5000;
-        const INACTIVITY_THRESHOLD_MS = 15000;
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        let lastActivityTime = Date.now();
-        let elapsed = 0;
+        // CDP 타겟 찾기
+        let targetWsUrl;
+        try {
+            const target = await this._findMainTarget(false);
+            targetWsUrl = target.webSocketDebuggerUrl;
+            this._addLog('[Ralph] 📡 CDP 에이전트 상태 모니터링 시작');
+        } catch (e) {
+            this._addLog('[Ralph] ⚠ CDP 타겟 찾기 실패 — 시간 기반 대기(60초)로 대체: ' + e.message, 'warn');
+            await delay(60000);
+            return;
+        }
 
-        // Set up a file system watcher for activity detection
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        // 에이전트가 시작할 시간 확보
+        this._addLog('[Ralph] ⏳ 에이전트 시작 대기 (' + (INITIAL_WAIT_MS / 1000) + '초)...');
+        await delay(INITIAL_WAIT_MS);
 
-        const watcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(workspaceFolders[0], '**/*')
-        );
+        let elapsed = INITIAL_WAIT_MS;
+        let consecutiveIdleCount = 0;
+        let lastMsgLen = 0;
+        let msgStableCount = 0;
 
-        const updateActivity = () => { lastActivityTime = Date.now(); };
-        watcher.onDidChange(updateActivity);
-        watcher.onDidCreate(updateActivity);
-        watcher.onDidDelete(updateActivity);
+        while (elapsed < MAX_WAIT_MS) {
+            // 루프 상태 확인
+            if (this.state !== LoopState.RUNNING) {
+                this._addLog('[Ralph] ⚠ 루프 상태 변경 — 대기 취소');
+                return;
+            }
 
-        return new Promise((resolve) => {
-            const checkInterval = setInterval(() => {
-                elapsed += CHECK_INTERVAL_MS;
-                const timeSinceActivity = Date.now() - lastActivityTime;
+            // CDP로 에이전트 상태 확인
+            const status = await this._isAgentBusy(targetWsUrl);
 
-                // Stop conditions
-                if (this.state !== LoopState.RUNNING) {
-                    clearInterval(checkInterval);
-                    watcher.dispose();
-                    this._addLog('[Ralph] ⚠ 루프 상태 변경 — 대기 취소');
-                    resolve();
+            if (status.busy) {
+                // 에이전트 작업 중 — 카운터 리셋
+                consecutiveIdleCount = 0;
+                msgStableCount = 0;
+
+                // 주기적으로 상태 로그
+                if (elapsed % 15000 < POLL_INTERVAL_MS) {
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 (' + status.reason +
+                        (status.detail ? ': ' + status.detail : '') +
+                        ', ' + Math.round(elapsed / 1000) + '초 경과)');
+                }
+            } else {
+                // 에이전트 유휴 상태 — 메시지 안정성 확인
+                if (status.lastMsgLen !== undefined) {
+                    if (status.lastMsgLen === lastMsgLen && lastMsgLen > 0) {
+                        msgStableCount++;
+                    } else {
+                        msgStableCount = 0;
+                    }
+                    lastMsgLen = status.lastMsgLen;
+                } else {
+                    msgStableCount++;
+                }
+
+                consecutiveIdleCount++;
+
+                // 충분히 확인되면 완료로 판단
+                if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED && msgStableCount >= MSG_STABLE_CONFIRMS) {
+                    this._addLog('[Ralph] ✅ 에이전트 완료 감지 (idle=' + consecutiveIdleCount +
+                        ', stable=' + msgStableCount + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                     return;
                 }
 
-                // Past minimum wait and agent seems idle
-                if (elapsed >= MIN_WAIT_MS && timeSinceActivity >= INACTIVITY_THRESHOLD_MS) {
-                    this._addLog(`[Ralph] 에이전트 유휴 감지 (${Math.round(timeSinceActivity / 1000)}초 비활성)`);
-                    clearInterval(checkInterval);
-                    watcher.dispose();
-                    resolve();
-                    return;
-                }
+                this._addLog('[Ralph] ⏳ 유휴 확인 중 (idle=' + consecutiveIdleCount + '/' + IDLE_CONFIRMS_NEEDED +
+                    ', stable=' + msgStableCount + '/' + MSG_STABLE_CONFIRMS + ')');
+            }
 
-                // Maximum wait exceeded
-                if (elapsed >= MAX_WAIT_MS) {
-                    this._addLog('[Ralph] ⚠ 최대 대기 시간 초과 — 다음 반복으로 이동', 'warn');
-                    clearInterval(checkInterval);
-                    watcher.dispose();
-                    resolve();
-                    return;
-                }
+            await delay(POLL_INTERVAL_MS);
+            elapsed += POLL_INTERVAL_MS;
+        }
 
-                if (elapsed % 15000 === 0) {
-                    this._addLog(`[Ralph] ⏳ 에이전트 대기 중... (${Math.round(elapsed / 1000)}초 경과)`);
-                }
-            }, CHECK_INTERVAL_MS);
-        });
+        this._addLog('[Ralph] ⚠ 최대 대기 시간 초과 (' + (MAX_WAIT_MS / 1000) + '초) — 다음 반복으로 이동', 'warn');
     }
 
     /**
