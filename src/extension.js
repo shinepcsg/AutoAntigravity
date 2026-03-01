@@ -4,9 +4,11 @@
 const vscode = require('vscode');
 const { AutoAcceptManager } = require('./autoAccept');
 const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
+const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 
 let autoAccept = null;
 let ralphLoop = null;
+let sidebarProvider = null;
 let statusBarAutoAccept = null;
 let statusBarRalph = null;
 let outputChannel = null;
@@ -28,6 +30,8 @@ function updateAutoAcceptStatusBar() {
         statusBarAutoAccept.backgroundColor = undefined;
         statusBarAutoAccept.tooltip = 'Auto Accept is OFF — click to enable';
     }
+    // Sync sidebar
+    if (sidebarProvider) sidebarProvider.updateState();
 }
 
 function updateRalphStatusBar() {
@@ -52,12 +56,14 @@ function updateRalphStatusBar() {
             statusBarRalph.tooltip = 'Ralph Loop is IDLE — click to start';
             break;
     }
+    // Sync sidebar
+    if (sidebarProvider) sidebarProvider.updateState();
 }
 
 // ─── Activation ───────────────────────────────────────────────────────
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('AutoAntigravity');
-    log('AutoAntigravity extension activating (v1.0.0)');
+    log('AutoAntigravity extension activating (v1.3.0)');
 
     // ─── Initialize Auto Accept ───────────────────────────────────────
     autoAccept = new AutoAcceptManager(log);
@@ -68,6 +74,35 @@ function activate(context) {
     ralphLoop.onStateChange = () => {
         updateRalphStatusBar();
     };
+
+    // ─── Register Sidebar WebviewView Provider ────────────────────────
+    sidebarProvider = new RalphSidebarProvider(context, log);
+    sidebarProvider.autoAccept = autoAccept;
+    sidebarProvider.ralphLoop = ralphLoop;
+
+    // Wire sidebar actions
+    sidebarProvider.onToggleAutoAccept = () => {
+        vscode.commands.executeCommand('autoAntigravity.toggleAutoAccept');
+    };
+    sidebarProvider.onStartRalph = () => {
+        vscode.commands.executeCommand('autoAntigravity.startRalphLoop');
+    };
+    sidebarProvider.onStopRalph = () => {
+        vscode.commands.executeCommand('autoAntigravity.stopRalphLoop');
+    };
+    sidebarProvider.onEmergencyStop = () => {
+        vscode.commands.executeCommand('autoAntigravity.emergencyStop');
+    };
+    sidebarProvider.onSelectTaskFile = () => {
+        vscode.commands.executeCommand('autoAntigravity.selectTaskFile');
+    };
+
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            RalphSidebarProvider.viewType,
+            sidebarProvider
+        )
+    );
 
     // ─── Status Bar Items ─────────────────────────────────────────────
     statusBarAutoAccept = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 200);
@@ -131,8 +166,13 @@ function activate(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('autoAntigravity.selectTaskFile', async () => {
             await ralphLoop.selectTaskFile();
+            if (sidebarProvider) sidebarProvider.updateState();
         })
     );
+
+    // ─── Initial StatusBar Update (immediate, before CDP check) ─────
+    updateAutoAcceptStatusBar();
+    updateRalphStatusBar();
 
     // ─── CDP Check & Restore State ────────────────────────────────────
     autoAccept.checkAndFixCDP().then(cdpOk => {
@@ -147,6 +187,10 @@ function activate(context) {
         updateAutoAcceptStatusBar();
         updateRalphStatusBar();
         log('AutoAntigravity activated successfully');
+    }).catch(err => {
+        log(`CDP check error: ${err.message} — continuing with status bar visible`);
+        updateAutoAcceptStatusBar();
+        updateRalphStatusBar();
     });
 }
 

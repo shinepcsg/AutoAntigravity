@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "AutoAntigravity",
     "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.0.0",
+    "version": "1.3.0",
     "publisher": "TrollGames",
     "icon": "images/icon.png",
     "engines": {
@@ -36,6 +36,31 @@
             {
                 "command": "autoAntigravity.selectTaskFile",
                 "title": "AutoAntigravity: Select Task File"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "autoAntigravity",
+                    "title": "AutoAntigravity",
+                    "icon": "images/sidebar-icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "autoAntigravity": [
+                {
+                    "type": "webview",
+                    "id": "autoAntigravity.ralphSidebar",
+                    "name": "Ralph Loop"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "command": "autoAntigravity.toggleAutoAccept",
+                "key": "ctrl+alt+shift+u",
+                "mac": "cmd+alt+shift+u"
             }
         ],
         "configuration": {
@@ -88,7 +113,7 @@
         }
     },
     "scripts": {
-        "package": "vsce package --no-dependencies"
+        "package": "vsce package"
     },
     "repository": {
         "type": "git",

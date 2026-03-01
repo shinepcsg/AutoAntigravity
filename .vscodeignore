@@ -3,5 +3,4 @@
 test/**
 .gitignore
 .git/**
-node_modules/**
 *.vsix
