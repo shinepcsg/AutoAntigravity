@@ -651,61 +651,26 @@ class RalphLoopManager {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
-        // --- Step 2: Create new chat via VS Code command discovery ---
-        // Search all registered commands for chat/agent/conversation related ones
-        try {
-            const allCommands = await vscode.commands.getCommands(true);
-            const chatCmds = allCommands.filter(c => {
-                const cl = c.toLowerCase();
-                return (cl.includes('chat') || cl.includes('agent') || cl.includes('conversation') || cl.includes('thread'))
-                    && (cl.includes('new') || cl.includes('create') || cl.includes('clear') || cl.includes('reset') || cl.includes('start'));
-            });
-            this._addLog('[Ralph] 새 채팅 후보 커맨드: ' + chatCmds.join(', '));
-
-            let newChatOk = false;
-            for (const cmd of chatCmds) {
-                try {
-                    await vscode.commands.executeCommand(cmd);
-                    this._addLog('[Ralph] 🆕 새 채팅 성공: ' + cmd);
-                    newChatOk = true;
-                    break;
-                } catch (e) {
-                    // try next
-                }
+        // --- Step 2: Create new conversation ---
+        // Use discovered Antigravity-specific commands
+        const newChatCmds = [
+            'antigravity.startNewConversation',
+            'antigravity.prioritized.chat.openNewConversation',
+            'welcome.newWorkspaceChat',
+        ];
+        let newChatOk = false;
+        for (const cmd of newChatCmds) {
+            try {
+                await vscode.commands.executeCommand(cmd);
+                this._addLog('[Ralph] 🆕 새 대화 시작: ' + cmd);
+                newChatOk = true;
+                break;
+            } catch (e) {
+                // try next
             }
-
-            if (!newChatOk) {
-                // Fallback: try known VS Code chat commands
-                const fallbackCmds = [
-                    'workbench.action.chat.new',
-                    'workbench.action.chat.newChat',
-                    'workbench.action.chat.clear',
-                    'workbench.action.chat.newEditSession',
-                    'aichat.newchat',
-                    'aichat.new',
-                ];
-                for (const cmd of fallbackCmds) {
-                    try {
-                        await vscode.commands.executeCommand(cmd);
-                        this._addLog('[Ralph] 🆕 새 채팅 (fallback): ' + cmd);
-                        newChatOk = true;
-                        break;
-                    } catch (e) {
-                        // try next
-                    }
-                }
-            }
-
-            if (!newChatOk) {
-                // Log ALL agent/chat related commands for debugging
-                const relatedCmds = allCommands.filter(c => {
-                    const cl = c.toLowerCase();
-                    return cl.includes('chat') || cl.includes('agent') || cl.includes('antigravity') || cl.includes('conversation');
-                });
-                this._addLog('[Ralph] ⚠ 관련 커맨드 목록: ' + relatedCmds.slice(0, 20).join(', '));
-            }
-        } catch (e) {
-            this._addLog('[Ralph] ⚠ 커맨드 탐색 실패: ' + e.message, 'warn');
+        }
+        if (!newChatOk) {
+            this._addLog('[Ralph] ⚠ 새 대화 생성 실패', 'warn');
         }
 
         await delay(2000);
