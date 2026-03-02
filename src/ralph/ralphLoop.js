@@ -569,7 +569,11 @@ class RalphLoopManager {
                     '    var title = b.getAttribute("title") || "";',
                     '    var text = (b.textContent || "").trim().substring(0, 20);',
                     '    var cls = (b.className || "").substring(0, 40);',
-                    '    all.push(label || title || text || cls || "(empty)");',
+                    '    var info = label || title || text || cls || "(empty)";',
+                    '    if (!label && !title && !text && b.querySelector("svg")) {',
+                    '      info += " [SVG:" + (b.innerHTML || "").replace(/\\s+/g," ").substring(0,80) + "]";',
+                    '    }',
+                    '    all.push(info);',
                     '  }',
                     '  return JSON.stringify({ buttons: all });',
                     '})()',
@@ -599,10 +603,19 @@ class RalphLoopManager {
                     '          combined.includes("close") || combined.includes("hide")) continue;',
                     '      return JSON.stringify({ busy: true, reason: "stop_button", detail: (label || title || text).substring(0, 50) });',
                     '    }',
-                    '    if (combined.includes("thought for") || combined.includes("thinking") ||',
-                    '        combined.includes("generating")) {',
+                    '    if (combined.includes("generating") || combined.includes("planning") || combined.includes("searching") || combined.includes("reading") || combined.includes("editing") || combined.includes("analyzing")) {',
                     '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
                     '    }',
+                    '    if (combined.includes("thinking") || combined.includes("thought")) {',
+                    '      if (combined.includes(" for ")) continue;',
+                    '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
+                    '    }',
+                    '  }',
+                    '  var bodyLen = (document.body.innerText || "").length;',
+                    '  var prev = window.__ralphContentLen || 0;',
+                    '  window.__ralphContentLen = bodyLen;',
+                    '  if (prev > 0 && bodyLen > prev + 5) {',
+                    '    return JSON.stringify({ busy: true, reason: "content_growing", detail: "+" + (bodyLen - prev) + " chars" });',
                     '  }',
                     '  return JSON.stringify({ busy: false });',
                     '})()',
@@ -1087,8 +1100,8 @@ class RalphLoopManager {
                 everSeenBusy = true;
 
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
-                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' +
-                        (status.reason || 'busy') + ' (' +
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' + (status.reason || 'unknown') + ' (' +
+
                         (status.detail || '') + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                 }
             } else {
