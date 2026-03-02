@@ -41,6 +41,7 @@ class RalphLoopManager {
 
         // CDP 관련
         this._connectionManager = null; // shared from AutoAccept
+        this._lastAgentTargetWsUrl = null; // 마지막으로 프롬프트를 보낸 타겟의 WS URL
 
         // ExtensionContext — workspaceState 영속 저장용 (워크스페이스별)
         this._context = null;
@@ -526,6 +527,27 @@ class RalphLoopManager {
     }
 
     /**
+     * Find ALL workbench CDP targets (모든 Antigravity 윈도우)
+     * Stop 버튼 감지 시 모든 윈도우를 스캔하기 위해 사용
+     * @returns {Promise<Object[]>} Array of CDP target objects
+     */
+    async _findAllWorkbenchTargets() {
+        const cdpPort = this._getCdpPort();
+        let targets;
+        try {
+            targets = await this._getTargets(cdpPort);
+        } catch (e) {
+            return [];
+        }
+        return targets.filter(function (t) {
+            return t.type === 'page' &&
+                t.url && t.url.includes('workbench.html') &&
+                !t.url.includes('jetski-agent') &&
+                t.webSocketDebuggerUrl;
+        });
+    }
+
+    /**
      * Check if the Antigravity agent is currently busy via CDP DOM inspection
      * Focuses ONLY on Stop button existence — simplest and most reliable approach
      * @param {string} targetWsUrl - WebSocket debugger URL
@@ -746,6 +768,7 @@ class RalphLoopManager {
         // ─── Step 1: Get CDP target matching CURRENT workspace ───
         const mainTarget = await this._findMainTarget(true);
         const targetWsUrl = mainTarget.webSocketDebuggerUrl;
+        this._lastAgentTargetWsUrl = targetWsUrl; // 완료 대기 시 이 타겟에서 확인
 
         const sendKey = async (type, params) => {
             await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
@@ -956,17 +979,19 @@ class RalphLoopManager {
 
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        // CDP 타겟 찾기
-        let targetWsUrl;
-        try {
-            const target = await this._findMainTarget(false);
-            targetWsUrl = target.webSocketDebuggerUrl;
-            this._addLog('[Ralph] 📡 CDP Stop 버튼 모니터링 시작');
-        } catch (e) {
-            this._addLog('[Ralph] ⚠ CDP 타겟 찾기 실패 — 시간 기반 대기(60초)로 대체: ' + e.message, 'warn');
-            await delay(60000);
-            return;
+        // CDP 타겟 찾기 — 프롬프트를 보낸 타겟을 우선 사용
+        let targetWsUrl = this._lastAgentTargetWsUrl;
+        if (!targetWsUrl) {
+            try {
+                const target = await this._findMainTarget(false);
+                targetWsUrl = target.webSocketDebuggerUrl;
+            } catch (e) {
+                this._addLog('[Ralph] ⚠ CDP 타겟 찾기 실패 — 시간 기반 대기(60초)로 대체: ' + e.message, 'warn');
+                await delay(60000);
+                return;
+            }
         }
+        this._addLog('[Ralph] 📡 CDP 에이전트 활동 모니터링 시작 (타겟: ' + targetWsUrl.substring(targetWsUrl.lastIndexOf('/') + 1, targetWsUrl.lastIndexOf('/') + 13) + '...)');
 
         // 에이전트가 시작할 시간 확보
         this._addLog('[Ralph] ⏳ 에이전트 시작 대기 (' + (INITIAL_WAIT_MS / 1000) + '초)...');
@@ -994,8 +1019,26 @@ class RalphLoopManager {
                 return;
             }
 
-            // CDP로 Stop 버튼 존재 확인
-            const status = await this._isAgentBusy(targetWsUrl);
+            // CDP로 에이전트 활동 상태 확인 (모든 workbench 타겟 스캔)
+            let status = await this._isAgentBusy(targetWsUrl);
+
+            // 저장된 타겟에서 감지 실패 시, 다른 workbench 타겟도 스캔
+            if (!status.busy) {
+                try {
+                    const allTargets = await this._findAllWorkbenchTargets();
+                    for (const t of allTargets) {
+                        if (t.webSocketDebuggerUrl === targetWsUrl) continue;
+                        const altStatus = await this._isAgentBusy(t.webSocketDebuggerUrl);
+                        if (altStatus.busy) {
+                            status = altStatus;
+                            // 다음부터 이 타겟을 직접 사용
+                            targetWsUrl = t.webSocketDebuggerUrl;
+                            this._addLog('[Ralph] 🔀 에이전트 활동 감지: 다른 윈도우 (' + (t.title || '').substring(0, 40) + ')');
+                            break;
+                        }
+                    }
+                } catch (e) { /* ignore scan errors */ }
+            }
 
             if (status.busy) {
                 // Quota reached 처리
@@ -1039,26 +1082,27 @@ class RalphLoopManager {
                     throw new Error('QUOTA_REACHED');
                 }
 
-                // Stop 버튼 발견 — 에이전트 작업 중
+                // 에이전트 활동 감지 (Stop 버튼, Thinking 등)
                 consecutiveIdleCount = 0;
                 everSeenBusy = true;
 
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
-                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — Stop 버튼 감지 (' +
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' +
+                        (status.reason || 'busy') + ' (' +
                         (status.detail || '') + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                 }
             } else {
-                // Stop 버튼 없음 — 에이전트 유휴
+                // 에이전트 유휴 상태
                 consecutiveIdleCount++;
 
                 if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED) {
-                    this._addLog('[Ralph] ✅ 에이전트 완료 감지 — Stop 버튼 ' +
+                    this._addLog('[Ralph] ✅ 에이전트 완료 감지 — 활동 지표 ' +
                         consecutiveIdleCount + '회 연속 미발견 (' +
                         Math.round(elapsed / 1000) + '초 경과, everBusy=' + everSeenBusy + ')');
                     return;
                 }
 
-                this._addLog('[Ralph] ⏳ Stop 버튼 미발견 (' +
+                this._addLog('[Ralph] ⏳ 에이전트 활동 미감지 (' +
                     consecutiveIdleCount + '/' + IDLE_CONFIRMS_NEEDED + ')');
             }
 
