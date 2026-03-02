@@ -39,6 +39,10 @@ class RalphLoopManager {
         this.lastError = null;
         this.consecutiveErrors = 0;
 
+        // PRD 변경 추적
+        this._prdChanges = [];  // { iteration, added, removed, modified, timestamp }
+        this._maxPrdChanges = 50;
+
         // CDP 관련
         this._connectionManager = null; // shared from AutoAccept
         this._lastAgentTargetWsUrl = null; // 마지막으로 프롬프트를 보낸 타겟의 WS URL
@@ -569,7 +573,11 @@ class RalphLoopManager {
                     '    var title = b.getAttribute("title") || "";',
                     '    var text = (b.textContent || "").trim().substring(0, 20);',
                     '    var cls = (b.className || "").substring(0, 40);',
-                    '    all.push(label || title || text || cls || "(empty)");',
+                    '    var info = label || title || text || cls || "(empty)";',
+                    '    if (!label && !title && !text && b.querySelector("svg")) {',
+                    '      info += " [SVG:" + (b.innerHTML || "").replace(/\\s+/g," ").substring(0,80) + "]";',
+                    '    }',
+                    '    all.push(info);',
                     '  }',
                     '  return JSON.stringify({ buttons: all });',
                     '})()',
@@ -599,10 +607,19 @@ class RalphLoopManager {
                     '          combined.includes("close") || combined.includes("hide")) continue;',
                     '      return JSON.stringify({ busy: true, reason: "stop_button", detail: (label || title || text).substring(0, 50) });',
                     '    }',
-                    '    if (combined.includes("thought for") || combined.includes("thinking") ||',
-                    '        combined.includes("generating")) {',
+                    '    if (combined.includes("generating") || combined.includes("planning") || combined.includes("searching") || combined.includes("reading") || combined.includes("editing") || combined.includes("analyzing")) {',
                     '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
                     '    }',
+                    '    if (combined.includes("thinking") || combined.includes("thought")) {',
+                    '      if (combined.includes(" for ")) continue;',
+                    '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
+                    '    }',
+                    '  }',
+                    '  var bodyLen = (document.body.innerText || "").length;',
+                    '  var prev = window.__ralphContentLen || 0;',
+                    '  window.__ralphContentLen = bodyLen;',
+                    '  if (prev > 0 && bodyLen > prev + 5) {',
+                    '    return JSON.stringify({ busy: true, reason: "content_growing", detail: "+" + (bodyLen - prev) + " chars" });',
                     '  }',
                     '  return JSON.stringify({ busy: false });',
                     '})()',
@@ -671,6 +688,11 @@ class RalphLoopManager {
         this._notifyStateChange();
 
         try {
+            // Snapshot PRD tasks BEFORE agent execution (for change detection)
+            const tasksBeforeSnapshot = this.taskManager.parseTasks();
+            const taskCountBefore = tasksBeforeSnapshot.length;
+            const taskTextsBefore = new Set(tasksBeforeSnapshot.map(t => t.text));
+
             // Build the prompt for the agent
             const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
@@ -692,6 +714,9 @@ class RalphLoopManager {
                 'completed'
             );
             this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
+
+            // ── PRD 변경 감지 ──
+            this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
 
             // Auto-commit
             const committed = await this.progressTracker.autoCommit(this.currentIteration, task.text);
@@ -741,6 +766,8 @@ class RalphLoopManager {
     _buildAgentPrompt(task, iteration, progress) {
         const progressFilePath = this.progressTracker.getProgressFilePath();
         const taskFilePath = this.taskManager.getTaskFile();
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const allowPrdMod = config.get('ralphLoop.allowPrdModification', false);
 
         let prompt = `# Ralph Loop — Iteration ${iteration}\n\n`;
         prompt += `## Current Task\n${task.text}\n\n`;
@@ -751,6 +778,14 @@ class RalphLoopManager {
         prompt += `3. Complete EXACTLY ONE task: "${task.text}"\n`;
         prompt += `4. Do NOT modify the progress file — it is managed automatically\n`;
         prompt += `5. When done, verify your changes work correctly\n`;
+
+        if (allowPrdMod) {
+            prompt += `6. PRD 수정 허용: 작업 수행 중 PRD에 새로운 태스크 추가/변경이 필요하면 \`${taskFilePath}\`를 직접 수정하세요\n`;
+            prompt += `   - 새 태스크 추가: \`- [ ] 태스크 설명\` 형식으로 추가\n`;
+            prompt += `   - 기존 미완료 태스크 수정: 체크박스 형식(\`- [ ]\`)을 유지하되 내용을 변경\n`;
+            prompt += `   - ⚠ \`- [x]\`로 마킹하지 마세요 — 완료 처리는 자동 관리됩니다\n`;
+            prompt += `   - ⚠ 이미 완료된 태스크(\`- [x]\`)는 수정하지 마세요\n`;
+        }
 
         return prompt;
     }
@@ -1087,8 +1122,8 @@ class RalphLoopManager {
                 everSeenBusy = true;
 
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
-                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' +
-                        (status.reason || 'busy') + ' (' +
+                    this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' + (status.reason || 'unknown') + ' (' +
+
                         (status.detail || '') + ', ' + Math.round(elapsed / 1000) + '초 경과)');
                 }
             } else {
@@ -1111,6 +1146,88 @@ class RalphLoopManager {
         }
 
         this._addLog('[Ralph] ⚠ 최대 대기 시간 초과 (' + (MAX_WAIT_MS / 1000) + '초) — 다음 반복으로 이동', 'warn');
+    }
+
+    /**
+     * Detect PRD file changes by comparing task snapshots (before vs after agent execution)
+     * @param {Array} tasksBefore - Tasks snapshot before agent ran
+     * @param {number} countBefore - Task count before
+     * @param {Set<string>} textsBefore - Set of task texts before
+     * @param {number} iteration - Current iteration number
+     */
+    _detectPrdChanges(tasksBefore, countBefore, textsBefore, iteration) {
+        const tasksAfter = this.taskManager.parseTasks();
+        const countAfter = tasksAfter.length;
+        const textsAfter = new Set(tasksAfter.map(t => t.text));
+
+        // Find added tasks (in after but not in before)
+        const added = [];
+        for (const text of textsAfter) {
+            if (!textsBefore.has(text)) {
+                added.push(text);
+            }
+        }
+
+        // Find removed tasks (in before but not in after, excluding just-completed task)
+        const removed = [];
+        for (const text of textsBefore) {
+            if (!textsAfter.has(text)) {
+                // Check if this was the just-completed task (it got [x] marked, text stays same)
+                const afterTask = tasksAfter.find(t => t.text === text);
+                if (!afterTask) {
+                    removed.push(text);
+                }
+            }
+        }
+
+        // Detect if any change occurred
+        if (added.length > 0 || removed.length > 0) {
+            const change = {
+                iteration,
+                added,
+                removed,
+                countBefore,
+                countAfter,
+                timestamp: new Date().toISOString()
+            };
+
+            this._prdChanges.push(change);
+            if (this._prdChanges.length > this._maxPrdChanges) {
+                this._prdChanges.shift();
+            }
+
+            // Log the changes
+            this._addLog(`[Ralph] 📝 PRD 변경 감지! (반복 ${iteration})`, 'warn');
+            if (added.length > 0) {
+                this._addLog(`[Ralph]   ➕ 추가된 태스크 (${added.length}개):`);
+                for (const t of added) {
+                    this._addLog(`[Ralph]      • ${t.substring(0, 60)}`);
+                }
+            }
+            if (removed.length > 0) {
+                this._addLog(`[Ralph]   ➖ 제거된 태스크 (${removed.length}개):`);
+                for (const t of removed) {
+                    this._addLog(`[Ralph]      • ${t.substring(0, 60)}`);
+                }
+            }
+
+            // Updated progress
+            const newProgress = this.taskManager.getProgress();
+            this._addLog(`[Ralph]   📊 현재 진행: ${newProgress.completed}/${newProgress.total} (남은: ${newProgress.remaining})`);
+
+            // Show VS Code notification
+            vscode.window.showInformationMessage(
+                `📝 PRD 변경: +${added.length} / -${removed.length} 태스크 (반복 ${iteration})`
+            );
+        }
+    }
+
+    /**
+     * Get PRD change history for sidebar display
+     * @returns {Array<{iteration: number, added: string[], removed: string[], timestamp: string}>}
+     */
+    getPrdChanges() {
+        return this._prdChanges.slice(-20);
     }
 
     /**

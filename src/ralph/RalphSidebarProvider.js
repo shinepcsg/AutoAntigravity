@@ -80,6 +80,14 @@ class RalphSidebarProvider {
                     this._log(`[Sidebar] Auto-commit: ${!current ? 'ON' : 'OFF'}`);
                     break;
                 }
+                case 'toggleAllowPrdMod': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('ralphLoop.allowPrdModification', false);
+                    await config.update('ralphLoop.allowPrdModification', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] PRD modification: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -110,16 +118,18 @@ class RalphSidebarProvider {
             maxIterations: config.get('ralphLoop.maxIterations', 50),
             iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
             autoCommit: config.get('ralphLoop.autoCommit', true),
+            allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
             progress: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getProgress()
                 : { total: 0, completed: 0, remaining: 0 },
-            // 새로 추가: 로그, 에러 정보
+            // 로그, 에러, PRD 변경 정보
             recentLogs: this.ralphLoop ? this.ralphLoop.getRecentLogs(30) : [],
             lastError: this.ralphLoop ? this.ralphLoop.lastError : null,
-            consecutiveErrors: this.ralphLoop ? this.ralphLoop.consecutiveErrors : 0
+            consecutiveErrors: this.ralphLoop ? this.ralphLoop.consecutiveErrors : 0,
+            prdChanges: this.ralphLoop ? this.ralphLoop.getPrdChanges() : []
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -488,6 +498,12 @@ class RalphSidebarProvider {
         </button>
     </div>
 
+    <!-- ═══ PRD Changes Section ═══ -->
+    <div id="prdChangesSection" class="section" style="display:none;">
+        <div class="section-title">📝 PRD 변경 이력</div>
+        <div id="prdChangesPanel" class="log-panel" style="max-height:140px;"></div>
+    </div>
+
     <!-- ═══ Log Panel Section ═══ -->
     <div class="section">
         <div class="section-title">📜 실시간 로그</div>
@@ -510,6 +526,10 @@ class RalphSidebarProvider {
         <label id="labelAutoCommit" class="toggle-row">
             <input id="chkAutoCommit" type="checkbox" checked />
             자동 Git 커밋
+        </label>
+        <label id="labelAllowPrdMod" class="toggle-row">
+            <input id="chkAllowPrdMod" type="checkbox" />
+            PRD 수정 허용
         </label>
     </div>
 
@@ -548,6 +568,10 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoCommit' });
+    });
+    document.getElementById('labelAllowPrdMod').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAllowPrdMod' });
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -638,14 +662,52 @@ class RalphSidebarProvider {
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
         document.getElementById('chkAutoCommit').checked = s.autoCommit;
+        document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
 
         // Version
         if (s.version) {
             document.getElementById('versionText').textContent = 'v' + s.version;
         }
 
+        // PRD Changes
+        updatePrdChangesPanel(s.prdChanges || []);
+
         // Logs
         updateLogPanel(s.recentLogs || []);
+    }
+
+    function updatePrdChangesPanel(changes) {
+        const section = document.getElementById('prdChangesSection');
+        const panel = document.getElementById('prdChangesPanel');
+        if (!changes || changes.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = '';
+        let html = '';
+        for (const c of changes) {
+            html += '<div class="log-line log-warn">';
+            html += '<strong>반복 ' + c.iteration + '</strong> ';
+            if (c.added && c.added.length > 0) {
+                html += '<span style="color:var(--success)">+' + c.added.length + '</span> ';
+            }
+            if (c.removed && c.removed.length > 0) {
+                html += '<span style="color:var(--danger)">-' + c.removed.length + '</span>';
+            }
+            html += '</div>';
+            if (c.added) {
+                for (const t of c.added) {
+                    html += '<div class="log-line log-info" style="color:var(--success);padding-left:12px;">➕ ' + escapeHtml(t.substring(0, 50)) + '</div>';
+                }
+            }
+            if (c.removed) {
+                for (const t of c.removed) {
+                    html += '<div class="log-line log-info" style="color:var(--danger);padding-left:12px;">➖ ' + escapeHtml(t.substring(0, 50)) + '</div>';
+                }
+            }
+        }
+        panel.innerHTML = html;
+        panel.scrollTop = panel.scrollHeight;
     }
 
     function updateLogPanel(logs) {
