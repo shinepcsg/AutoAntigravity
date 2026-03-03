@@ -531,8 +531,8 @@ class RalphLoopManager {
     }
 
     /**
-     * Find ALL workbench CDP targets (모든 Antigravity 윈도우)
-     * Stop 버튼 감지 시 모든 윈도우를 스캔하기 위해 사용
+     * Find workbench CDP targets matching the CURRENT workspace only
+     * 현재 워크스페이스에 해당하는 Antigravity 윈도우만 반환
      * @returns {Promise<Object[]>} Array of CDP target objects
      */
     async _findAllWorkbenchTargets() {
@@ -543,12 +543,28 @@ class RalphLoopManager {
         } catch (e) {
             return [];
         }
-        return targets.filter(function (t) {
+
+        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
+            ? vscode.workspace.workspaceFolders[0].name : '';
+
+        let filtered = targets.filter(function (t) {
             return t.type === 'page' &&
                 t.url && t.url.includes('workbench.html') &&
                 !t.url.includes('jetski-agent') &&
                 t.webSocketDebuggerUrl;
         });
+
+        // 현재 워크스페이스 이름이 있으면 해당 타겟만 필터링
+        if (workspaceName) {
+            const wsFiltered = filtered.filter(function (t) {
+                return t.title && t.title.includes(workspaceName);
+            });
+            if (wsFiltered.length > 0) {
+                filtered = wsFiltered;
+            }
+        }
+
+        return filtered;
     }
 
     /**
@@ -1147,10 +1163,10 @@ class RalphLoopManager {
                 return;
             }
 
-            // CDP로 에이전트 활동 상태 확인 (모든 workbench 타겟 스캔)
+            // CDP로 에이전트 활동 상태 확인 (현재 워크스페이스 타겟만 스캔)
             let status = await this._isAgentBusy(targetWsUrl);
 
-            // 저장된 타겟에서 감지 실패 시, 다른 workbench 타겟도 스캔
+            // 저장된 타겟에서 감지 실패 시, 현재 워크스페이스의 다른 workbench 타겟도 스캔
             if (!status.busy) {
                 try {
                     const allTargets = await this._findAllWorkbenchTargets();
@@ -1161,7 +1177,7 @@ class RalphLoopManager {
                             status = altStatus;
                             // 다음부터 이 타겟을 직접 사용
                             targetWsUrl = t.webSocketDebuggerUrl;
-                            this._addLog('[Ralph] 🔀 에이전트 활동 감지: 다른 윈도우 (' + (t.title || '').substring(0, 40) + ')');
+                            this._addLog('[Ralph] 🔀 에이전트 활동 감지: 같은 워크스페이스 다른 윈도우 (' + (t.title || '').substring(0, 40) + ')');
                             break;
                         }
                     }
