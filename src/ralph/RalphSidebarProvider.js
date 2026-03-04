@@ -110,6 +110,14 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
+                case 'toggleAutoDeleteBranch': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('ralphLoop.autoDeleteBranch', true);
+                    await config.update('ralphLoop.autoDeleteBranch', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Auto Delete Branch: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -143,6 +151,7 @@ class RalphSidebarProvider {
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
             autoStart: config.get('ralphLoop.autoStart', true),
             autoCommit: config.get('ralphLoop.autoCommit', true),
+            autoDeleteBranch: config.get('ralphLoop.autoDeleteBranch', true),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
@@ -570,7 +579,11 @@ class RalphSidebarProvider {
         </label>
         <label id="labelAutoCommit" class="toggle-row">
             <input id="chkAutoCommit" type="checkbox" />
-            🌿 Git Auto Commit (자동 커밋 & 머지)
+            🌿 Git Auto Commit (작업별 브랜치 & 머지)
+        </label>
+        <label id="labelAutoDeleteBranch" class="toggle-row">
+            <input id="chkAutoDeleteBranch" type="checkbox" />
+            🗑 자동 브랜치 폐기 (머지 후 삭제)
         </label>
     </div>
 
@@ -624,6 +637,10 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoCommit' });
+    });
+    document.getElementById('labelAutoDeleteBranch').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAutoDeleteBranch' });
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -724,6 +741,7 @@ class RalphSidebarProvider {
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
         document.getElementById('chkAutoStart').checked = s.autoStart || false;
         document.getElementById('chkAutoCommit').checked = !!s.autoCommit;
+        document.getElementById('chkAutoDeleteBranch').checked = !!s.autoDeleteBranch;
 
         // Version
         if (s.version) {

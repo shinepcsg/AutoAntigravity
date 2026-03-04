@@ -219,14 +219,14 @@ class RalphLoopManager {
         this.progressTracker.initializeProgressFile();
         this.currentIteration = this.progressTracker.getLastIteration();
 
-        // ── Git Branch Management ──
+        // ── Git Session Init (per-task branching) ──
         const autoCommit = vscode.workspace.getConfiguration('autoAntigravity')
             .get('ralphLoop.autoCommit', true);
         if (autoCommit) {
             const wsRoot = workspaceFolders[0].uri.fsPath;
-            const gitResult = this.gitManager.startSession(wsRoot);
+            const gitResult = this.gitManager.initSession(wsRoot);
             if (gitResult.success) {
-                this._addLog(`[Ralph] 🌿 Git 작업 브랜치: ${gitResult.workBranch}`);
+                this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch} (작업별 브랜치 모드)`);
             } else {
                 this._addLog(`[Ralph] ⚠ Git 브랜치 관리 비활성 — ${gitResult.error || '알 수 없는 오류'}`, 'warn');
             }
@@ -763,6 +763,12 @@ class RalphLoopManager {
                     '  if (sendBtn) {',
                     '    var isDisabled = sendBtn.disabled || sendBtn.hasAttribute("disabled");',
                     '    if (isDisabled) {',
+                    '      // 입력창 텍스트 확인 — 비어있으면 텍스트 미입력 때문에 disabled (에이전트는 idle)',
+                    '      var chatInput = document.querySelector(".cursor-text[contenteditable]");',
+                    '      var hasText = chatInput && (chatInput.textContent || "").trim().length > 0;',
+                    '      if (!hasText) {',
+                    '        return JSON.stringify({ busy: false, reason: "send_btn_disabled_no_text", detail: "Send button disabled due to empty input — agent is idle" });',
+                    '      }',
                     '      return JSON.stringify({ busy: true, reason: "send_btn_disabled", detail: "Send button is disabled" });',
                     '    } else {',
                     '      return JSON.stringify({ busy: false, detail: "send_btn_enabled" });',
@@ -841,6 +847,17 @@ class RalphLoopManager {
         this._addLog(`[Ralph] 진행: ${progress.completed}/${progress.total}`);
         this._notifyStateChange();
 
+        // ── Git: Create per-task branch ──
+        const autoCommit = config.get('ralphLoop.autoCommit', true);
+        if (autoCommit) {
+            const branchResult = this.gitManager.startTaskBranch(task.text, this.currentIteration);
+            if (branchResult.success) {
+                this._addLog(`[Ralph] 🌿 작업 브랜치: ${branchResult.workBranch}`);
+            } else if (branchResult.error) {
+                this._addLog(`[Ralph] ⚠ 작업 브랜치 생성 실패: ${branchResult.error}`, 'warn');
+            }
+        }
+
         try {
             // Snapshot PRD tasks BEFORE agent execution (for change detection)
             const tasksBeforeSnapshot = this.taskManager.parseTasks();
@@ -872,10 +889,16 @@ class RalphLoopManager {
             // ── PRD 변경 감지 ──
             this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
 
-            // ── Git: Auto commit after each successful iteration ──
-            const autoCommit = config.get('ralphLoop.autoCommit', true);
+            // ── Git: Commit changes and merge task branch back ──
             if (autoCommit) {
                 this.gitManager.commitIteration(this.currentIteration, task.text);
+                const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
+                const mergeResult = this.gitManager.endTaskBranch(autoDeleteBranch);
+                if (mergeResult.success && mergeResult.merged) {
+                    this._addLog(`[Git] ✅ 작업 브랜치 → 원본 브랜치 머지 완료`);
+                } else if (!mergeResult.success) {
+                    this._addLog(`[Git] ⚠ 머지 중 문제: ${mergeResult.error}`, 'warn');
+                }
             }
 
             // Reset consecutive errors on success
@@ -1374,22 +1397,31 @@ class RalphLoopManager {
     }
 
     /**
-     * End git session — commit remaining changes, merge work branch into original
+     * End git session — merge current task branch (if any) and clean up.
+     * Branch deletion is controlled by the autoDeleteBranch setting.
      */
     _endGitSession() {
         const session = this.gitManager.getSessionInfo();
         if (!session.active) return;
 
-        this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.originalBranch} 머지 시작...`);
-        const result = this.gitManager.endSession({ mergeOnStop: true });
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
+
+        if (session.workBranch) {
+            this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.originalBranch} 머지...`);
+        } else {
+            this._addLog(`[Git] ℹ 세션 종료 — 활성 작업 브랜치 없음.`);
+        }
+
+        const result = this.gitManager.endSession({ autoDeleteBranch });
 
         if (result.success && result.merged) {
-            this._addLog('[Git] ✅ 작업 브랜치가 원본 브랜치에 성공적으로 머지되었습니다.');
+            this._addLog('[Git] ✅ 작업 브랜치가 원본 브랜치에 머지되었습니다.');
             vscode.window.showInformationMessage(
                 `✅ Git: ${session.workBranch} → ${session.originalBranch} 머지 완료`
             );
         } else if (result.success && !result.merged) {
-            this._addLog('[Git] ℹ 머지할 커밋이 없어 브랜치만 정리했습니다.');
+            this._addLog('[Git] ℹ 머지할 커밋이 없어 세션만 종료했습니다.');
         } else {
             this._addLog(`[Git] ⚠ 세션 종료 중 문제: ${result.error}`, 'warn');
             vscode.window.showWarningMessage(

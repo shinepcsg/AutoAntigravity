@@ -76,7 +76,8 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 | `autoAntigravity.ralphLoop.maxIterations` | `50` | 최대 반복 횟수 |
 | `autoAntigravity.ralphLoop.taskFile` | `PRD.md` | 작업 파일명 |
 | `autoAntigravity.ralphLoop.progressFile` | `progress.txt` | 진행 파일명 |
-| `autoAntigravity.ralphLoop.autoCommit` | `true` | Git 자동 커밋 |
+| `autoAntigravity.ralphLoop.autoCommit` | `true` | Git 작업별 브랜치 & 자동 커밋 |
+| `autoAntigravity.ralphLoop.autoDeleteBranch` | `true` | 머지 후 작업 브랜치 자동 삭제 |
 | `autoAntigravity.ralphLoop.iterationDelayMs` | `3000` | 반복 간 대기 (ms) |
 
 ---

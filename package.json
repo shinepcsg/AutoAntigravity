@@ -108,6 +108,11 @@
                     "default": true,
                     "description": "Automatically git commit after each iteration"
                 },
+                "autoAntigravity.ralphLoop.autoDeleteBranch": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically delete task branch after merge (자동 브랜치 폐기)"
+                },
                 "autoAntigravity.ralphLoop.iterationDelayMs": {
                     "type": "number",
                     "default": 3000,
