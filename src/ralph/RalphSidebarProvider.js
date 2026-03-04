@@ -94,6 +94,14 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
+                case 'toggleAutoStart': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('ralphLoop.autoStart', false);
+                    await config.update('ralphLoop.autoStart', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Auto Start: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -125,6 +133,7 @@ class RalphSidebarProvider {
             iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
 
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
+            autoStart: config.get('ralphLoop.autoStart', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
@@ -545,6 +554,11 @@ class RalphSidebarProvider {
             <input id="chkAllowPrdMod" type="checkbox" />
             PRD 수정 허용
         </label>
+
+        <label id="labelAutoStart" class="toggle-row">
+            <input id="chkAutoStart" type="checkbox" />
+            🚀 PRD 변경 시 자동 시작
+        </label>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -589,6 +603,10 @@ class RalphSidebarProvider {
     document.getElementById('labelAllowPrdMod').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAllowPrdMod' });
+    });
+    document.getElementById('labelAutoStart').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAutoStart' });
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -687,6 +705,7 @@ class RalphSidebarProvider {
         document.getElementById('inputDelay').value = s.iterationDelay;
 
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
+        document.getElementById('chkAutoStart').checked = s.autoStart || false;
 
         // Version
         if (s.version) {

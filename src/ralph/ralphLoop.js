@@ -7,6 +7,7 @@ const http = require('http');
 const path = require('path');
 const { TaskFileManager } = require('./TaskFileManager');
 const { ProgressTracker } = require('./ProgressTracker');
+const { GitManager } = require('./GitManager');
 
 /**
  * Ralph Loop states
@@ -26,6 +27,7 @@ class RalphLoopManager {
         this.log = log;
         this.taskManager = new TaskFileManager(log);
         this.progressTracker = new ProgressTracker(log);
+        this.gitManager = new GitManager(log);
 
         this.state = LoopState.IDLE;
         this.currentIteration = 0;
@@ -217,6 +219,19 @@ class RalphLoopManager {
         this.progressTracker.initializeProgressFile();
         this.currentIteration = this.progressTracker.getLastIteration();
 
+        // ── Git Branch Management ──
+        const autoCommit = vscode.workspace.getConfiguration('autoAntigravity')
+            .get('ralphLoop.autoCommit', true);
+        if (autoCommit) {
+            const wsRoot = workspaceFolders[0].uri.fsPath;
+            const gitResult = this.gitManager.startSession(wsRoot);
+            if (gitResult.success) {
+                this._addLog(`[Ralph] 🌿 Git 작업 브랜치: ${gitResult.workBranch}`);
+            } else {
+                this._addLog(`[Ralph] ⚠ Git 브랜치 관리 비활성 — ${gitResult.error || '알 수 없는 오류'}`, 'warn');
+            }
+        }
+
         const progress = this.taskManager.getProgress();
         const startMsg = `🔄 Ralph Loop started — ${progress.remaining} tasks remaining`;
         this._addLog(`[Ralph] ${startMsg}`);
@@ -241,6 +256,9 @@ class RalphLoopManager {
             this.loopTimer = null;
         }
 
+        // ── Git: End session & merge ──
+        this._endGitSession();
+
         this.state = LoopState.IDLE;
         vscode.window.showInformationMessage('⏹ Ralph Loop stopped.');
         this._addLog('[Ralph] ⏹ 루프가 정지되었습니다.');
@@ -257,6 +275,9 @@ class RalphLoopManager {
             clearTimeout(this.loopTimer);
             this.loopTimer = null;
         }
+
+        // ── Git: End session & merge ──
+        this._endGitSession();
 
         this.state = LoopState.IDLE;
         vscode.window.showWarningMessage('🛑 Ralph Loop EMERGENCY STOPPED');
@@ -783,6 +804,7 @@ class RalphLoopManager {
             const msg = `🏁 Ralph Loop reached max iterations (${maxIterations}). Stopping.`;
             this._addLog(`[Ralph] ${msg}`, 'warn');
             vscode.window.showInformationMessage(msg);
+            this._endGitSession();
             this.state = LoopState.IDLE;
             this._notifyStateChange();
             return;
@@ -793,6 +815,7 @@ class RalphLoopManager {
             const msg = `❌ 연속 ${this.consecutiveErrors}회 에러 발생 — 루프를 자동 정지합니다.`;
             this._addLog(`[Ralph] ${msg}`, 'error');
             vscode.window.showErrorMessage(`Ralph Loop: ${msg}\n마지막 에러: ${this.lastError}`);
+            this._endGitSession();
             this.state = LoopState.IDLE;
             this._notifyStateChange();
             return;
@@ -801,6 +824,9 @@ class RalphLoopManager {
         // Get next task
         const task = this.taskManager.getNextTask();
         if (!task) {
+            // ── Git: End session & merge on completion ──
+            this._endGitSession();
+
             this._addLog('[Ralph] ✅ 모든 작업이 완료되었습니다!');
             vscode.window.showInformationMessage('🎉 Ralph Loop: All tasks completed!');
             this.state = LoopState.IDLE;
@@ -845,6 +871,12 @@ class RalphLoopManager {
 
             // ── PRD 변경 감지 ──
             this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
+
+            // ── Git: Auto commit after each successful iteration ──
+            const autoCommit = config.get('ralphLoop.autoCommit', true);
+            if (autoCommit) {
+                this.gitManager.commitIteration(this.currentIteration, task.text);
+            }
 
             // Reset consecutive errors on success
             this.consecutiveErrors = 0;
@@ -1339,6 +1371,31 @@ class RalphLoopManager {
      */
     getPrdChanges() {
         return this._prdChanges.slice(-20);
+    }
+
+    /**
+     * End git session — commit remaining changes, merge work branch into original
+     */
+    _endGitSession() {
+        const session = this.gitManager.getSessionInfo();
+        if (!session.active) return;
+
+        this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.originalBranch} 머지 시작...`);
+        const result = this.gitManager.endSession({ mergeOnStop: true });
+
+        if (result.success && result.merged) {
+            this._addLog('[Git] ✅ 작업 브랜치가 원본 브랜치에 성공적으로 머지되었습니다.');
+            vscode.window.showInformationMessage(
+                `✅ Git: ${session.workBranch} → ${session.originalBranch} 머지 완료`
+            );
+        } else if (result.success && !result.merged) {
+            this._addLog('[Git] ℹ 머지할 커밋이 없어 브랜치만 정리했습니다.');
+        } else {
+            this._addLog(`[Git] ⚠ 세션 종료 중 문제: ${result.error}`, 'warn');
+            vscode.window.showWarningMessage(
+                `⚠ Git 머지 문제: ${result.error}\n수동으로 해결이 필요할 수 있습니다.`
+            );
+        }
     }
 
     /**
