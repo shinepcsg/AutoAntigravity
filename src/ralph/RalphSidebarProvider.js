@@ -73,13 +73,7 @@ class RalphSidebarProvider {
                     this._log(`[Sidebar] Iteration delay set to ${message.value}ms`);
                     break;
                 }
-                case 'toggleAutoCommit': {
-                    const config = vscode.workspace.getConfiguration('autoAntigravity');
-                    const current = config.get('ralphLoop.autoCommit', true);
-                    await config.update('ralphLoop.autoCommit', !current, vscode.ConfigurationTarget.Global);
-                    this._log(`[Sidebar] Auto-commit: ${!current ? 'ON' : 'OFF'}`);
-                    break;
-                }
+
                 case 'toggleAllowPrdMod': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('ralphLoop.allowPrdModification', false);
@@ -117,7 +111,7 @@ class RalphSidebarProvider {
             currentIteration: this.ralphLoop ? this.ralphLoop.currentIteration : 0,
             maxIterations: config.get('ralphLoop.maxIterations', 50),
             iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
-            autoCommit: config.get('ralphLoop.autoCommit', true),
+
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
@@ -523,10 +517,7 @@ class RalphSidebarProvider {
             <label>반복 간격 (ms)</label>
             <input id="inputDelay" type="number" min="500" max="60000" step="500" value="3000" />
         </div>
-        <label id="labelAutoCommit" class="toggle-row">
-            <input id="chkAutoCommit" type="checkbox" checked />
-            자동 Git 커밋
-        </label>
+
         <label id="labelAllowPrdMod" class="toggle-row">
             <input id="chkAllowPrdMod" type="checkbox" />
             PRD 수정 허용
@@ -565,10 +556,7 @@ class RalphSidebarProvider {
     document.getElementById('inputDelay').addEventListener('change', (e) => {
         vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(e.target.value, 10) || 3000 });
     });
-    document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
-        e.preventDefault();
-        vscodeApi.postMessage({ command: 'toggleAutoCommit' });
-    });
+
     document.getElementById('labelAllowPrdMod').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAllowPrdMod' });
@@ -661,7 +649,7 @@ class RalphSidebarProvider {
         // Settings
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
-        document.getElementById('chkAutoCommit').checked = s.autoCommit;
+
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
 
         // Version

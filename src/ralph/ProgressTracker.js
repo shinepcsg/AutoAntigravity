@@ -1,10 +1,10 @@
 // AutoAntigravity — Progress Tracker
-// Manages progress.txt (append-only) and git auto-commit
+// Manages progress.txt (append-only)
 
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const cp = require('child_process');
+
 
 class ProgressTracker {
     /**
@@ -92,48 +92,7 @@ class ProgressTracker {
         return isNaN(num) ? 0 : num;
     }
 
-    /**
-     * Auto-commit changes via git
-     * @param {number} iteration - Current iteration number
-     * @param {string} taskText - Task description for commit message
-     * @returns {Promise<boolean>} Whether commit succeeded
-     */
-    async autoCommit(iteration, taskText) {
-        const config = vscode.workspace.getConfiguration('autoAntigravity');
-        if (!config.get('ralphLoop.autoCommit', true)) {
-            this.log('[Ralph] Auto-commit disabled');
-            return false;
-        }
 
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) return false;
-
-        const cwd = workspaceFolders[0].uri.fsPath;
-        const shortTask = taskText.length > 50 ? taskText.substring(0, 47) + '...' : taskText;
-        const commitMsg = `[Ralph Loop #${iteration}] ${shortTask}`;
-
-        return new Promise((resolve) => {
-            cp.exec(
-                `git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
-                { cwd, timeout: 30000, windowsHide: true },
-                (err, stdout, stderr) => {
-                    if (err) {
-                        // "nothing to commit" is not really an error
-                        if (stderr?.includes('nothing to commit') || stdout?.includes('nothing to commit')) {
-                            this.log('[Ralph] Git: nothing to commit');
-                            resolve(true);
-                        } else {
-                            this.log(`[Ralph] Git commit failed: ${err.message}`);
-                            resolve(false);
-                        }
-                    } else {
-                        this.log(`[Ralph] Git committed: ${commitMsg}`);
-                        resolve(true);
-                    }
-                }
-            );
-        });
-    }
 }
 
 module.exports = { ProgressTracker };

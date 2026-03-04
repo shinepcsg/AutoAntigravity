@@ -748,12 +748,6 @@ class RalphLoopManager {
             // ── PRD 변경 감지 ──
             this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
 
-            // Auto-commit
-            const committed = await this.progressTracker.autoCommit(this.currentIteration, task.text);
-            if (committed) {
-                this._addLog('[Ralph] 📦 Git 커밋 완료');
-            }
-
             // Reset consecutive errors on success
             this.consecutiveErrors = 0;
             this.lastError = null;
@@ -904,97 +898,62 @@ class RalphLoopManager {
                     '  delete window.__ralphPrompt;',
                     '  if (!text) return "ERROR:no_prompt";',
                     '',
-
+                    '  // Helper: insert text with line breaks into contenteditable',
+                    '  function insertWithLineBreaks(el, txt) {',
+                    '    el.focus();',
+                    '    var lines = txt.split("\\n");',
+                    '    for (var k = 0; k < lines.length; k++) {',
+                    '      if (lines[k].length > 0) {',
+                    '        document.execCommand("insertText", false, lines[k]);',
+                    '      }',
+                    '      if (k < lines.length - 1) {',
+                    '        document.execCommand("insertParagraph", false);',
+                    '      }',
+                    '    }',
+                    '    return true;',
+                    '  }',
+                    '',
                     '  // Phase 1: Try Antigravity contenteditable chat input FIRST',
-
                     '  var ceSelectors = [',
-
                     '    ".cursor-text[contenteditable]",',
-
                     '    ".cursor-text[role]",',
-
                     '    "[contenteditable].rounded",',
-
                     '    "[role]",',
-
                     '    "[contenteditable]:not(.xterm-helper-textarea)",',
-
                     '  ];',
-
                     '  for (var i = 0; i < ceSelectors.length; i++) {',
-
                     '    var ce = document.querySelector(ceSelectors[i]);',
-
                     '    if (ce) {',
-
-                    '      ce.focus();',
-
-                    '      var ok = document.execCommand("insertText", false, text);',
-
-                    '      if (ok) return "OK:ce:execCmd:" + ceSelectors[i];',
-
-                    '      ce.textContent = text;',
-
-                    '      ce.dispatchEvent(new Event("input", { bubbles: true }));',
-
-                    '      return "OK:ce:textContent:" + ceSelectors[i];',
-
+                    '      insertWithLineBreaks(ce, text);',
+                    '      return "OK:ce:lineBreaks:" + ceSelectors[i];',
                     '    }',
-
                     '  }',
-
                     '',
-
                     '  // Phase 2: Try specific chat textarea selectors (standard VS Code)',
-
                     '  var taSelectors = [',
-
                     '    ".interactive-input-part .monaco-editor textarea",',
-
                     '    ".interactive-input-editor .monaco-editor textarea",',
-
                     '    ".chat-input-part .monaco-editor textarea",',
-
                     '    ".interactive-input-part textarea",',
-
                     '    ".chat-editor-input textarea",',
-
                     '    ".part.panel .interactive-session .monaco-editor textarea",',
-
                     '  ];',
-
                     '  for (var j = 0; j < taSelectors.length; j++) {',
-
                     '    var el = document.querySelector(taSelectors[j]);',
-
                     '    if (el) {',
-
                     '      el.focus();',
-
                     '      var ok2 = document.execCommand("insertText", false, text);',
-
                     '      if (ok2) return "OK:ta:execCmd:" + taSelectors[j];',
-
                     '      el.value = text;',
-
                     '      el.dispatchEvent(new Event("input", { bubbles: true }));',
-
                     '      return "OK:ta:setValue:" + taSelectors[j];',
-
                     '    }',
-
                     '  }',
-
                     '',
-
                     '  // NOT FOUND - debug info',
-
                     '  var ta = document.querySelectorAll("textarea").length;',
-
                     '  var ce2 = document.querySelectorAll("[contenteditable]").length;',
-
                     '  var tb = document.querySelectorAll("[role]").length;',
-
                     '  return "NOT_FOUND|ta=" + ta + "|ce=" + ce2 + "|tb=" + tb;',
                     '})()',
                 ].join('\n'),
