@@ -569,8 +569,7 @@ class RalphLoopManager {
 
     /**
      * Check if the Antigravity agent is currently busy via CDP DOM inspection
-     * Multi-signal approach: Stop button (text + SVG icon), spinners, streaming indicators,
-     * content changes (growth & shrinkage), and DOM mutation rate
+     * Send button approach: when Send button is disabled, agent is busy; when enabled, agent is done
      * @param {string} targetWsUrl - WebSocket debugger URL
      * @param {boolean} [diagnostic=false] - If true, log all visible buttons for debugging
      * @returns {Promise<{busy: boolean, reason?: string, detail?: string}>}
@@ -600,14 +599,31 @@ class RalphLoopManager {
                     '    }',
                     '    all.push(info);',
                     '  }',
-                    '  return JSON.stringify({ buttons: all });',
+                    '  // 채팅 입력창 상태 진단',
+                    '  var inputInfo = {};',
+                    '  var chatInput = document.querySelector(".cursor-text[contenteditable]");',
+                    '  if (chatInput) {',
+                    '    var ir = chatInput.getBoundingClientRect();',
+                    '    inputInfo.found = true;',
+                    '    inputInfo.visible = ir.width > 0 && ir.height > 0;',
+                    '    inputInfo.disabled = chatInput.getAttribute("aria-disabled") === "true";',
+                    '    inputInfo.readonly = chatInput.getAttribute("aria-readonly") === "true" || chatInput.getAttribute("contenteditable") === "false";',
+                    '    inputInfo.hasContent = (chatInput.textContent || "").trim().length > 0;',
+                    '    inputInfo.cls = (chatInput.className || "").substring(0, 60);',
+                    '  } else {',
+                    '    inputInfo.found = false;',
+                    '    // contenteditable 요소 전체 탐색',
+                    '    var ces = document.querySelectorAll("[contenteditable]");',
+                    '    inputInfo.totalContentEditable = ces.length;',
+                    '  }',
+                    '  return JSON.stringify({ buttons: all, inputState: inputInfo });',
                     '})()',
                 ].join('\n')
                 : [
                     '(function() {',
                     '  var bodyText = document.body.innerText || "";',
                     '',
-                    '  // ── 1. Quota 감지 ──',
+                    '  // ── 0. Quota 감지 (최우선) ──',
                     '  if (bodyText.includes("Model quota reached") && bodyText.includes("refresh on")) {',
                     '    var match = bodyText.match(/refresh on (.*?)\\./);',
                     '    if (match) {',
@@ -615,128 +631,30 @@ class RalphLoopManager {
                     '    }',
                     '  }',
                     '',
-                    '  // ── 2. 버튼 기반 감지 (텍스트 + SVG 아이콘) ──',
-                    '  var btns = document.querySelectorAll("button");',
-                    '  for (var i = 0; i < btns.length; i++) {',
-                    '    var b = btns[i];',
-                    '    var rect = b.getBoundingClientRect();',
-                    '    if (rect.width === 0 || rect.height === 0) continue;',
-                    '    var label = (b.getAttribute("aria-label") || "").toLowerCase();',
-                    '    var title = (b.getAttribute("title") || "").toLowerCase();',
-                    '    var text = (b.textContent || "").toLowerCase().trim();',
-                    '    var combined = label + " " + title + " " + text;',
+                    '  // ── 1. 보내기(Send) 버튼 상태로 작업 완료 여부 판단 ──',
+                    '  // 에이전트 작업 중이면 보내기 버튼이 disabled 상태이고,',
+                    '  // 작업 완료 시 보내기 버튼이 활성화(disabled 속성 제거)됨',
+                    '  var sendBtn = document.querySelector(\'button[data-tooltip-id="input-send-button-send-tooltip"]\');',
+                    '  if (!sendBtn) {',
+                    '    // fallback: XPath로 시도',
+                    '    var xpResult = document.evaluate(',
+                    '      \'//*[@id="antigravity.agentSidePanelInputBox"]/div[3]/div[2]/button\',',
+                    '      document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null',
+                    '    );',
+                    '    sendBtn = xpResult.singleNodeValue;',
+                    '  }',
                     '',
-                    '    // 2a. 텍스트 기반 Stop/Cancel 키워드 매칭',
-                    '    if (combined.includes("stop") || combined.includes("cancel") ||',
-                    '        combined.includes("중지") || combined.includes("취소") ||',
-                    '        combined.includes("interrupt")) {',
-                    '      if (combined.includes("breakpoint") || combined.includes("debug") ||',
-                    '          combined.includes("close") || combined.includes("hide")) continue;',
-                    '      return JSON.stringify({ busy: true, reason: "stop_button", detail: (label || title || text).substring(0, 50) });',
-                    '    }',
-                    '',
-                    '    // 2b. SVG-only 버튼: 텍스트 없이 SVG만 있는 작은 원형 버튼 (Stop 아이콘)',
-                    '    if (!text && b.querySelector("svg")) {',
-                    '      var svg = b.querySelector("svg");',
-                    '      var svgHTML = (svg.innerHTML || "").toLowerCase();',
-                    '      var cls = (b.className || "").toLowerCase();',
-                    '      var paths = svg.querySelectorAll("path");',
-                    '      var rects = svg.querySelectorAll("rect");',
-                    '      var circles = svg.querySelectorAll("circle");',
-                    '      var lines = svg.querySelectorAll("line");',
-                    '      var polylines = svg.querySelectorAll("polyline");',
-                    '      var totalShapes = paths.length + rects.length + circles.length + lines.length + polylines.length;',
-                    '      // Stop 아이콘: 단순한 사각형(rect 1개, path 0~1개) 또는 "stop" 키워드 포함',
-                    '      var hasSimpleStopShape = (rects.length >= 1 && paths.length <= 1 && totalShapes <= 3) || svgHTML.includes("stop");',
-                    '      // 복잡한 아이콘(path 2개 이상)은 복사/피드백 버튼 등이므로 제외',
-                    '      var isComplexIcon = paths.length >= 2 || totalShapes >= 4;',
-                    '      // 둥근 버튼(rounded-full)에 작은 크기 = 전형적인 Stop 버튼',
-                    '      var isRoundBtn = cls.includes("rounded-full") || cls.includes("rounded-lg");',
-                    '      var isSmall = rect.width <= 44 && rect.height <= 44 && rect.width >= 16;',
-                    '      if (hasSimpleStopShape && !isComplexIcon && isRoundBtn && isSmall) {',
-                    '        return JSON.stringify({ busy: true, reason: "stop_button", detail: "svg_stop_icon" });',
-                    '      }',
-                    '      // 대체 감지: data-testid나 부모에서 stop/cancel 힌트가 있는 SVG 버튼',
-                    '      if (isRoundBtn && isSmall && !isComplexIcon) {',
-                    '        var testId = b.getAttribute("data-testid") || b.getAttribute("data-action") || "";',
-                    '        var parentText = (b.parentElement && b.parentElement.getAttribute("aria-label")) || "";',
-                    '        if (testId.includes("stop") || testId.includes("cancel") ||',
-                    '            parentText.toLowerCase().includes("stop") || parentText.toLowerCase().includes("cancel")) {',
-                    '          return JSON.stringify({ busy: true, reason: "stop_button", detail: "svg_parent_hint" });',
-                    '        }',
-                    '      }',
-                    '    }',
-                    '',
-                    '    // 2c. Thinking/활동 상태 텍스트',
-                    '    if (combined.includes("generating") || combined.includes("planning") || combined.includes("searching") || combined.includes("reading") || combined.includes("editing") || combined.includes("analyzing")) {',
-                    '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
-                    '    }',
-                    '    if (combined.includes("thinking") || combined.includes("thought")) {',
-                    '      if (combined.includes(" for ")) continue;',
-                    '      return JSON.stringify({ busy: true, reason: "thinking", detail: text.substring(0, 50) });',
+                    '  if (sendBtn) {',
+                    '    var isDisabled = sendBtn.disabled || sendBtn.hasAttribute("disabled");',
+                    '    if (isDisabled) {',
+                    '      return JSON.stringify({ busy: true, reason: "send_btn_disabled", detail: "Send button is disabled" });',
+                    '    } else {',
+                    '      return JSON.stringify({ busy: false, detail: "send_btn_enabled" });',
                     '    }',
                     '  }',
                     '',
-                    '  // ── 3. 스피너/진행 표시기 감지 ──',
-                    '  var spinSel = ".codicon-loading, .codicon-sync, .progress-indicator, [role=progressbar]";',
-                    '  var spinners = document.querySelectorAll(spinSel);',
-                    '  for (var si = 0; si < spinners.length; si++) {',
-                    '    var sr = spinners[si].getBoundingClientRect();',
-                    '    if (sr.width > 0 && sr.height > 0) {',
-                    '      return JSON.stringify({ busy: true, reason: "spinner", detail: spinners[si].className.substring(0, 50) });',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // ── 4. CSS 애니메이션 중인 요소 감지 (깜빡이는 커서 등) ──',
-                    '  var animSel = ".streaming, .typing-indicator, .blink-animation, .pulse-animation";',
-                    '  var allEls = document.querySelectorAll("*");',
-                    '  var animEls = [];',
-                    '  for (var xi = 0; xi < allEls.length; xi++) {',
-                    '    var cn = (allEls[xi].className || "").toString().toLowerCase();',
-                    '    if (cn.indexOf("blink") >= 0 || cn.indexOf("pulse") >= 0 || cn.indexOf("streaming") >= 0 || cn.indexOf("typing") >= 0) {',
-                    '      animEls.push(allEls[xi]);',
-                    '    }',
-                    '  }',
-                    '  for (var ai = 0; ai < animEls.length; ai++) {',
-                    '    var ar = animEls[ai].getBoundingClientRect();',
-                    '    if (ar.width > 0 && ar.height > 0) {',
-                    '      return JSON.stringify({ busy: true, reason: "streaming_indicator", detail: animEls[ai].className.substring(0, 50) });',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // ── 5. Content 변화 감지 (증가 OR 감소 = 활동 중) ──',
-                    '  var bodyLen = (document.body.innerText || "").length;',
-                    '  var prev = window.__ralphContentLen || 0;',
-                    '  var prevTime = window.__ralphContentTime || 0;',
-                    '  var now = Date.now();',
-                    '  window.__ralphContentLen = bodyLen;',
-                    '  window.__ralphContentTime = now;',
-                    '  if (prev > 0) {',
-                    '    var diff = Math.abs(bodyLen - prev);',
-                    '    if (diff > 5) {',
-                    '      var sign = bodyLen > prev ? "+" : "-";',
-                    '      return JSON.stringify({ busy: true, reason: "content_changing", detail: sign + diff + " chars" });',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // ── 6. DOM 변이 감지 (MutationObserver 스냅샷) ──',
-                    '  if (!window.__ralphMutationCount) { window.__ralphMutationCount = 0; window.__ralphMutationTs = now; }',
-                    '  if (!window.__ralphMutObs) {',
-                    '    window.__ralphMutObs = new MutationObserver(function(muts) {',
-                    '      window.__ralphMutationCount += muts.length;',
-                    '    });',
-                    '    window.__ralphMutObs.observe(document.body, { childList: true, subtree: true, characterData: true });',
-                    '  }',
-                    '  var mutCount = window.__ralphMutationCount;',
-                    '  var mutElapsed = now - window.__ralphMutationTs;',
-                    '  window.__ralphMutationCount = 0;',
-                    '  window.__ralphMutationTs = now;',
-                    '  // 폴링 간격(~3초) 동안 50개 이상 DOM 변이 = 활동 중',
-                    '  if (mutCount > 50 && mutElapsed > 1000) {',
-                    '    return JSON.stringify({ busy: true, reason: "dom_mutations", detail: mutCount + " mutations/" + Math.round(mutElapsed/1000) + "s" });',
-                    '  }',
-                    '',
-                    '  return JSON.stringify({ busy: false });',
+                    '  // ── 2. 보내기 버튼을 찾지 못한 경우 — busy로 간주 (안전 측) ──',
+                    '  return JSON.stringify({ busy: true, reason: "send_btn_not_found", detail: "Send button not found in DOM" });',
                     '})()',
                 ].join('\n');
 
@@ -1119,13 +1037,13 @@ class RalphLoopManager {
 
     /**
      * Wait for the agent to finish working
-     * Uses CDP to check Stop button existence — when Stop button disappears, agent is done
+     * Uses CDP to check Send button disabled state — when Send button is enabled, agent is done
      */
     async _waitForAgentCompletion() {
         const MAX_WAIT_MS = 300000;       // 5분 최대
         const POLL_INTERVAL_MS = 3000;    // 3초마다 폴링
         const INITIAL_WAIT_MS = 10000;    // 에이전트 시작 대기 10초
-        const IDLE_CONFIRMS_NEEDED = 3;   // 연속 3회 idle 확인 필요
+        const IDLE_CONFIRMS_NEEDED = 1;   // 보내기 버튼 enabled 1회 확인이면 충분
 
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -1147,7 +1065,7 @@ class RalphLoopManager {
         this._addLog('[Ralph] ⏳ 에이전트 시작 대기 (' + (INITIAL_WAIT_MS / 1000) + '초)...');
         await delay(INITIAL_WAIT_MS);
 
-        // ── 첫 폴링: 진단 모드로 DOM 버튼 전체 로그 ──
+        // ── 첫 폴링: 진단 모드로 DOM 버튼 + 입력창 상태 로그 ──
         const diag = await this._isAgentBusy(targetWsUrl, true);
         if (diag.buttons && diag.buttons.length > 0) {
             this._addLog('[Ralph] 🔍 DOM 버튼 진단 (' + diag.buttons.length + '개):');
@@ -1156,6 +1074,9 @@ class RalphLoopManager {
             });
         } else {
             this._addLog('[Ralph] 🔍 DOM 버튼 진단: 버튼 없음');
+        }
+        if (diag.inputState) {
+            this._addLog('[Ralph] 🔍 입력창 상태: ' + JSON.stringify(diag.inputState));
         }
 
         let elapsed = INITIAL_WAIT_MS;
@@ -1248,7 +1169,8 @@ class RalphLoopManager {
                 if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED) {
                     this._addLog('[Ralph] ✅ 에이전트 완료 감지 — 활동 지표 ' +
                         consecutiveIdleCount + '회 연속 미발견 (' +
-                        Math.round(elapsed / 1000) + '초 경과, everBusy=' + everSeenBusy + ')');
+                        Math.round(elapsed / 1000) + '초 경과, everBusy=' + everSeenBusy +
+                        (status.detail ? ', signal=' + status.detail : '') + ')');
                     return;
                 }
 
