@@ -4,6 +4,7 @@
 
 const vscode = require('vscode');
 const http = require('http');
+const path = require('path');
 const { TaskFileManager } = require('./TaskFileManager');
 const { ProgressTracker } = require('./ProgressTracker');
 
@@ -49,6 +50,10 @@ class RalphLoopManager {
 
         // ExtensionContext — workspaceState 영속 저장용 (워크스페이스별)
         this._context = null;
+
+        // Auto Start — FileSystemWatcher
+        this._autoStartWatcher = null;
+        this._autoStartDebounceTimer = null;
     }
 
     /**
@@ -262,7 +267,100 @@ class RalphLoopManager {
      * Dispose / cleanup
      */
     dispose() {
+        this.disableAutoStart();
         this.emergencyStop();
+    }
+
+    // ─── Auto Start (FileSystemWatcher) ───────────────────────────────
+
+    /**
+     * Enable auto-start: watch for task file changes and auto-start Ralph Loop
+     * PRD.md가 변경/생성되면 미완료 작업이 있을 때 자동으로 Ralph Loop 시작
+     */
+    enableAutoStart() {
+        this.disableAutoStart(); // 기존 watcher 정리
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            this._addLog('[Ralph] ⚠ autoStart: 워크스페이스 없음 — 감시 불가', 'warn');
+            return;
+        }
+
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const taskFileName = config.get('ralphLoop.taskFile', 'PRD.md');
+        const wsRoot = workspaceFolders[0].uri.fsPath;
+
+        // FileSystemWatcher: 워크스페이스 루트의 작업 파일만 감시
+        const pattern = new vscode.RelativePattern(wsRoot, taskFileName);
+        this._autoStartWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+        const handleFileChange = (uri) => {
+            // Debounce: 연속 저장 시 2초 대기 후 한 번만 실행
+            if (this._autoStartDebounceTimer) {
+                clearTimeout(this._autoStartDebounceTimer);
+            }
+            this._autoStartDebounceTimer = setTimeout(() => {
+                this._onTaskFileChanged(uri);
+            }, 2000);
+        };
+
+        this._autoStartWatcher.onDidChange(handleFileChange);
+        this._autoStartWatcher.onDidCreate(handleFileChange);
+
+        this._addLog(`[Ralph] 👁 autoStart 활성화 — ${taskFileName} 감시 시작`);
+    }
+
+    /**
+     * Disable auto-start: stop watching for file changes
+     */
+    disableAutoStart() {
+        if (this._autoStartDebounceTimer) {
+            clearTimeout(this._autoStartDebounceTimer);
+            this._autoStartDebounceTimer = null;
+        }
+        if (this._autoStartWatcher) {
+            this._autoStartWatcher.dispose();
+            this._autoStartWatcher = null;
+            this._addLog('[Ralph] 👁 autoStart 비활성화 — 감시 중지');
+        }
+    }
+
+    /**
+     * Handle task file change event — auto-start Ralph Loop if conditions met
+     * @param {vscode.Uri} uri - Changed file URI
+     */
+    async _onTaskFileChanged(uri) {
+        const filePath = uri.fsPath;
+        this._addLog(`[Ralph] 📄 작업 파일 변경 감지: ${path.basename(filePath)}`);
+
+        // 이미 실행 중이면 무시
+        if (this.state === LoopState.RUNNING) {
+            this._addLog('[Ralph] ⏭ Ralph Loop가 이미 실행 중 — autoStart 건너뜀');
+            return;
+        }
+
+        // 작업 파일 세팅
+        this.taskManager.setTaskFile(filePath);
+
+        // workspaceState에 경로 영속 저장
+        if (this._context) {
+            this._context.workspaceState.update('autoAntigravity.lastTaskFilePath', filePath);
+        }
+
+        // 미완료 작업이 있는지 확인
+        if (this.taskManager.allTasksCompleted()) {
+            this._addLog('[Ralph] ✅ 모든 작업이 이미 완료 — autoStart 건너뜀');
+            return;
+        }
+
+        const progress = this.taskManager.getProgress();
+        this._addLog(`[Ralph] 🚀 autoStart: ${progress.remaining}개 미완료 작업 감지 — Ralph Loop 자동 시작!`);
+        vscode.window.showInformationMessage(
+            `🚀 AutoAntigravity: PRD 변경 감지 — ${progress.remaining}개 작업으로 Ralph Loop 자동 시작`
+        );
+
+        // Ralph Loop 시작
+        await this.start();
     }
 
     // ─── CDP Helpers ──────────────────────────────────────────────────

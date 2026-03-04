@@ -82,6 +82,28 @@ function activate(context) {
         updateRalphStatusBar();
     };
 
+    // ─── Auto Start (FileSystemWatcher) ──────────────────────────────
+    const autoStartConfig = vscode.workspace.getConfiguration('autoAntigravity');
+    if (autoStartConfig.get('ralphLoop.autoStart', false)) {
+        ralphLoop.enableAutoStart();
+    }
+
+    // 설정 변경 시 동적으로 autoStart ON/OFF
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('autoAntigravity.ralphLoop.autoStart')) {
+                const enabled = vscode.workspace.getConfiguration('autoAntigravity')
+                    .get('ralphLoop.autoStart', false);
+                if (enabled) {
+                    ralphLoop.enableAutoStart();
+                } else {
+                    ralphLoop.disableAutoStart();
+                }
+                log(`Auto Start ${enabled ? 'enabled' : 'disabled'}`);
+            }
+        })
+    );
+
     // ─── Register Sidebar WebviewView Provider ────────────────────────
     sidebarProvider = new RalphSidebarProvider(context, log);
     sidebarProvider.autoAccept = autoAccept;
