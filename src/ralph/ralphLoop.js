@@ -1005,7 +1005,7 @@ class RalphLoopManager {
      */
     async _waitForAgentCompletion() {
         const MAX_WAIT_MS = 3600000;      // 1시간 최대
-        const POLL_INTERVAL_MS = 3000;    // 3초마다 폴링
+        const POLL_INTERVAL_MS = 1000;    // 1초마다 폴링
         const INITIAL_WAIT_MS = 10000;    // 에이전트 시작 대기 10초
         const IDLE_CONFIRMS_NEEDED = 1;   // 보내기 버튼 enabled 1회 확인이면 충분
 
