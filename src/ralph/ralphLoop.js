@@ -811,6 +811,10 @@ class RalphLoopManager {
             prompt += `   - ⚠ 이미 완료된 태스크(\`- [x]\`)는 수정하지 마세요\n`;
         }
 
+        // Convert literal \n sequences to actual newline characters
+        // (template literals with \\n produce literal backslash+n, not real newlines)
+        prompt = prompt.replace(/\\n/g, '\n');
+
         return prompt;
     }
 
@@ -879,93 +883,97 @@ class RalphLoopManager {
 
         await delay(2000);
 
-        // ─── Step 3: Store prompt → find textarea → focus → insert text ───
-        // All done via Runtime.evaluate to prevent focus from being stolen
-        try {
-            await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-                expression: 'window.__ralphPrompt = ' + JSON.stringify(prompt) + ';',
-                returnByValue: true
-            }, 5000);
-        } catch (e) {
-            throw new Error('프롬프트 전달 실패: ' + e.message);
-        }
+        // ─── Step 3: Find chat input → focus → insert text with line breaks ───
+        // Strategy: CDP Input.insertText for text + Shift+Enter for line breaks
+        // This is the most reliable way to insert multi-line text into contenteditable
 
+        // 3a: Focus the chat input via Runtime.evaluate
         try {
-            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+            const focusResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
                 expression: [
                     '(function() {',
-                    '  var text = window.__ralphPrompt;',
-                    '  delete window.__ralphPrompt;',
-                    '  if (!text) return "ERROR:no_prompt";',
-                    '',
-                    '  // Helper: insert text with line breaks into contenteditable',
-                    '  function insertWithLineBreaks(el, txt) {',
-                    '    el.focus();',
-                    '    var lines = txt.split("\\n");',
-                    '    for (var k = 0; k < lines.length; k++) {',
-                    '      if (lines[k].length > 0) {',
-                    '        document.execCommand("insertText", false, lines[k]);',
-                    '      }',
-                    '      if (k < lines.length - 1) {',
-                    '        document.execCommand("insertParagraph", false);',
-                    '      }',
-                    '    }',
-                    '    return true;',
-                    '  }',
-                    '',
-                    '  // Phase 1: Try Antigravity contenteditable chat input FIRST',
                     '  var ceSelectors = [',
                     '    ".cursor-text[contenteditable]",',
                     '    ".cursor-text[role]",',
                     '    "[contenteditable].rounded",',
-                    '    "[role]",',
                     '    "[contenteditable]:not(.xterm-helper-textarea)",',
                     '  ];',
                     '  for (var i = 0; i < ceSelectors.length; i++) {',
                     '    var ce = document.querySelector(ceSelectors[i]);',
                     '    if (ce) {',
-                    '      insertWithLineBreaks(ce, text);',
-                    '      return "OK:ce:lineBreaks:" + ceSelectors[i];',
+                    '      ce.focus();',
+                    '      return "FOCUSED:" + ceSelectors[i];',
                     '    }',
                     '  }',
-                    '',
-                    '  // Phase 2: Try specific chat textarea selectors (standard VS Code)',
                     '  var taSelectors = [',
                     '    ".interactive-input-part .monaco-editor textarea",',
-                    '    ".interactive-input-editor .monaco-editor textarea",',
                     '    ".chat-input-part .monaco-editor textarea",',
-                    '    ".interactive-input-part textarea",',
                     '    ".chat-editor-input textarea",',
-                    '    ".part.panel .interactive-session .monaco-editor textarea",',
                     '  ];',
                     '  for (var j = 0; j < taSelectors.length; j++) {',
                     '    var el = document.querySelector(taSelectors[j]);',
                     '    if (el) {',
                     '      el.focus();',
-                    '      var ok2 = document.execCommand("insertText", false, text);',
-                    '      if (ok2) return "OK:ta:execCmd:" + taSelectors[j];',
-                    '      el.value = text;',
-                    '      el.dispatchEvent(new Event("input", { bubbles: true }));',
-                    '      return "OK:ta:setValue:" + taSelectors[j];',
+                    '      return "FOCUSED:" + taSelectors[j];',
                     '    }',
                     '  }',
-                    '',
-                    '  // NOT FOUND - debug info',
                     '  var ta = document.querySelectorAll("textarea").length;',
                     '  var ce2 = document.querySelectorAll("[contenteditable]").length;',
-                    '  var tb = document.querySelectorAll("[role]").length;',
-                    '  return "NOT_FOUND|ta=" + ta + "|ce=" + ce2 + "|tb=" + tb;',
+                    '  return "NOT_FOUND|ta=" + ta + "|ce=" + ce2;',
                     '})()',
                 ].join('\n'),
                 returnByValue: true
-            }, 15000);
+            }, 10000);
 
-            const val = (result && result.result) ? result.result.value : JSON.stringify(result);
-            this._addLog('[Ralph] 텍스트 삽입: ' + val);
+            const focusVal = (focusResult && focusResult.result) ? focusResult.result.value : '';
+            this._addLog('[Ralph] 입력창 포커스: ' + focusVal);
 
-            if (typeof val === 'string' && (val.startsWith('NOT_FOUND') || val.startsWith('ERROR'))) {
-                throw new Error(val);
+            if (typeof focusVal === 'string' && focusVal.startsWith('NOT_FOUND')) {
+                throw new Error(focusVal);
             }
+        } catch (e) {
+            throw new Error('채팅 입력창 포커스 실패: ' + e.message);
+        }
+
+        await delay(200);
+
+        // 3b: Insert text line by line using CDP Input commands
+        // Split prompt into lines and insert with Shift+Enter between them
+        // trimEnd to avoid unnecessary trailing blank lines
+        const lines = prompt.trimEnd().split('\n');
+        this._addLog(`[Ralph] 📝 ${lines.length}줄 프롬프트 삽입 중 (CDP Input 방식)...`);
+
+        try {
+            for (let i = 0; i < lines.length; i++) {
+                // Insert the line text (even if empty, we still need Shift+Enter for blank lines)
+                if (lines[i].length > 0) {
+                    await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
+                        text: lines[i]
+                    }, 5000);
+                }
+
+                // Insert line break between lines (not after the last line)
+                if (i < lines.length - 1) {
+                    // Shift+Enter = new line without submitting
+                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
+                        type: 'keyDown',
+                        key: 'Enter',
+                        code: 'Enter',
+                        windowsVirtualKeyCode: 13,
+                        nativeVirtualKeyCode: 13,
+                        modifiers: 8, // Shift modifier
+                    }, 5000);
+                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
+                        type: 'keyUp',
+                        key: 'Enter',
+                        code: 'Enter',
+                        windowsVirtualKeyCode: 13,
+                        nativeVirtualKeyCode: 13,
+                        modifiers: 8,
+                    }, 5000);
+                }
+            }
+            this._addLog('[Ralph] ✅ 프롬프트 텍스트 삽입 완료');
         } catch (e) {
             throw new Error('텍스트 삽입 실패: ' + e.message);
         }
@@ -996,7 +1004,7 @@ class RalphLoopManager {
      * Uses CDP to check Send button disabled state — when Send button is enabled, agent is done
      */
     async _waitForAgentCompletion() {
-        const MAX_WAIT_MS = 300000;       // 5분 최대
+        const MAX_WAIT_MS = 3600000;      // 1시간 최대
         const POLL_INTERVAL_MS = 3000;    // 3초마다 폴링
         const INITIAL_WAIT_MS = 10000;    // 에이전트 시작 대기 10초
         const IDLE_CONFIRMS_NEEDED = 1;   // 보내기 버튼 enabled 1회 확인이면 충분
