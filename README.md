@@ -96,7 +96,6 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 MIT License — [LICENSE](LICENSE)
 
 ## 🙏 크레딧
-
-- 찬선
+찬선.
 - [AntiGravity-AutoAccept](https://github.com/yazanbaker94/AntiGravity-AutoAccept) by yazanbaker94
 - [ralph-loop-for-antigravity](https://github.com/abhishekbhakat/ralph-loop-for-antigravity) by abhishekbhakat
