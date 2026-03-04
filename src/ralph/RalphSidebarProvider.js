@@ -61,6 +61,18 @@ class RalphSidebarProvider {
                 case 'selectTaskFile':
                     if (this.onSelectTaskFile) this.onSelectTaskFile();
                     break;
+                case 'openTaskFile': {
+                    const filePath = message.filePath;
+                    if (filePath) {
+                        try {
+                            const doc = await vscode.workspace.openTextDocument(filePath);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                        } catch (err) {
+                            this._log(`[Sidebar] Failed to open task file: ${err.message}`);
+                        }
+                    }
+                    break;
+                }
                 case 'setMaxIterations': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     await config.update('ralphLoop.maxIterations', message.value, vscode.ConfigurationTarget.Global);
@@ -314,6 +326,17 @@ class RalphSidebarProvider {
         word-break: break-all;
         margin-bottom: 8px;
         opacity: 0.85;
+        transition: background 0.15s, opacity 0.15s;
+    }
+    .task-file-name.clickable {
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-underline-offset: 2px;
+    }
+    .task-file-name.clickable:hover {
+        opacity: 1;
+        background: rgba(128,128,128,0.25);
     }
 
     /* ─── Checkbox Toggle ─── */
@@ -533,6 +556,7 @@ class RalphSidebarProvider {
 
 <script nonce="${nonce}">
     const vscodeApi = acquireVsCodeApi();
+    let currentTaskFilePath = null;
 
     // ─── Event Bindings (CSP-safe, no inline onclick) ─────
     document.getElementById('btnToggleAutoAccept').addEventListener('click', () => {
@@ -549,6 +573,11 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'selectTaskFile' });
+    });
+    document.getElementById('taskFileName').addEventListener('click', () => {
+        if (currentTaskFilePath) {
+            vscodeApi.postMessage({ command: 'openTaskFile', filePath: currentTaskFilePath });
+        }
     });
     document.getElementById('inputMaxIter').addEventListener('change', (e) => {
         vscodeApi.postMessage({ command: 'setMaxIterations', value: parseInt(e.target.value, 10) || 50 });
@@ -639,11 +668,18 @@ class RalphSidebarProvider {
         }
 
         // Task file
+        const taskFileEl = document.getElementById('taskFileName');
         if (s.taskFile) {
+            currentTaskFilePath = s.taskFile;
             const parts = s.taskFile.replace(/\\\\/g, '/').split('/');
-            document.getElementById('taskFileName').textContent = parts[parts.length - 1];
+            taskFileEl.textContent = parts[parts.length - 1];
+            taskFileEl.classList.add('clickable');
+            taskFileEl.title = s.taskFile;
         } else {
-            document.getElementById('taskFileName').textContent = '선택되지 않음';
+            currentTaskFilePath = null;
+            taskFileEl.textContent = '선택되지 않음';
+            taskFileEl.classList.remove('clickable');
+            taskFileEl.title = '';
         }
 
         // Settings
