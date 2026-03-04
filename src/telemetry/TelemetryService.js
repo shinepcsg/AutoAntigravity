@@ -361,7 +361,65 @@ class TelemetryService {
             });
         }
 
-        return models.sort((a, b) => a.remaining - b.remaining);
+        return this._groupModels(models).sort((a, b) => a.remaining - b.remaining);
+    }
+
+    /**
+     * Group models by provider.
+     * - "Claude" group: Claude Sonnet, Claude Opus, GPT OSS
+     * - "Gemini" group: Gemini Pro, Gemini Flash
+     * Ungrouped models remain as-is.
+     */
+    _groupModels(models) {
+        const GROUP_RULES = [
+            {
+                name: 'Claude',
+                test: (label) => /claude/i.test(label) || /gpt\s*oss/i.test(label)
+            },
+            {
+                name: 'Gemini',
+                test: (label) => /gemini/i.test(label)
+            }
+        ];
+
+        // Bucket models into groups
+        /** @type {Map<string, {remaining: number, resetTime: string|null, members: string[]}>} */
+        const groups = new Map();
+        const ungrouped = [];
+
+        for (const m of models) {
+            const rule = GROUP_RULES.find(r => r.test(m.label));
+            if (rule) {
+                if (!groups.has(rule.name)) {
+                    groups.set(rule.name, { remaining: m.remaining, resetTime: m.resetTime, members: [] });
+                }
+                const g = groups.get(rule.name);
+                // Use the minimum remaining across the group (most constrained)
+                g.remaining = Math.min(g.remaining, m.remaining);
+                // Use the earliest resetTime
+                if (m.resetTime) {
+                    if (!g.resetTime || new Date(m.resetTime) < new Date(g.resetTime)) {
+                        g.resetTime = m.resetTime;
+                    }
+                }
+                g.members.push(m.label);
+            } else {
+                ungrouped.push(m);
+            }
+        }
+
+        // Convert groups back to model-like objects
+        const result = [];
+        for (const [name, g] of groups) {
+            result.push({
+                label: name,
+                remaining: g.remaining,
+                resetTime: g.resetTime,
+                isGroup: true,
+                members: g.members
+            });
+        }
+        return [...result, ...ungrouped];
     }
 
     /** Clean up model label */

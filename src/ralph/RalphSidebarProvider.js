@@ -936,7 +936,13 @@ class RalphSidebarProvider {
 
         const models = quota.models || [];
         lastQuotaModels = models;
-        statusEl.textContent = '✅ 연결됨 — ' + models.length + '개 모델';
+
+        // Count total individual models (expand groups)
+        let totalCount = 0;
+        for (const m of models) {
+            totalCount += (m.isGroup && m.members) ? m.members.length : 1;
+        }
+        statusEl.textContent = '✅ 연결됨 — ' + totalCount + '개 모델 (' + models.length + '개 항목)';
 
         if (models.length === 0) {
             listEl.innerHTML = '<div class="quota-empty">모델 정보 없음</div>';
@@ -947,13 +953,33 @@ class RalphSidebarProvider {
         for (const m of models) {
             const pct = Math.round(m.remaining * 100);
             const level = pct > 40 ? 'ok' : pct > 20 ? 'caution' : pct > 5 ? 'warn' : pct > 0 ? 'critical' : 'empty';
+            const colorVar = level === 'ok' ? 'success' : level === 'caution' ? 'warning' : 'danger';
 
             html += '<div class="quota-model">';
             html += '<div class="quota-model-header">';
-            html += '<span class="quota-model-name" title="' + escapeHtml(m.label) + '">' + escapeHtml(m.label) + '</span>';
-            html += '<span class="quota-pct" style="color:var(--' + (level === 'ok' ? 'success' : level === 'caution' ? 'warning' : 'danger') + ')">' + pct + '%</span>';
+
+            if (m.isGroup && m.members && m.members.length > 0) {
+                // Group label with member count badge
+                const memberTooltip = m.members.map(n => escapeHtml(n)).join('&#10;');
+                html += '<span class="quota-model-name" title="' + memberTooltip + '">'
+                    + escapeHtml(m.label)
+                    + ' <span style="opacity:0.5;font-size:10px;">(' + m.members.length + ')</span>'
+                    + '</span>';
+            } else {
+                html += '<span class="quota-model-name" title="' + escapeHtml(m.label) + '">' + escapeHtml(m.label) + '</span>';
+            }
+
+            html += '<span class="quota-pct" style="color:var(--' + colorVar + ')">' + pct + '%</span>';
             html += '</div>';
             html += '<div class="quota-bar"><div class="quota-bar-fill level-' + level + '" style="width:' + pct + '%"></div></div>';
+
+            // Show group members below the bar
+            if (m.isGroup && m.members && m.members.length > 0) {
+                html += '<div style="font-size:9px;opacity:0.5;margin-top:2px;line-height:1.4;">';
+                html += m.members.map(n => escapeHtml(n)).join(' · ');
+                html += '</div>';
+            }
+
             if (m.resetTime) {
                 html += '<div class="quota-reset" data-reset="' + escapeHtml(m.resetTime) + '">⏱ 리셋: 계산 중...</div>';
             }
