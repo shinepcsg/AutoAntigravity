@@ -1038,6 +1038,7 @@ class RalphLoopManager {
         let elapsed = INITIAL_WAIT_MS;
         let consecutiveIdleCount = 0;
         let everSeenBusy = false;
+        let previousReason = null; // 이전 폴링의 reason 추적
 
         while (elapsed < MAX_WAIT_MS) {
             // 루프 상태 확인
@@ -1065,6 +1066,15 @@ class RalphLoopManager {
                         }
                     }
                 } catch (e) { /* ignore scan errors */ }
+            }
+
+            // ── 상태 전환 감지: cancel → send_btn_disabled = 작업 중단/완료 ──
+            // Cancel 버튼이 있다가 Send 버튼(disabled)으로 바뀌면 에이전트가 멈춘 것
+            if (status.busy && status.reason === 'send_btn_disabled' &&
+                previousReason === 'cancel_btn_present') {
+                this._addLog('[Ralph] ✅ 에이전트 중단/완료 감지 — Cancel→Send(disabled) 전환 (' +
+                    Math.round(elapsed / 1000) + '초 경과)');
+                return;
             }
 
             if (status.busy) {
@@ -1112,6 +1122,7 @@ class RalphLoopManager {
                 // 에이전트 활동 감지 (Stop 버튼, Thinking 등)
                 consecutiveIdleCount = 0;
                 everSeenBusy = true;
+                previousReason = status.reason; // 이전 상태 기록
 
                 if (elapsed % 15000 < POLL_INTERVAL_MS) {
                     this._addLog('[Ralph] 🔄 에이전트 작업 중 — ' + (status.reason || 'unknown') + ' (' +
@@ -1121,6 +1132,7 @@ class RalphLoopManager {
             } else {
                 // 에이전트 유휴 상태
                 consecutiveIdleCount++;
+                previousReason = null; // idle 상태이므로 전환 추적 리셋
 
                 if (consecutiveIdleCount >= IDLE_CONFIRMS_NEEDED) {
                     this._addLog('[Ralph] ✅ 에이전트 완료 감지 — 활동 지표 ' +
