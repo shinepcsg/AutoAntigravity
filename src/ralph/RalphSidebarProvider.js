@@ -96,9 +96,17 @@ class RalphSidebarProvider {
                 }
                 case 'toggleAutoStart': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
-                    const current = config.get('ralphLoop.autoStart', false);
+                    const current = config.get('ralphLoop.autoStart', true);
                     await config.update('ralphLoop.autoStart', !current, vscode.ConfigurationTarget.Global);
                     this._log(`[Sidebar] Auto Start: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
+                case 'toggleAutoCommit': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('ralphLoop.autoCommit', true);
+                    await config.update('ralphLoop.autoCommit', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Auto Commit: ${!current ? 'ON' : 'OFF'}`);
                     this.updateState();
                     break;
                 }
@@ -133,7 +141,8 @@ class RalphSidebarProvider {
             iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
 
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
-            autoStart: config.get('ralphLoop.autoStart', false),
+            autoStart: config.get('ralphLoop.autoStart', true),
+            autoCommit: config.get('ralphLoop.autoCommit', true),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
@@ -559,6 +568,10 @@ class RalphSidebarProvider {
             <input id="chkAutoStart" type="checkbox" />
             🚀 PRD 변경 시 자동 시작
         </label>
+        <label id="labelAutoCommit" class="toggle-row">
+            <input id="chkAutoCommit" type="checkbox" />
+            🌿 Git Auto Commit (자동 커밋 & 머지)
+        </label>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -607,6 +620,10 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoStart').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoStart' });
+    });
+    document.getElementById('labelAutoCommit').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAutoCommit' });
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -706,6 +723,7 @@ class RalphSidebarProvider {
 
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
         document.getElementById('chkAutoStart').checked = s.autoStart || false;
+        document.getElementById('chkAutoCommit').checked = !!s.autoCommit;
 
         // Version
         if (s.version) {
