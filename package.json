@@ -127,6 +127,13 @@
                     "type": "boolean",
                     "default": true,
                     "description": "PRD 파일 변경 감지 시 Ralph Loop 자동 시작 (Auto-start Ralph Loop when task file changes)"
+                },
+                "autoAntigravity.telemetry.pollInterval": {
+                    "type": "number",
+                    "default": 90,
+                    "minimum": 30,
+                    "maximum": 600,
+                    "description": "AI 모델 사용량 조회 간격 (초) — Telemetry polling interval in seconds"
                 }
             }
         }

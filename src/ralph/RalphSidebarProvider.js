@@ -19,6 +19,7 @@ class RalphSidebarProvider {
         // External references (set by extension.js)
         this.ralphLoop = null;
         this.autoAccept = null;
+        this.telemetryService = null;
         this.onToggleAutoAccept = null;
         this.onStartRalph = null;
         this.onStopRalph = null;
@@ -118,6 +119,11 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
+                case 'refreshQuota':
+                    if (this.telemetryService) {
+                        this.telemetryService.refresh();
+                    }
+                    break;
                 case 'ready':
                     this.updateState();
                     break;
@@ -162,7 +168,9 @@ class RalphSidebarProvider {
             recentLogs: this.ralphLoop ? this.ralphLoop.getRecentLogs(30) : [],
             lastError: this.ralphLoop ? this.ralphLoop.lastError : null,
             consecutiveErrors: this.ralphLoop ? this.ralphLoop.consecutiveErrors : 0,
-            prdChanges: this.ralphLoop ? this.ralphLoop.getPrdChanges() : []
+            prdChanges: this.ralphLoop ? this.ralphLoop.getPrdChanges() : [],
+            // 텔레메트리
+            quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] }
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -460,6 +468,85 @@ class RalphSidebarProvider {
         font-size: 11px;
     }
 
+    /* ─── Quota Section ─── */
+    .quota-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .quota-refresh-btn {
+        background: none;
+        border: none;
+        color: var(--fg);
+        cursor: pointer;
+        font-size: 13px;
+        opacity: 0.5;
+        transition: opacity 0.15s;
+        padding: 2px 4px;
+    }
+    .quota-refresh-btn:hover { opacity: 1; }
+    .quota-status {
+        font-size: 10px;
+        opacity: 0.5;
+        margin-bottom: 8px;
+    }
+    .quota-model {
+        margin-bottom: 8px;
+    }
+    .quota-model-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        margin-bottom: 3px;
+    }
+    .quota-model-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        margin-right: 6px;
+    }
+    .quota-pct {
+        font-weight: 600;
+        font-size: 11px;
+        flex-shrink: 0;
+    }
+    .quota-bar {
+        width: 100%;
+        height: 5px;
+        background: rgba(128,128,128,0.2);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .quota-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.5s ease, background 0.3s;
+    }
+    .quota-bar-fill.level-ok     { background: #4caf50; }
+    .quota-bar-fill.level-caution { background: #ff9800; }
+    .quota-bar-fill.level-warn   { background: #f57c00; }
+    .quota-bar-fill.level-critical { background: #f44336; }
+    .quota-bar-fill.level-empty  { background: #9e9e9e; }
+    .quota-reset {
+        font-size: 10px;
+        opacity: 0.5;
+        margin-top: 2px;
+    }
+    .quota-empty {
+        opacity: 0.4;
+        text-align: center;
+        padding: 10px;
+        font-size: 11px;
+    }
+    .quota-list {
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .quota-list::-webkit-scrollbar { width: 4px; }
+    .quota-list::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 2px; }
+
     /* ─── Version Footer ─── */
     .version-footer {
         margin-top: 12px;
@@ -556,6 +643,18 @@ class RalphSidebarProvider {
         </div>
     </div>
 
+    <!-- ═══ AI Quota Section ═══ -->
+    <div class="section">
+        <div class="quota-header">
+            <div class="section-title">🔋 AI 사용량</div>
+            <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
+        </div>
+        <div id="quotaStatus" class="quota-status">연결 중...</div>
+        <div id="quotaList" class="quota-list">
+            <div class="quota-empty">데이터 로딩 중...</div>
+        </div>
+    </div>
+
     <!-- ═══ Settings Section ═══ -->
     <div class="section">
         <div class="section-title">⚙ 설정</div>
@@ -613,6 +712,9 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'selectTaskFile' });
+    });
+    document.getElementById('btnRefreshQuota').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'refreshQuota' });
     });
     document.getElementById('taskFileName').addEventListener('click', () => {
         if (currentTaskFilePath) {
@@ -753,6 +855,9 @@ class RalphSidebarProvider {
 
         // Logs
         updateLogPanel(s.recentLogs || []);
+
+        // Quota
+        updateQuotaPanel(s.quota || { connected: false, models: [] });
     }
 
     function updatePrdChangesPanel(changes) {
@@ -813,6 +918,73 @@ class RalphSidebarProvider {
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ─── Quota Panel ──────────────────────────────────────
+    let quotaCountdownTimer = null;
+    let lastQuotaModels = [];
+
+    function updateQuotaPanel(quota) {
+        const statusEl = document.getElementById('quotaStatus');
+        const listEl = document.getElementById('quotaList');
+
+        if (!quota.connected) {
+            statusEl.textContent = '⚠ 연결 안 됨 — language_server를 찾을 수 없습니다';
+            listEl.innerHTML = '<div class="quota-empty">Antigravity가 실행 중인지 확인하세요</div>';
+            return;
+        }
+
+        const models = quota.models || [];
+        lastQuotaModels = models;
+        statusEl.textContent = '✅ 연결됨 — ' + models.length + '개 모델';
+
+        if (models.length === 0) {
+            listEl.innerHTML = '<div class="quota-empty">모델 정보 없음</div>';
+            return;
+        }
+
+        let html = '';
+        for (const m of models) {
+            const pct = Math.round(m.remaining * 100);
+            const level = pct > 40 ? 'ok' : pct > 20 ? 'caution' : pct > 5 ? 'warn' : pct > 0 ? 'critical' : 'empty';
+
+            html += '<div class="quota-model">';
+            html += '<div class="quota-model-header">';
+            html += '<span class="quota-model-name" title="' + escapeHtml(m.label) + '">' + escapeHtml(m.label) + '</span>';
+            html += '<span class="quota-pct" style="color:var(--' + (level === 'ok' ? 'success' : level === 'caution' ? 'warning' : 'danger') + ')">' + pct + '%</span>';
+            html += '</div>';
+            html += '<div class="quota-bar"><div class="quota-bar-fill level-' + level + '" style="width:' + pct + '%"></div></div>';
+            if (m.resetTime) {
+                html += '<div class="quota-reset" data-reset="' + escapeHtml(m.resetTime) + '">⏱ 리셋: 계산 중...</div>';
+            }
+            html += '</div>';
+        }
+        listEl.innerHTML = html;
+
+        // Start countdown updates
+        updateResetCountdowns();
+    }
+
+    function updateResetCountdowns() {
+        if (quotaCountdownTimer) clearInterval(quotaCountdownTimer);
+        quotaCountdownTimer = setInterval(() => {
+            const els = document.querySelectorAll('.quota-reset[data-reset]');
+            if (els.length === 0) { clearInterval(quotaCountdownTimer); return; }
+            const now = Date.now();
+            els.forEach(el => {
+                const resetStr = el.getAttribute('data-reset');
+                const resetMs = new Date(resetStr).getTime();
+                const diff = resetMs - now;
+                if (diff <= 0) {
+                    el.textContent = '⏱ 리셋 완료 (갱신 대기)';
+                } else {
+                    const h = Math.floor(diff / 3600000);
+                    const m = Math.floor((diff % 3600000) / 60000);
+                    const s = Math.floor((diff % 60000) / 1000);
+                    el.textContent = '⏱ 리셋까지 ' + h + '시간 ' + m + '분 ' + s + '초';
+                }
+            });
+        }, 1000);
     }
 
     // Request initial state

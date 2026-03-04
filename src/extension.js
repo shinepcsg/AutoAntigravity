@@ -7,11 +7,13 @@ const { AutoAcceptManager } = require('./autoAccept');
 const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
 const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 const { AutoUpdater } = require('./updater');
+const { TelemetryService } = require('./telemetry/TelemetryService');
 
 let autoAccept = null;
 let ralphLoop = null;
 let sidebarProvider = null;
 let autoUpdater = null;
+let telemetryService = null;
 let statusBarAutoAccept = null;
 let statusBarRalph = null;
 let outputChannel = null;
@@ -133,6 +135,21 @@ function activate(context) {
         )
     );
 
+    // ─── Initialize Telemetry Service ─────────────────────────────
+    telemetryService = new TelemetryService(log);
+    sidebarProvider.telemetryService = telemetryService;
+
+    // Update sidebar when quota data changes
+    telemetryService.onUpdate(() => {
+        if (sidebarProvider) sidebarProvider.updateState();
+    });
+
+    const pollInterval = vscode.workspace.getConfiguration('autoAntigravity')
+        .get('telemetry.pollInterval', 90);
+    telemetryService.startPolling(pollInterval);
+
+    context.subscriptions.push({ dispose: () => telemetryService.dispose() });
+
     // ─── Status Bar Items ─────────────────────────────────────────────
     statusBarAutoAccept = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 200);
     statusBarAutoAccept.command = 'autoAntigravity.toggleAutoAccept';
@@ -239,6 +256,7 @@ function activate(context) {
 
 function deactivate() {
     if (autoUpdater) autoUpdater.dispose();
+    if (telemetryService) telemetryService.dispose();
     if (autoAccept) autoAccept.dispose();
     if (ralphLoop) ralphLoop.dispose();
     if (outputChannel) outputChannel.dispose();
