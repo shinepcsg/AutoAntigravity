@@ -21,6 +21,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+*~Stashed changes
 
 # Logs
 *.log
@@ -33,5 +34,7 @@ npm-debug.log*
 # Gemini / AI
 .gemini/
 PRD.md
+PRD.md
+progress.txt
 PRD.md
 progress.txt
