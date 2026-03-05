@@ -81,6 +81,29 @@ class TelegramService {
     }
 
     /**
+     * 개별 작업 완료 결과를 텔레그램으로 전송.
+     * @param {string} taskText - 완료된 작업명
+     * @param {number} iteration - 현재 반복 횟수
+     * @param {{ completed: number, total: number }} progress - 진행률 (완료/전체)
+     */
+    async sendTaskResult(taskText, iteration, progress) {
+        const { completed, total } = progress;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const bar = '█'.repeat(Math.round(percent / 10)) + '░'.repeat(10 - Math.round(percent / 10));
+
+        const message = [
+            `✅ *작업 완료*`,
+            ``,
+            `📌 *작업:* ${taskText}`,
+            `🔄 *반복:* ${iteration}회차`,
+            `📊 *진행률:* ${completed}/${total} (${percent}%)`,
+            `[${bar}]`,
+        ].join('\n');
+
+        await this.sendMessage(message);
+    }
+
+    /**
      * Long-poll for incoming updates from Telegram.
      * Recursively calls itself via setTimeout.
      */
