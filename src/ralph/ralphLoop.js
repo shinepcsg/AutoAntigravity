@@ -895,6 +895,20 @@ class RalphLoopManager {
                     this.consecutiveErrors = 0;
                     this.lastError = null;
                     this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
+
+                    // 병렬 그룹 완료 콜백 호출
+                    if (this.onTaskCompleteCallback) {
+                        try {
+                            this.onTaskCompleteCallback({
+                                taskText: '병렬 그룹',
+                                iteration: this.currentIteration,
+                                progress: `${progress.completed}/${progress.total}`
+                            });
+                        } catch (cbErr) {
+                            this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                        }
+                    }
+
                     this.progressTracker.appendProgress(
                         this.currentIteration,
                         `병렬 그룹 (${result.completed}개)`,
