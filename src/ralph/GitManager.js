@@ -308,6 +308,281 @@ class GitManager {
         return { success: true, merged: false };
     }
 
+    // ─── Worktree 기반 병렬 작업 지원 ──────────────────────────────
+
+    /**
+     * Create a git worktree for parallel task execution.
+     * Creates a new branch and checks it out in a separate directory.
+     *
+     * @param {string} taskText - Task description (used for branch name)
+     * @param {number} taskIndex - Task index within the parallel group
+     * @param {number} iteration - Current iteration number
+     * @returns {{ success: boolean, worktreePath?: string, branchName?: string, error?: string }}
+     */
+    createWorktree(taskText, taskIndex, iteration) {
+        if (!this._workspaceRoot) {
+            return { success: false, error: 'Workspace root not set' };
+        }
+
+        const sanitized = this._sanitizeBranchName(taskText);
+        const branchName = sanitized
+            ? `ralph/parallel-${iteration}-${taskIndex}-${sanitized}`
+            : `ralph/parallel-${iteration}-${taskIndex}`;
+
+        // Worktree directory: .ralph-worktrees/<branchName>
+        const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees', branchName.replace(/\//g, '-'));
+
+        try {
+            // Ensure the parent directory exists
+            const fs = require('fs');
+            const parentDir = path.dirname(worktreeDir);
+            if (!fs.existsSync(parentDir)) {
+                fs.mkdirSync(parentDir, { recursive: true });
+            }
+
+            // Create worktree with a new branch based on original branch
+            this._execGit(['worktree', 'add', '-b', branchName, worktreeDir, this._originalBranch]);
+            this.log(`[Git] 🌿 워크트리 생성: ${branchName} → ${worktreeDir}`);
+
+            return { success: true, worktreePath: worktreeDir, branchName };
+        } catch (e) {
+            this.log(`[Git] ❌ 워크트리 생성 실패: ${e.message}`);
+            return { success: false, error: e.message };
+        }
+    }
+
+    /**
+     * Remove a git worktree and optionally delete the branch.
+     *
+     * @param {string} worktreePath - Path to the worktree directory
+     * @param {string} [branchName] - Branch name to delete after removal
+     * @param {boolean} [deleteBranch=true] - Whether to delete the branch
+     */
+    removeWorktree(worktreePath, branchName, deleteBranch = true) {
+        try {
+            this._execGit(['worktree', 'remove', worktreePath, '--force']);
+            this.log(`[Git] 🗑 워크트리 제거: ${worktreePath}`);
+        } catch (e) {
+            this.log(`[Git] ⚠ 워크트리 제거 실패: ${e.message}`);
+            // Try cleaning up the directory manually
+            const fs = require('fs');
+            try {
+                if (fs.existsSync(worktreePath)) {
+                    fs.rmSync(worktreePath, { recursive: true, force: true });
+                }
+                this._execGit(['worktree', 'prune']);
+            } catch { /* ignore */ }
+        }
+
+        if (deleteBranch && branchName) {
+            try {
+                this._execGit(['branch', '-D', branchName]);
+                this.log(`[Git] 🗑 브랜치 삭제: ${branchName}`);
+            } catch { /* non-critical */ }
+        }
+    }
+
+    /**
+     * Commit all changes in a specific worktree directory.
+     *
+     * @param {string} worktreePath - Path to the worktree
+     * @param {string} message - Commit message
+     * @returns {boolean} true if committed
+     */
+    commitWorktree(worktreePath, message) {
+        try {
+            const result = cp.spawnSync('git', ['add', '-A'], {
+                cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
+            });
+            if (result.status !== 0) return false;
+
+            const status = cp.spawnSync('git', ['status', '--porcelain'], {
+                cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
+            });
+            if (!status.stdout || !status.stdout.trim()) {
+                this.log('[Git] 워크트리에 커밋할 변경사항이 없습니다.');
+                return false;
+            }
+
+            const commit = cp.spawnSync('git', ['commit', '-m', message], {
+                cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
+            });
+            if (commit.status !== 0) {
+                this.log(`[Git] ⚠ 워크트리 커밋 실패: ${(commit.stderr || '').trim()}`);
+                return false;
+            }
+
+            this.log(`[Git] ✅ 워크트리 커밋 완료: ${message}`);
+            return true;
+        } catch (e) {
+            this.log(`[Git] ⚠ 워크트리 커밋 에러: ${e.message}`);
+            return false;
+        }
+    }
+
+    /**
+     * Merge a worktree branch into the original branch.
+     * Attempts automatic conflict resolution if conflicts occur.
+     *
+     * Strategy: For conflicting files, use "theirs" (worktree branch) version,
+     * since each parallel task was designed to work in isolation.
+     *
+     * @param {string} branchName - Branch name to merge
+     * @param {boolean} [autoResolve=true] - Attempt automatic conflict resolution
+     * @returns {{ success: boolean, merged: boolean, conflictsResolved: number, error?: string }}
+     */
+    mergeWorktreeBranch(branchName, autoResolve = true) {
+        if (!this._originalBranch) {
+            return { success: false, merged: false, conflictsResolved: 0, error: 'No original branch' };
+        }
+
+        try {
+            // Ensure we're on the original branch
+            const currentBranch = this.getCurrentBranch();
+            if (currentBranch !== this._originalBranch) {
+                this._execGit(['checkout', this._originalBranch]);
+            }
+
+            // Check if branch has any commits ahead of original
+            let hasCommits = false;
+            try {
+                const log = this._execGit(['log', `${this._originalBranch}..${branchName}`, '--oneline']);
+                hasCommits = log.length > 0;
+            } catch {
+                hasCommits = false;
+            }
+
+            if (!hasCommits) {
+                this.log(`[Git] ℹ ${branchName}에 머지할 커밋이 없습니다.`);
+                return { success: true, merged: false, conflictsResolved: 0 };
+            }
+
+            // Try normal merge first
+            try {
+                this._execGit(['merge', branchName, '--no-ff', '-m',
+                    `[Ralph] 병렬 작업 완료: ${branchName} → ${this._originalBranch}`]);
+                this.log(`[Git] ✅ ${branchName} 머지 완료 (충돌 없음)`);
+                return { success: true, merged: true, conflictsResolved: 0 };
+            } catch (mergeErr) {
+                // Merge conflict detected
+                if (!autoResolve) {
+                    this.log(`[Git] ⚠ 머지 충돌 — 자동 해결 비활성화됨`);
+                    try { this._execGit(['merge', '--abort']); } catch { /* ignore */ }
+                    return { success: false, merged: false, conflictsResolved: 0, error: mergeErr.message };
+                }
+
+                this.log(`[Git] ⚠ 머지 충돌 감지 — 자동 해결 시도 중...`);
+                return this._autoResolveConflicts(branchName);
+            }
+        } catch (e) {
+            this.log(`[Git] ❌ 머지 실패: ${e.message}`);
+            return { success: false, merged: false, conflictsResolved: 0, error: e.message };
+        }
+    }
+
+    /**
+     * Attempt to automatically resolve merge conflicts.
+     * Strategy: Accept "theirs" (the branch being merged) for conflicting files,
+     * since parallel tasks were designed to touch independent files.
+     * If both sides modified the same file, prefer "theirs".
+     *
+     * @param {string} branchName - Branch being merged
+     * @returns {{ success: boolean, merged: boolean, conflictsResolved: number, error?: string }}
+     * @private
+     */
+    _autoResolveConflicts(branchName) {
+        const fs = require('fs');
+        let conflictsResolved = 0;
+
+        try {
+            // Get list of conflicted files
+            const statusOutput = this._execGit(['status', '--porcelain']);
+            const conflictedFiles = statusOutput
+                .split('\n')
+                .filter(line => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DU') || line.startsWith('UD'))
+                .map(line => line.substring(3).trim());
+
+            if (conflictedFiles.length === 0) {
+                this.log('[Git] ℹ 충돌 파일이 없습니다 — 머지 계속');
+                this._execGit(['commit', '--no-edit']);
+                return { success: true, merged: true, conflictsResolved: 0 };
+            }
+
+            this.log(`[Git] 🔧 충돌 파일 ${conflictedFiles.length}개 자동 해결 시도...`);
+
+            for (const file of conflictedFiles) {
+                try {
+                    const filePath = path.join(this._workspaceRoot, file);
+
+                    // Check if deleted on one side
+                    if (!fs.existsSync(filePath)) {
+                        // File was deleted — accept theirs (merge branch version)
+                        try {
+                            this._execGit(['checkout', '--theirs', '--', file]);
+                            this._execGit(['add', file]);
+                        } catch {
+                            // If theirs also doesn't exist, remove it
+                            this._execGit(['rm', '--force', file]);
+                        }
+                        conflictsResolved++;
+                        this.log(`[Git]   ✅ ${file} — 삭제 충돌 해결`);
+                        continue;
+                    }
+
+                    // For content conflicts: use "theirs" version (parallel branch)
+                    this._execGit(['checkout', '--theirs', '--', file]);
+                    this._execGit(['add', file]);
+                    conflictsResolved++;
+                    this.log(`[Git]   ✅ ${file} — theirs 전략으로 해결`);
+
+                } catch (fileErr) {
+                    this.log(`[Git]   ❌ ${file} 해결 실패: ${fileErr.message}`);
+                    // Abort the entire merge if any file can't be resolved
+                    try { this._execGit(['merge', '--abort']); } catch { /* ignore */ }
+                    return {
+                        success: false,
+                        merged: false,
+                        conflictsResolved,
+                        error: `파일 '${file}' 충돌 해결 실패: ${fileErr.message}`
+                    };
+                }
+            }
+
+            // All conflicts resolved — commit the merge
+            this._execGit(['commit', '--no-edit']);
+            this.log(`[Git] ✅ 머지 완료 — ${conflictsResolved}개 충돌 자동 해결`);
+            return { success: true, merged: true, conflictsResolved };
+
+        } catch (e) {
+            this.log(`[Git] ❌ 자동 충돌 해결 실패: ${e.message}`);
+            try { this._execGit(['merge', '--abort']); } catch { /* ignore */ }
+            return { success: false, merged: false, conflictsResolved, error: e.message };
+        }
+    }
+
+    /**
+     * Clean up all ralph worktree directories.
+     * Called during session cleanup.
+     */
+    cleanupWorktrees() {
+        if (!this._workspaceRoot) return;
+
+        const fs = require('fs');
+        const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees');
+
+        try {
+            // Prune any stale worktrees first
+            this._execGit(['worktree', 'prune']);
+
+            if (fs.existsSync(worktreeDir)) {
+                fs.rmSync(worktreeDir, { recursive: true, force: true });
+                this.log('[Git] 🗑 워크트리 디렉토리 정리 완료');
+            }
+        } catch (e) {
+            this.log(`[Git] ⚠ 워크트리 정리 실패: ${e.message}`);
+        }
+    }
+
     /**
      * Try to restore stashed changes on the original branch
      */

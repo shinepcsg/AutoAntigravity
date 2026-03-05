@@ -9,6 +9,7 @@ const { TaskFileManager } = require('./TaskFileManager');
 const { ProgressTracker } = require('./ProgressTracker');
 const { GitManager } = require('./GitManager');
 const { AgentSessionLock } = require('./AgentSessionLock');
+const { ParallelTaskRunner } = require('./ParallelTaskRunner');
 
 /**
  * Ralph Loop states
@@ -30,6 +31,7 @@ class RalphLoopManager {
         this.progressTracker = new ProgressTracker(log);
         this.gitManager = new GitManager(log);
         this._sessionLock = new AgentSessionLock(log);
+        this._parallelRunner = null; // initialized lazily
 
         this.state = LoopState.IDLE;
         this.currentIteration = 0;
@@ -837,9 +839,11 @@ class RalphLoopManager {
             return;
         }
 
-        // Get next task
-        const task = this.taskManager.getNextTask();
-        if (!task) {
+        // Get next task group (may be parallel)
+        const enableParallel = config.get('ralphLoop.enableParallel', true);
+        const taskGroup = this.taskManager.getNextTaskGroup();
+
+        if (taskGroup.tasks.length === 0) {
             // ── Git: End session & merge on completion ──
             this._endGitSession();
 
@@ -850,99 +854,151 @@ class RalphLoopManager {
             return;
         }
 
-        this.currentIteration++;
-        const progress = this.taskManager.getProgress();
-        this._addLog(`[Ralph] ═══ 반복 ${this.currentIteration} ═══`);
-        this._addLog(`[Ralph] 작업: ${task.text}`);
-        this._addLog(`[Ralph] 진행: ${progress.completed}/${progress.total}`);
-        this._notifyStateChange();
+        // ── Parallel group execution ──
+        if (taskGroup.parallel && enableParallel && taskGroup.tasks.length > 1) {
+            this.currentIteration++;
+            const progress = this.taskManager.getProgress();
+            this._addLog(`[Ralph] ═══ 반복 ${this.currentIteration} (병렬 ${taskGroup.tasks.length}개) ═══`);
+            this._addLog(`[Ralph] 진행: ${progress.completed}/${progress.total}`);
+            this._notifyStateChange();
 
-        // ── Git: Create per-task branch ──
-        const autoCommit = config.get('ralphLoop.autoCommit', true);
-        if (autoCommit) {
-            const branchResult = this.gitManager.startTaskBranch(task.text, this.currentIteration);
-            if (branchResult.success) {
-                this._addLog(`[Ralph] 🌿 작업 브랜치: ${branchResult.workBranch}`);
-            } else if (branchResult.error) {
-                this._addLog(`[Ralph] ⚠ 작업 브랜치 생성 실패: ${branchResult.error}`, 'warn');
+            try {
+                // Lazy-init parallel runner
+                if (!this._parallelRunner) {
+                    this._parallelRunner = new ParallelTaskRunner(this);
+                }
+
+                this._sessionLock.acquire(this.currentIteration, `병렬 그룹: ${taskGroup.tasks.length}개`);
+
+                const result = await this._parallelRunner.runParallelGroup(taskGroup.tasks, this.currentIteration);
+
+                this._sessionLock.release();
+
+                if (result.success) {
+                    this.consecutiveErrors = 0;
+                    this.lastError = null;
+                    this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
+                    this.progressTracker.appendProgress(
+                        this.currentIteration,
+                        `병렬 그룹 (${result.completed}개)`,
+                        'completed'
+                    );
+                } else {
+                    this.consecutiveErrors++;
+                    this.lastError = result.errors.join('; ');
+                    this._addLog(`[Ralph] ⚠ 병렬 그룹 부분 완료: ${result.completed}개 성공, ${result.errors.length}개 에러`, 'warn');
+                    this.progressTracker.appendProgress(
+                        this.currentIteration,
+                        `병렬 그룹 (부분 완료: ${result.completed}개)`,
+                        'partial',
+                        result.errors.join('; ')
+                    );
+                }
+            } catch (e) {
+                this._sessionLock.release();
+                this.consecutiveErrors++;
+                this.lastError = e.message;
+                this._addLog(`[Ralph] ❌ 병렬 그룹 에러: ${e.message}`, 'error');
+                vscode.window.showErrorMessage(`Ralph Loop 병렬 에러: ${e.message}`);
             }
-        }
+        } else {
+            // ── Sequential single-task execution (existing logic) ──
+            const task = taskGroup.tasks[0];
 
-        try {
-            // Snapshot PRD tasks BEFORE agent execution (for change detection)
-            const tasksBeforeSnapshot = this.taskManager.parseTasks();
-            const taskCountBefore = tasksBeforeSnapshot.length;
-            const taskTextsBefore = new Set(tasksBeforeSnapshot.map(t => t.text));
+            this.currentIteration++;
+            const progress = this.taskManager.getProgress();
+            this._addLog(`[Ralph] ═══ 반복 ${this.currentIteration} ═══`);
+            this._addLog(`[Ralph] 작업: ${task.text}`);
+            this._addLog(`[Ralph] 진행: ${progress.completed}/${progress.total}`);
+            this._notifyStateChange();
 
-            // Build the prompt for the agent
-            const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
-
-            // ── 세션 락 획득 ──
-            this._sessionLock.acquire(this.currentIteration, task.text);
-
-            // Send to Antigravity agent via CDP
-            this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
-            await this._sendToAgent(prompt);
-            this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
-
-            // Wait for the agent to complete
-            this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기 중...');
-            await this._waitForAgentCompletion();
-            this._addLog('[Ralph] ✅ 에이전트 작업 완료 감지');
-
-            // Mark task as complete and record progress
-            this.taskManager.markTaskComplete(task.line);
-            this.progressTracker.appendProgress(
-                this.currentIteration,
-                task.text,
-                'completed'
-            );
-
-            // ── 세션 락 해제 (성공) ──
-            this._sessionLock.release();
-            this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
-
-            // ── PRD 변경 감지 ──
-            this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
-
-            // ── Git: Commit changes and merge task branch back ──
+            // ── Git: Create per-task branch ──
+            const autoCommit = config.get('ralphLoop.autoCommit', true);
             if (autoCommit) {
-                this.gitManager.commitIteration(this.currentIteration, task.text);
-                const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
-                const mergeResult = this.gitManager.endTaskBranch(autoDeleteBranch);
-                if (mergeResult.success && mergeResult.merged) {
-                    this._addLog(`[Git] ✅ 작업 브랜치 → 원본 브랜치 머지 완료`);
-                } else if (!mergeResult.success) {
-                    this._addLog(`[Git] ⚠ 머지 중 문제: ${mergeResult.error}`, 'warn');
+                const branchResult = this.gitManager.startTaskBranch(task.text, this.currentIteration);
+                if (branchResult.success) {
+                    this._addLog(`[Ralph] 🌿 작업 브랜치: ${branchResult.workBranch}`);
+                } else if (branchResult.error) {
+                    this._addLog(`[Ralph] ⚠ 작업 브랜치 생성 실패: ${branchResult.error}`, 'warn');
                 }
             }
 
-            // Reset consecutive errors on success
-            this.consecutiveErrors = 0;
-            this.lastError = null;
+            try {
+                // Snapshot PRD tasks BEFORE agent execution (for change detection)
+                const tasksBeforeSnapshot = this.taskManager.parseTasks();
+                const taskCountBefore = tasksBeforeSnapshot.length;
+                const taskTextsBefore = new Set(tasksBeforeSnapshot.map(t => t.text));
 
-        } catch (e) {
-            // ── 세션 락 해제 (실패) ──
-            this._sessionLock.release();
+                // Build the prompt for the agent
+                const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
-            if (e.message === 'QUOTA_REACHED') {
-                // Quota 제한으로 인해 대기한 경우
-                this._addLog(`[Ralph] 🔄 동일한 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다 (${task.text})`);
-                this.currentIteration--;
-                this.lastError = null;
-                this.consecutiveErrors = 0;
-            } else {
-                this.consecutiveErrors++;
-                this.lastError = e.message;
-                const errMsg = `반복 ${this.currentIteration} 에러: ${e.message}`;
-                this._addLog(`[Ralph] ❌ ${errMsg}`, 'error');
-                vscode.window.showErrorMessage(`Ralph Loop 에러: ${errMsg}`);
+                // ── 세션 락 획득 ──
+                this._sessionLock.acquire(this.currentIteration, task.text);
+
+                // Send to Antigravity agent via CDP
+                this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
+                await this._sendToAgent(prompt);
+                this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
+
+                // Wait for the agent to complete
+                this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기 중...');
+                await this._waitForAgentCompletion();
+                this._addLog('[Ralph] ✅ 에이전트 작업 완료 감지');
+
+                // Mark task as complete and record progress
+                this.taskManager.markTaskComplete(task.line);
                 this.progressTracker.appendProgress(
                     this.currentIteration,
                     task.text,
-                    'failed',
-                    e.message
+                    'completed'
                 );
+
+                // ── 세션 락 해제 (성공) ──
+                this._sessionLock.release();
+                this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
+
+                // ── PRD 변경 감지 ──
+                this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
+
+                // ── Git: Commit changes and merge task branch back ──
+                if (autoCommit) {
+                    this.gitManager.commitIteration(this.currentIteration, task.text);
+                    const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
+                    const mergeResult = this.gitManager.endTaskBranch(autoDeleteBranch);
+                    if (mergeResult.success && mergeResult.merged) {
+                        this._addLog(`[Git] ✅ 작업 브랜치 → 원본 브랜치 머지 완료`);
+                    } else if (!mergeResult.success) {
+                        this._addLog(`[Git] ⚠ 머지 중 문제: ${mergeResult.error}`, 'warn');
+                    }
+                }
+
+                // Reset consecutive errors on success
+                this.consecutiveErrors = 0;
+                this.lastError = null;
+
+            } catch (e) {
+                // ── 세션 락 해제 (실패) ──
+                this._sessionLock.release();
+
+                if (e.message === 'QUOTA_REACHED') {
+                    // Quota 제한으로 인해 대기한 경우
+                    this._addLog(`[Ralph] 🔄 동일한 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다 (${task.text})`);
+                    this.currentIteration--;
+                    this.lastError = null;
+                    this.consecutiveErrors = 0;
+                } else {
+                    this.consecutiveErrors++;
+                    this.lastError = e.message;
+                    const errMsg = `반복 ${this.currentIteration} 에러: ${e.message}`;
+                    this._addLog(`[Ralph] ❌ ${errMsg}`, 'error');
+                    vscode.window.showErrorMessage(`Ralph Loop 에러: ${errMsg}`);
+                    this.progressTracker.appendProgress(
+                        this.currentIteration,
+                        task.text,
+                        'failed',
+                        e.message
+                    );
+                }
             }
         }
 
@@ -1420,6 +1476,9 @@ class RalphLoopManager {
      * Branch deletion is controlled by the autoDeleteBranch setting.
      */
     _endGitSession() {
+        // Clean up any remaining worktrees from parallel execution
+        this.gitManager.cleanupWorktrees();
+
         const session = this.gitManager.getSessionInfo();
         if (!session.active) return;
 

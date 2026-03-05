@@ -55,7 +55,7 @@ class TaskFileManager {
 
     /**
      * Parse task file and return all tasks
-     * @returns {Array<{line: number, text: string, completed: boolean}>}
+     * @returns {Array<{line: number, text: string, completed: boolean, parallel: boolean}>}
      */
     parseTasks() {
         if (!this.taskFilePath || !fs.existsSync(this.taskFilePath)) {
@@ -67,6 +67,9 @@ class TaskFileManager {
         const lines = content.split('\n');
         const tasks = [];
 
+        // Parallel tag pattern: [병렬진행] at the start of the task text
+        const parallelTagRe = /^\[병렬진행\]\s*/;
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
 
@@ -75,16 +78,26 @@ class TaskFileManager {
             const checkedMatch = line.match(/^[-*]\s*\[[xX]\]\s+(.+)$/);
 
             if (uncheckedMatch) {
+                const rawText = uncheckedMatch[1].trim();
+                const isParallel = parallelTagRe.test(rawText);
+                const cleanText = isParallel ? rawText.replace(parallelTagRe, '').trim() : rawText;
                 tasks.push({
                     line: i,
-                    text: uncheckedMatch[1].trim(),
-                    completed: false
+                    text: cleanText,
+                    rawText: rawText,
+                    completed: false,
+                    parallel: isParallel
                 });
             } else if (checkedMatch) {
+                const rawText = checkedMatch[1].trim();
+                const isParallel = parallelTagRe.test(rawText);
+                const cleanText = isParallel ? rawText.replace(parallelTagRe, '').trim() : rawText;
                 tasks.push({
                     line: i,
-                    text: checkedMatch[1].trim(),
-                    completed: true
+                    text: cleanText,
+                    rawText: rawText,
+                    completed: true,
+                    parallel: isParallel
                 });
             }
         }
@@ -94,11 +107,42 @@ class TaskFileManager {
 
     /**
      * Get the next incomplete task
-     * @returns {{line: number, text: string, completed: boolean}|null}
+     * @returns {{line: number, text: string, completed: boolean, parallel: boolean}|null}
      */
     getNextTask() {
         const tasks = this.parseTasks();
         return tasks.find(t => !t.completed) || null;
+    }
+
+    /**
+     * Get the next task group — returns consecutive [병렬진행] tasks as a group,
+     * or a single non-parallel task wrapped in an array.
+     * @returns {{tasks: Array<{line: number, text: string, completed: boolean, parallel: boolean}>, parallel: boolean}}
+     */
+    getNextTaskGroup() {
+        const tasks = this.parseTasks();
+        const firstIncomplete = tasks.find(t => !t.completed);
+        if (!firstIncomplete) {
+            return { tasks: [], parallel: false };
+        }
+
+        // If the first incomplete task is not parallel, return it as a single-task group
+        if (!firstIncomplete.parallel) {
+            return { tasks: [firstIncomplete], parallel: false };
+        }
+
+        // Collect consecutive parallel tasks starting from the first incomplete
+        const group = [];
+        const startIdx = tasks.indexOf(firstIncomplete);
+        for (let i = startIdx; i < tasks.length; i++) {
+            if (!tasks[i].completed && tasks[i].parallel) {
+                group.push(tasks[i]);
+            } else {
+                break; // Stop at first non-parallel or completed task
+            }
+        }
+
+        return { tasks: group, parallel: true };
     }
 
     /**

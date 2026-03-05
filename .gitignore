@@ -38,3 +38,6 @@ progress.txt
 
 # Agent session lock
 .agent-running
+
+# Ralph parallel worktrees
+.ralph-worktrees/
