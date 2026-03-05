@@ -577,7 +577,7 @@ class RalphSidebarProvider {
     <div class="section">
         <div class="section-title">⚡ Auto Accept</div>
         <button id="btnToggleAutoAccept" class="btn btn-toggle">
-            <span id="autoAcceptIcon">$(circle-slash)</span>
+            <span id="autoAcceptIcon">🚫</span>
             <span id="autoAcceptLabel">OFF</span>
         </button>
     </div>
