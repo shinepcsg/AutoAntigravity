@@ -15,6 +15,7 @@ let ralphLoop = null;
 let sidebarProvider = null;
 let autoUpdater = null;
 let telemetryService = null;
+let telegramService = null;
 let statusBarAutoAccept = null;
 let statusBarRalph = null;
 let outputChannel = null;
