@@ -25,6 +25,12 @@ class AutoUpdater {
         this.checkTimer = null;
         this._checking = false;
         this._authHeader = null; // cached Basic Auth header
+
+        // ─── Update state (exposed for sidebar) ──────────────
+        this.updateAvailable = false;
+        this.latestVersion = null;
+        this.latestAssetName = null;
+        this.onUpdateStateChange = null; // callback: () => void
     }
 
     /**
@@ -32,12 +38,12 @@ class AutoUpdater {
      * Checks immediately, then periodically
      */
     start() {
-        // 첫 체크는 10초 후 (확장 활성화 직후 부하 방지)
-        setTimeout(() => this.checkForUpdates(), 10000);
+        // 즉시 체크 (활성화되자마자 업데이트 확인)
+        this.checkForUpdates();
 
         // 주기적 체크
         this.checkTimer = setInterval(() => this.checkForUpdates(), CHECK_INTERVAL_MS);
-        this.log('[Updater] Auto-updater started (check interval: 30min)');
+        this.log('[Updater] Auto-updater started (immediate check + interval: 30min)');
     }
 
     /**
@@ -116,6 +122,48 @@ class AutoUpdater {
     /**
      * Check for updates from Gitea releases
      */
+    /**
+     * Get the current update state for sidebar display
+     * @returns {{ available: boolean, version: string|null, asset: string|null }}
+     */
+    getUpdateState() {
+        return {
+            available: this.updateAvailable,
+            version: this.latestVersion,
+            asset: this.latestAssetName
+        };
+    }
+
+    /**
+     * Trigger the update installation (called from sidebar)
+     */
+    async installUpdate() {
+        if (!this.updateAvailable || !this.latestVersion) return;
+
+        const authHeader = await this._getAuthHeader();
+        const release = await this._fetchLatestRelease(authHeader);
+        if (!release) return;
+
+        const vsixAsset = (release.assets || []).find(a =>
+            a.name && a.name.endsWith('.vsix')
+        );
+        if (!vsixAsset) return;
+
+        await this._performUpdate(vsixAsset, this.latestVersion, authHeader);
+    }
+
+    /**
+     * Update the exposed state and notify listeners
+     */
+    _setUpdateState(available, version, assetName) {
+        this.updateAvailable = available;
+        this.latestVersion = version;
+        this.latestAssetName = assetName;
+        if (this.onUpdateStateChange) {
+            try { this.onUpdateStateChange(); } catch (e) { /* ignore */ }
+        }
+    }
+
     async checkForUpdates() {
         if (this._checking) return;
         this._checking = true;
@@ -131,6 +179,7 @@ class AutoUpdater {
             const release = await this._fetchLatestRelease(authHeader);
             if (!release) {
                 this.log('[Updater] No releases found');
+                this._setUpdateState(false, null, null);
                 return;
             }
 
@@ -140,6 +189,7 @@ class AutoUpdater {
             // 2. Compare versions
             if (this._semverCompare(latestVersion, currentVersion) <= 0) {
                 this.log(`[Updater] Already up to date (v${currentVersion})`);
+                this._setUpdateState(false, null, null);
                 return;
             }
 
@@ -150,12 +200,26 @@ class AutoUpdater {
 
             if (!vsixAsset) {
                 this.log('[Updater] ⚠ No .vsix asset found in latest release');
+                this._setUpdateState(false, null, null);
                 return;
             }
 
             this.log(`[Updater] 🆕 New version available: v${latestVersion} (asset: ${vsixAsset.name})`);
 
-            // 4. Show notification to user
+            // Update exposed state for sidebar
+            this._setUpdateState(true, latestVersion, vsixAsset.name);
+
+            // 4. Check auto-install setting
+            const config = vscode.workspace.getConfiguration('autoAntigravity');
+            const autoInstall = config.get('updater.autoInstall', false);
+
+            if (autoInstall) {
+                this.log(`[Updater] Auto-install enabled — installing v${latestVersion}...`);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader);
+                return;
+            }
+
+            // 5. Show notification to user
             const action = await vscode.window.showInformationMessage(
                 `🚀 AutoAntigravity v${latestVersion} 업데이트 가능! (현재: v${currentVersion})`,
                 '지금 업데이트',

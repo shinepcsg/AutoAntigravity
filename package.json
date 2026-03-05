@@ -145,6 +145,11 @@
                     "maximum": 8,
                     "description": "동시 실행 가능한 최대 병렬 작업 수 (Maximum concurrent parallel tasks)"
                 },
+                "autoAntigravity.updater.autoInstall": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "새 버전 감지 시 확인 없이 자동 설치 (Auto-install updates without confirmation)"
+                },
                 "autoAntigravity.telemetry.pollInterval": {
                     "type": "number",
                     "default": 90,

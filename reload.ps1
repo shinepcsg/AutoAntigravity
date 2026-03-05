@@ -3,13 +3,18 @@
 
 # 1. VSIX 패키지 빌드
 Write-Host "📦 Building VSIX package..." -ForegroundColor Cyan
-npx -y @vscode/vsce package --no-dependencies 2>$null
+npx -y @vscode/vsce package --no-dependencies --baseContentUrl "." --baseImagesUrl "." --allow-star-activation 2>&1 | Out-Null
 
 # 2. 생성된 최신 VSIX 파일 찾기
 $vsix = Get-ChildItem "*.vsix" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $vsix) {
-    Write-Host "❌ VSIX file not found!" -ForegroundColor Red
-    exit 1
+    Write-Host "❌ VSIX file not found! Trying without --no-dependencies..." -ForegroundColor Red
+    npx -y @vscode/vsce package --baseContentUrl "." --baseImagesUrl "." --allow-star-activation 2>&1 | Out-Null
+    $vsix = Get-ChildItem "*.vsix" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $vsix) {
+        Write-Host "❌ VSIX build failed!" -ForegroundColor Red
+        exit 1
+    }
 }
 Write-Host "✅ Built: $($vsix.Name)" -ForegroundColor Green
 
@@ -32,4 +37,11 @@ if ($cliPath) {
 } else {
     Write-Host "⚠️  CLI not found. Please install manually:" -ForegroundColor Yellow
     Write-Host "   Extensions → ... → Install from VSIX → $($vsix.Name)" -ForegroundColor Yellow
+}
+
+# 4. 이전 VSIX 파일 정리 (최신 1개만 유지)
+$oldVsix = Get-ChildItem "*.vsix" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 1
+if ($oldVsix) {
+    $oldVsix | Remove-Item -Force
+    Write-Host "🧹 Cleaned up $($oldVsix.Count) old VSIX file(s)" -ForegroundColor Gray
 }

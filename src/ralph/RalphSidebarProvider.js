@@ -20,6 +20,7 @@ class RalphSidebarProvider {
         this.ralphLoop = null;
         this.autoAccept = null;
         this.telemetryService = null;
+        this.autoUpdater = null;
         this.onToggleAutoAccept = null;
         this.onStartRalph = null;
         this.onStopRalph = null;
@@ -124,6 +125,19 @@ class RalphSidebarProvider {
                         this.telemetryService.refresh();
                     }
                     break;
+                case 'installUpdate':
+                    if (this.autoUpdater) {
+                        this.autoUpdater.installUpdate();
+                    }
+                    break;
+                case 'toggleAutoInstall': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('updater.autoInstall', false);
+                    await config.update('updater.autoInstall', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Auto Install: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -170,7 +184,10 @@ class RalphSidebarProvider {
             consecutiveErrors: this.ralphLoop ? this.ralphLoop.consecutiveErrors : 0,
             prdChanges: this.ralphLoop ? this.ralphLoop.getPrdChanges() : [],
             // 텔레메트리
-            quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] }
+            quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] },
+            // 업데이트 정보
+            updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false },
+            autoInstall: config.get('updater.autoInstall', false)
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -564,9 +581,47 @@ class RalphSidebarProvider {
     .version-footer .version-icon {
         font-size: 12px;
     }
+
+    /* ─── Update Banner ─── */
+    .update-banner {
+        display: none;
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(33, 150, 243, 0.15));
+        border: 1px solid var(--success);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        animation: updatePulse 2s ease-in-out infinite;
+    }
+    .update-banner.visible { display: block; }
+    @keyframes updatePulse {
+        0%, 100% { border-color: var(--success); }
+        50% { border-color: var(--accent); }
+    }
+    .update-banner-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--success);
+        margin-bottom: 6px;
+    }
+    .update-banner-version {
+        font-size: 11px;
+        margin-bottom: 8px;
+        opacity: 0.85;
+    }
+    .update-banner .btn {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
 </style>
 </head>
 <body>
+    <!-- ═══ Update Banner ═══ -->
+    <div id="updateBanner" class="update-banner">
+        <div class="update-banner-title">🆕 업데이트 가능</div>
+        <div id="updateVersionText" class="update-banner-version"></div>
+        <button id="btnInstallUpdate" class="btn btn-success">⬆ 지금 업데이트</button>
+    </div>
+
     <!-- ═══ Error Banner ═══ -->
     <div id="errorBanner" class="error-banner">
         <div class="error-title">❌ 에러 발생</div>
@@ -684,6 +739,10 @@ class RalphSidebarProvider {
             <input id="chkAutoDeleteBranch" type="checkbox" />
             🗑 자동 브랜치 폐기 (머지 후 삭제)
         </label>
+        <label id="labelAutoInstall" class="toggle-row">
+            <input id="chkAutoInstall" type="checkbox" />
+            ⬆ 자동 업데이트 설치
+        </label>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -716,6 +775,9 @@ class RalphSidebarProvider {
     document.getElementById('btnRefreshQuota').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'refreshQuota' });
     });
+    document.getElementById('btnInstallUpdate').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'installUpdate' });
+    });
     document.getElementById('taskFileName').addEventListener('click', () => {
         if (currentTaskFilePath) {
             vscodeApi.postMessage({ command: 'openTaskFile', filePath: currentTaskFilePath });
@@ -743,6 +805,10 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoDeleteBranch').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoDeleteBranch' });
+    });
+    document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAutoInstall' });
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -849,6 +915,19 @@ class RalphSidebarProvider {
         if (s.version) {
             document.getElementById('versionText').textContent = 'v' + s.version;
         }
+
+        // Update Banner
+        const updateBanner = document.getElementById('updateBanner');
+        const updateVersionText = document.getElementById('updateVersionText');
+        if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
+            updateBanner.classList.add('visible');
+            updateVersionText.textContent = 'v' + s.version + ' → v' + s.updateInfo.version;
+        } else {
+            updateBanner.classList.remove('visible');
+        }
+
+        // Auto Install checkbox
+        document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
 
         // PRD Changes
         updatePrdChangesPanel(s.prdChanges || []);

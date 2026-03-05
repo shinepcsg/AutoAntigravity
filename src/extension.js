@@ -250,6 +250,13 @@ function activate(context) {
 
     // ─── Auto Updater ─────────────────────────────────────────────────
     autoUpdater = new AutoUpdater(context, log);
+    sidebarProvider.autoUpdater = autoUpdater;
+
+    // 업데이트 상태 변경 시 사이드바 갱신
+    autoUpdater.onUpdateStateChange = () => {
+        if (sidebarProvider) sidebarProvider.updateState();
+    };
+
     autoUpdater.start();
     context.subscriptions.push({ dispose: () => autoUpdater.dispose() });
 }
