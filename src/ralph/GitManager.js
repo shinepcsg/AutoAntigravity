@@ -11,7 +11,8 @@ class GitManager {
      */
     constructor(log) {
         this.log = log;
-        this._originalBranch = null;   // Branch name before Ralph Loop started
+        this._originalBranch = null;   // Branch name before Ralph Loop started (e.g. main)
+        this._sessionBranch = null;    // Session branch created at loop start (ralph/session-xxx)
         this._workBranch = null;       // Work branch for the current task
         this._workspaceRoot = null;    // Workspace root path for git commands
     }
@@ -89,11 +90,12 @@ class GitManager {
     }
 
     /**
-     * Initialize session — just record workspace root and original branch.
-     * Does NOT create a branch. Per-task branches are created via startTaskBranch().
+     * Initialize session — record workspace root, original branch, and create a session branch.
+     * The session branch serves as the integration branch for all task branches.
+     * Flow: originalBranch(main) ← sessionBranch ← taskBranches
      *
      * @param {string} workspaceRoot - Workspace root path
-     * @returns {{ success: boolean, originalBranch?: string, error?: string }}
+     * @returns {{ success: boolean, originalBranch?: string, sessionBranch?: string, error?: string }}
      */
     initSession(workspaceRoot) {
         this._workspaceRoot = workspaceRoot;
@@ -106,10 +108,32 @@ class GitManager {
         try {
             this._originalBranch = this.getCurrentBranch();
             this.log(`[Git] 📌 원본 브랜치 기록: ${this._originalBranch}`);
-            return { success: true, originalBranch: this._originalBranch };
+
+            // Stash any uncommitted changes before creating session branch
+            if (this.hasUncommittedChanges()) {
+                this.log('[Git] 📦 미커밋 변경사항을 스태시합니다...');
+                this._execGit(['stash', 'push', '-m', `ralph-auto-stash-${Date.now()}`]);
+                this.log('[Git] ✅ 스태시 완료');
+            }
+
+            // Create session branch from original branch
+            const now = new Date();
+            const timestamp = now.getFullYear().toString() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '-' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            this._sessionBranch = `ralph/session-${timestamp}`;
+
+            this._execGit(['checkout', '-b', this._sessionBranch]);
+            this.log(`[Git] 🌿 세션 브랜치 생성: ${this._sessionBranch} (from ${this._originalBranch})`);
+
+            return { success: true, originalBranch: this._originalBranch, sessionBranch: this._sessionBranch };
         } catch (e) {
             this.log(`[Git] ❌ 세션 초기화 실패: ${e.message}`);
             this._originalBranch = null;
+            this._sessionBranch = null;
             return { success: false, error: e.message };
         }
     }
@@ -130,13 +154,16 @@ class GitManager {
 
     /**
      * Create and checkout a new branch for a specific task.
+     * Task branches are created from the session branch (not from original/main).
      *
      * @param {string} taskText - Task description
      * @param {number} iteration - Iteration number
      * @returns {{ success: boolean, workBranch?: string, error?: string }}
      */
     startTaskBranch(taskText, iteration) {
-        if (!this._originalBranch || !this._workspaceRoot) {
+        // Use session branch as base; fall back to original branch if no session branch
+        const baseBranch = this._sessionBranch || this._originalBranch;
+        if (!baseBranch || !this._workspaceRoot) {
             return { success: false, error: 'Session not initialized (call initSession first)' };
         }
 
@@ -147,15 +174,15 @@ class GitManager {
         }
 
         try {
-            // Ensure we're on the original branch before creating a new task branch
+            // Ensure we're on the base branch (session branch) before creating a new task branch
             const currentBranch = this.getCurrentBranch();
-            if (currentBranch !== this._originalBranch) {
-                this._execGit(['checkout', this._originalBranch]);
+            if (currentBranch !== baseBranch) {
+                this._execGit(['checkout', baseBranch]);
             }
 
-            // Stash any uncommitted changes on the original branch
+            // Stash any uncommitted changes on the base branch
             if (this.hasUncommittedChanges()) {
-                this.log('[Git] 📦 원본 브랜치의 미커밋 변경사항을 스태시합니다...');
+                this.log('[Git] 📦 세션 브랜치의 미커밋 변경사항을 스태시합니다...');
                 this._execGit(['stash', 'push', '-m', `ralph-auto-stash-${Date.now()}`]);
                 this.log('[Git] ✅ 스태시 완료');
             }
@@ -168,7 +195,7 @@ class GitManager {
             this._workBranch = branchName;
 
             this._execGit(['checkout', '-b', this._workBranch]);
-            this.log(`[Git] 🌿 작업 브랜치 생성: ${this._workBranch}`);
+            this.log(`[Git] 🌿 작업 브랜치 생성: ${this._workBranch} (from ${baseBranch})`);
 
             return { success: true, workBranch: this._workBranch };
 
@@ -180,13 +207,16 @@ class GitManager {
     }
 
     /**
-     * End the current task branch: commit remaining changes, merge back to original.
+     * End the current task branch: commit remaining changes, merge back to session branch.
+     * Task branches are merged into the session branch (not directly into original/main).
      *
      * @param {boolean} [autoDeleteBranch=true] - Whether to delete the branch after merge
      * @returns {{ success: boolean, merged: boolean, error?: string }}
      */
     endTaskBranch(autoDeleteBranch = true) {
-        if (!this._originalBranch || !this._workBranch) {
+        // Use session branch as merge target; fall back to original branch
+        const mergeTo = this._sessionBranch || this._originalBranch;
+        if (!mergeTo || !this._workBranch) {
             return { success: true, merged: false };
         }
 
@@ -198,11 +228,11 @@ class GitManager {
                 this.commitAll(`[Ralph] 작업 완료 — 최종 커밋`);
             }
 
-            // Check if there are any commits on the work branch vs original
+            // Check if there are any commits on the work branch vs merge target
             let hasWorkCommits = false;
             try {
                 const log = this._execGit([
-                    'log', `${this._originalBranch}..${workBranch}`, '--oneline'
+                    'log', `${mergeTo}..${workBranch}`, '--oneline'
                 ]);
                 hasWorkCommits = log.length > 0;
             } catch {
@@ -212,7 +242,7 @@ class GitManager {
             if (!hasWorkCommits) {
                 // No commits on work branch → just switch back
                 this.log('[Git] ℹ 작업 브랜치에 커밋이 없습니다.');
-                this._execGit(['checkout', this._originalBranch]);
+                this._execGit(['checkout', mergeTo]);
                 if (autoDeleteBranch) {
                     try {
                         this._execGit(['branch', '-d', workBranch]);
@@ -224,13 +254,13 @@ class GitManager {
                 return { success: true, merged: false };
             }
 
-            // Merge work branch into original
-            this.log(`[Git] 🔀 ${workBranch} → ${this._originalBranch} 머지 중...`);
-            this._execGit(['checkout', this._originalBranch]);
+            // Merge work branch into session branch
+            this.log(`[Git] 🔀 ${workBranch} → ${mergeTo} 머지 중...`);
+            this._execGit(['checkout', mergeTo]);
 
             try {
                 this._execGit(['merge', workBranch, '--no-ff', '-m',
-                    `[Ralph] 작업 완료: ${workBranch} → ${this._originalBranch}`]);
+                    `[Ralph] 작업 완료: ${workBranch} → ${mergeTo}`]);
                 this.log('[Git] ✅ 머지 완료');
 
                 // Delete work branch after merge (if option enabled)
@@ -286,26 +316,103 @@ class GitManager {
     }
 
     /**
-     * End the entire session — clean up if a task branch is still open.
-     * Called on stop/emergencyStop.
+     * End the entire session:
+     * 1. End active task branch (merge into session branch)
+     * 2. Merge session branch into original branch (main)
+     * Called on stop/emergencyStop/all-tasks-completed.
      *
      * @param {{ autoDeleteBranch: boolean }} [options]
-     * @returns {{ success: boolean, merged: boolean, error?: string }}
+     * @returns {{ success: boolean, merged: boolean, sessionMerged: boolean, error?: string }}
      */
     endSession(options = {}) {
         const { autoDeleteBranch = true } = options;
 
-        // If there's an active task branch, end it
+        // 1. If there's an active task branch, end it (merge into session branch)
         if (this._workBranch) {
-            const result = this.endTaskBranch(autoDeleteBranch);
-            this._originalBranch = null;
-            return result;
+            this.endTaskBranch(autoDeleteBranch);
         }
 
-        // No active task branch — just clean up
+        // 2. Merge session branch into original branch (main)
+        if (this._sessionBranch && this._originalBranch) {
+            const sessionBranch = this._sessionBranch;
+
+            try {
+                // Commit any remaining changes on session branch
+                const currentBranch = this.getCurrentBranch();
+                if (currentBranch !== sessionBranch) {
+                    this._execGit(['checkout', sessionBranch]);
+                }
+                if (this.hasUncommittedChanges()) {
+                    this.commitAll('[Ralph] 세션 종료 — 최종 커밋');
+                }
+
+                // Check if session branch has commits ahead of original
+                let hasSessionCommits = false;
+                try {
+                    const log = this._execGit([
+                        'log', `${this._originalBranch}..${sessionBranch}`, '--oneline'
+                    ]);
+                    hasSessionCommits = log.length > 0;
+                } catch {
+                    hasSessionCommits = false;
+                }
+
+                if (!hasSessionCommits) {
+                    this.log('[Git] ℹ 세션 브랜치에 머지할 커밋이 없습니다.');
+                    this._execGit(['checkout', this._originalBranch]);
+                    this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
+                    this._restoreStash();
+                    this._originalBranch = null;
+                    this._sessionBranch = null;
+                    this._workBranch = null;
+                    return { success: true, merged: false, sessionMerged: false };
+                }
+
+                // Merge session branch → original branch
+                this.log(`[Git] 🔀 ${sessionBranch} → ${this._originalBranch} 머지 중...`);
+                this._execGit(['checkout', this._originalBranch]);
+
+                try {
+                    this._execGit(['merge', sessionBranch, '--no-ff', '-m',
+                        `[Ralph] 세션 완료: ${sessionBranch} → ${this._originalBranch}`]);
+                    this.log(`[Git] ✅ 세션 브랜치 → 원본 브랜치 머지 완료`);
+
+                    this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
+
+                    this._restoreStash();
+                    this._originalBranch = null;
+                    this._sessionBranch = null;
+                    this._workBranch = null;
+                    return { success: true, merged: true, sessionMerged: true };
+
+                } catch (mergeErr) {
+                    this.log(`[Git] ⚠ 세션 머지 충돌 발생: ${mergeErr.message}`);
+                    this.log(`[Git] ℹ 세션 브랜치 '${sessionBranch}'를 유지합니다. 수동으로 해결해주세요.`);
+                    try {
+                        this._execGit(['merge', '--abort']);
+                    } catch { /* ignore */ }
+
+                    this._restoreStash();
+                    this._originalBranch = null;
+                    this._sessionBranch = null;
+                    this._workBranch = null;
+                    return { success: false, merged: false, sessionMerged: false, error: `Session merge conflict: ${mergeErr.message}` };
+                }
+
+            } catch (e) {
+                this.log(`[Git] ❌ 세션 종료 중 에러: ${e.message}`);
+                this._originalBranch = null;
+                this._sessionBranch = null;
+                this._workBranch = null;
+                return { success: false, merged: false, sessionMerged: false, error: e.message };
+            }
+        }
+
+        // No session branch — just clean up
         this._originalBranch = null;
+        this._sessionBranch = null;
         this._workBranch = null;
-        return { success: true, merged: false };
+        return { success: true, merged: false, sessionMerged: false };
     }
 
     // ─── Worktree 기반 병렬 작업 지원 ──────────────────────────────
@@ -324,6 +431,9 @@ class GitManager {
             return { success: false, error: 'Workspace root not set' };
         }
 
+        // Use session branch as base; fall back to original branch
+        const baseBranch = this._sessionBranch || this._originalBranch;
+
         const sanitized = this._sanitizeBranchName(taskText);
         const branchName = sanitized
             ? `ralph/parallel-${iteration}-${taskIndex}-${sanitized}`
@@ -340,9 +450,9 @@ class GitManager {
                 fs.mkdirSync(parentDir, { recursive: true });
             }
 
-            // Create worktree with a new branch based on original branch
-            this._execGit(['worktree', 'add', '-b', branchName, worktreeDir, this._originalBranch]);
-            this.log(`[Git] 🌿 워크트리 생성: ${branchName} → ${worktreeDir}`);
+            // Create worktree with a new branch based on session branch
+            this._execGit(['worktree', 'add', '-b', branchName, worktreeDir, baseBranch]);
+            this.log(`[Git] 🌿 워크트리 생성: ${branchName} → ${worktreeDir} (from ${baseBranch})`);
 
             return { success: true, worktreePath: worktreeDir, branchName };
         } catch (e) {
@@ -421,7 +531,7 @@ class GitManager {
     }
 
     /**
-     * Merge a worktree branch into the original branch.
+     * Merge a worktree branch into the session branch (or original branch as fallback).
      * Attempts automatic conflict resolution if conflicts occur.
      *
      * Strategy: For conflicting files, use "theirs" (worktree branch) version,
@@ -432,21 +542,23 @@ class GitManager {
      * @returns {{ success: boolean, merged: boolean, conflictsResolved: number, error?: string }}
      */
     mergeWorktreeBranch(branchName, autoResolve = true) {
-        if (!this._originalBranch) {
-            return { success: false, merged: false, conflictsResolved: 0, error: 'No original branch' };
+        // Use session branch as merge target; fall back to original branch
+        const mergeTo = this._sessionBranch || this._originalBranch;
+        if (!mergeTo) {
+            return { success: false, merged: false, conflictsResolved: 0, error: 'No session/original branch' };
         }
 
         try {
-            // Ensure we're on the original branch
+            // Ensure we're on the merge target branch (session branch)
             const currentBranch = this.getCurrentBranch();
-            if (currentBranch !== this._originalBranch) {
-                this._execGit(['checkout', this._originalBranch]);
+            if (currentBranch !== mergeTo) {
+                this._execGit(['checkout', mergeTo]);
             }
 
-            // Check if branch has any commits ahead of original
+            // Check if branch has any commits ahead of merge target
             let hasCommits = false;
             try {
-                const log = this._execGit(['log', `${this._originalBranch}..${branchName}`, '--oneline']);
+                const log = this._execGit(['log', `${mergeTo}..${branchName}`, '--oneline']);
                 hasCommits = log.length > 0;
             } catch {
                 hasCommits = false;
@@ -460,7 +572,7 @@ class GitManager {
             // Try normal merge first
             try {
                 this._execGit(['merge', branchName, '--no-ff', '-m',
-                    `[Ralph] 병렬 작업 완료: ${branchName} → ${this._originalBranch}`]);
+                    `[Ralph] 병렬 작업 완료: ${branchName} → ${mergeTo}`]);
                 this.log(`[Git] ✅ ${branchName} 머지 완료 (충돌 없음)`);
                 return { success: true, merged: true, conflictsResolved: 0 };
             } catch (mergeErr) {
@@ -609,6 +721,7 @@ class GitManager {
         return {
             active: true,
             originalBranch: this._originalBranch,
+            sessionBranch: this._sessionBranch || null,
             workBranch: this._workBranch || null,
         };
     }

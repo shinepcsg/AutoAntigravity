@@ -248,7 +248,10 @@ class RalphLoopManager {
             const wsRoot = workspaceFolders[0].uri.fsPath;
             const gitResult = this.gitManager.initSession(wsRoot);
             if (gitResult.success) {
-                this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch} (작업별 브랜치 모드)`);
+                this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch}`);
+                if (gitResult.sessionBranch) {
+                    this._addLog(`[Ralph] 🌿 Git 세션 브랜치: ${gitResult.sessionBranch} (작업별 브랜치 → 세션 → 원본 모드)`);
+                }
             } else {
                 this._addLog(`[Ralph] ⚠ Git 브랜치 관리 비활성 — ${gitResult.error || '알 수 없는 오류'}`, 'warn');
             }
@@ -1498,18 +1501,21 @@ class RalphLoopManager {
         const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
 
         if (session.workBranch) {
-            this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.originalBranch} 머지...`);
-        } else {
-            this._addLog(`[Git] ℹ 세션 종료 — 활성 작업 브랜치 없음.`);
+            this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.sessionBranch || session.originalBranch} 머지...`);
+        }
+        if (session.sessionBranch) {
+            this._addLog(`[Git] 🔀 세션 브랜치 ${session.sessionBranch} → ${session.originalBranch} 머지 예정...`);
         }
 
         const result = this.gitManager.endSession({ autoDeleteBranch });
 
-        if (result.success && result.merged) {
-            this._addLog('[Git] ✅ 작업 브랜치가 원본 브랜치에 머지되었습니다.');
+        if (result.success && result.sessionMerged) {
+            this._addLog(`[Git] ✅ 세션 브랜치가 원본 브랜치(${session.originalBranch})에 머지되었습니다.`);
             vscode.window.showInformationMessage(
-                `✅ Git: ${session.workBranch} → ${session.originalBranch} 머지 완료`
+                `✅ Git: ${session.sessionBranch} → ${session.originalBranch} 세션 머지 완료`
             );
+        } else if (result.success && result.merged) {
+            this._addLog('[Git] ✅ 작업이 머지되었습니다.');
         } else if (result.success && !result.merged) {
             this._addLog('[Git] ℹ 머지할 커밋이 없어 세션만 종료했습니다.');
         } else {
