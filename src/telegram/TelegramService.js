@@ -104,6 +104,24 @@ class TelegramService {
     }
 
     /**
+     * 전체 작업 완료 결과를 텔레그램으로 전송.
+     * @param {number} totalTasks - 완료된 총 작업 수
+     * @param {number} totalIterations - 총 반복 횟수
+     */
+    async sendAllTasksCompleted(totalTasks, totalIterations) {
+        const message = [
+            `🎉 *전체 작업 완료!*`,
+            ``,
+            `📋 *총 작업 수:* ${totalTasks}개`,
+            `🔄 *총 반복 횟수:* ${totalIterations}회`,
+            ``,
+            `✅ 모든 작업이 성공적으로 완료되었습니다.`,
+        ].join('\n');
+
+        await this.sendMessage(message);
+    }
+
+    /**
      * Long-poll for incoming updates from Telegram.
      * Recursively calls itself via setTimeout.
      */
