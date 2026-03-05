@@ -95,9 +95,10 @@ class GitManager {
      * Flow: originalBranch(main) ← sessionBranch ← taskBranches
      *
      * @param {string} workspaceRoot - Workspace root path
+     * @param {string} [sessionLabel=''] - Optional label to append to the session branch name
      * @returns {{ success: boolean, originalBranch?: string, sessionBranch?: string, error?: string }}
      */
-    initSession(workspaceRoot) {
+    initSession(workspaceRoot, sessionLabel = '') {
         this._workspaceRoot = workspaceRoot;
 
         if (!this.isGitRepo()) {
