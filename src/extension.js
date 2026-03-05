@@ -152,6 +152,69 @@ function activate(context) {
 
     context.subscriptions.push({ dispose: () => telemetryService.dispose() });
 
+    // ─── Initialize Telegram Service ──────────────────────────────────
+    const telegramConfig = vscode.workspace.getConfiguration('autoAntigravity');
+    const telegramEnabled = telegramConfig.get('telegram.enabled', false);
+    if (telegramEnabled) {
+        const botToken = telegramConfig.get('telegram.botToken', '');
+        const chatId = telegramConfig.get('telegram.chatId', '');
+        if (botToken && chatId) {
+            telegramService = new TelegramService(log);
+
+            // 텔레그램 → 플러그인: 메시지 수신 시 PRD.md로 저장
+            telegramService.onMessageReceived = (text) => {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (!workspaceFolders || workspaceFolders.length === 0) {
+                    telegramService.sendMessage('❌ 워크스페이스가 열려있지 않습니다.');
+                    return;
+                }
+                const fs = require('fs');
+                const path = require('path');
+                const taskFileName = telegramConfig.get('ralphLoop.taskFile', 'PRD.md');
+                const prdPath = path.join(workspaceFolders[0].uri.fsPath, taskFileName);
+                const prdContent = `# 텔레그램 작업 요청\n\n> **목적**: 텔레그램에서 수신된 작업 요청\n\n---\n\n## 작업 목록\n\n${text}\n\n---\n\n## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.\n`;
+                fs.writeFileSync(prdPath, prdContent, 'utf-8');
+                telegramService.sendMessage(`📋 PRD 생성 완료 — autoStart가 활성화되어 있으면 자동 시작됩니다.`);
+                log('[Telegram] PRD 파일 생성: ' + prdPath);
+            };
+
+            // 텔레그램 → 플러그인: 상태 조회
+            telegramService.onStatusRequest = () => {
+                const state = ralphLoop.getState();
+                const progress = ralphLoop.taskManager.getProgress();
+                const msg = `📊 *상태*: ${state}\n📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})\n🔄 *반복*: ${ralphLoop.currentIteration}`;
+                telegramService.sendMessage(msg);
+            };
+
+            // 텔레그램 → 플러그인: 정지
+            telegramService.onStopRequest = () => {
+                ralphLoop.stop();
+                updateRalphStatusBar();
+                telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
+            };
+
+            // 텔레그램 → 플러그인: 긴급 정지
+            telegramService.onEmergencyRequest = () => {
+                ralphLoop.emergencyStop();
+                autoAccept.disable();
+                updateAutoAcceptStatusBar();
+                updateRalphStatusBar();
+                telegramService.sendMessage('🛑 긴급 정지 완료 — 모든 기능 비활성화');
+            };
+
+            // 플러그인 → 텔레그램: Ralph Loop 로그 전달
+            ralphLoop.onLogCallback = (logEntry) => {
+                telegramService.onRalphLog(logEntry);
+            };
+
+            telegramService.start(botToken, chatId);
+            context.subscriptions.push({ dispose: () => telegramService.dispose() });
+            log('[Telegram] 텔레그램 봇 서비스 시작');
+        } else {
+            log('[Telegram] 텔레그램 활성화되었으나 botToken 또는 chatId가 비어있습니다.');
+        }
+    }
+
     // ─── Status Bar Items ─────────────────────────────────────────────
     statusBarAutoAccept = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 200);
     statusBarAutoAccept.command = 'autoAntigravity.toggleAutoAccept';
