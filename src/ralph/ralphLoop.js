@@ -39,6 +39,7 @@ class RalphLoopManager {
         this.onStateChange = null; // callback for UI updates
         this.onLogCallback = null; // callback for log forwarding (e.g. Telegram)
         this.onTaskCompleteCallback = null; // callback for individual task completion (e.g. Telegram)
+        this.onAllTasksCompleteCallback = null; // callback for all tasks completion (e.g. Telegram)
 
         // 로그 버퍼 — 사이드바에 표시
         this._logBuffer = [];
