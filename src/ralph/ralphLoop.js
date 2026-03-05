@@ -37,6 +37,7 @@ class RalphLoopManager {
         this.currentIteration = 0;
         this.loopTimer = null;
         this.onStateChange = null; // callback for UI updates
+        this.onLogCallback = null; // callback for log forwarding (e.g. Telegram)
 
         // 로그 버퍼 — 사이드바에 표시
         this._logBuffer = [];
