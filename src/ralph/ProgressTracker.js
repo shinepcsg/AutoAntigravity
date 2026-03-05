@@ -62,6 +62,27 @@ class ProgressTracker {
     }
 
     /**
+     * Delete existing progress file (for fresh start from first task)
+     * @returns {boolean} true if file was deleted
+     */
+    resetProgressFile() {
+        const filePath = this.getProgressFilePath();
+        if (!filePath) return false;
+
+        if (fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+                this.log('[Ralph] 🗑 progress 파일 삭제 — 첫 번째 작업부터 시작');
+                return true;
+            } catch (e) {
+                this.log(`[Ralph] progress 파일 삭제 실패: ${e.message}`);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Initialize progress file with header
      */
     initializeProgressFile() {

@@ -223,6 +223,13 @@ class RalphLoopManager {
             this._addLog(`[Ralph] 🧹 이전 세션 잔존 락 파일 정리: ${lockClean.reason}`, 'warn');
         }
 
+        // ── 첫 번째 작업부터 시작하는 경우 progress.txt 초기화 ──
+        const allTasks = this.taskManager.parseTasks();
+        const isStartingFromFirst = allTasks.length > 0 && !allTasks[0].completed;
+        if (isStartingFromFirst) {
+            this.progressTracker.resetProgressFile();
+        }
+
         this.state = LoopState.RUNNING;
         this.consecutiveErrors = 0;
         this.lastError = null;
