@@ -38,6 +38,8 @@ class RalphLoopManager {
         this.loopTimer = null;
         this.onStateChange = null; // callback for UI updates
         this.onLogCallback = null; // callback for log forwarding (e.g. Telegram)
+        this.onTaskCompleteCallback = null; // callback for individual task completion (e.g. Telegram)
+        this.onAllTasksCompleteCallback = null; // callback for all tasks completion (e.g. Telegram)
 
         // 로그 버퍼 — 사이드바에 표시
         this._logBuffer = [];
@@ -863,6 +865,20 @@ class RalphLoopManager {
             this._endGitSession();
 
             this._addLog('[Ralph] ✅ 모든 작업이 완료되었습니다!');
+
+            // 전체 작업 완료 콜백 호출
+            if (this.onAllTasksCompleteCallback) {
+                try {
+                    const finalProgress = this.taskManager.getProgress();
+                    this.onAllTasksCompleteCallback({
+                        totalTasks: finalProgress.total,
+                        totalIterations: this.currentIteration
+                    });
+                } catch (cbErr) {
+                    this._addLog(`[Ralph] ⚠ onAllTasksCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                }
+            }
+
             vscode.window.showInformationMessage('🎉 Ralph Loop: All tasks completed!');
             this.state = LoopState.IDLE;
             this._notifyStateChange();
@@ -893,6 +909,20 @@ class RalphLoopManager {
                     this.consecutiveErrors = 0;
                     this.lastError = null;
                     this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
+
+                    // 병렬 그룹 완료 콜백 호출
+                    if (this.onTaskCompleteCallback) {
+                        try {
+                            this.onTaskCompleteCallback({
+                                taskText: '병렬 그룹',
+                                iteration: this.currentIteration,
+                                progress: `${progress.completed}/${progress.total}`
+                            });
+                        } catch (cbErr) {
+                            this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                        }
+                    }
+
                     this.progressTracker.appendProgress(
                         this.currentIteration,
                         `병렬 그룹 (${result.completed}개)`,
@@ -971,6 +1001,19 @@ class RalphLoopManager {
                 // ── 세션 락 해제 (성공) ──
                 this._sessionLock.release();
                 this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
+
+                // 개별 작업 완료 콜백 호출
+                if (this.onTaskCompleteCallback) {
+                    try {
+                        this.onTaskCompleteCallback({
+                            taskText: task.text,
+                            iteration: this.currentIteration,
+                            progress: `${progress.completed}/${progress.total}`
+                        });
+                    } catch (cbErr) {
+                        this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                    }
+                }
 
                 // ── PRD 변경 감지 ──
                 this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
