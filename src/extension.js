@@ -8,6 +8,7 @@ const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
 const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 const { AutoUpdater } = require('./updater');
 const { TelemetryService } = require('./telemetry/TelemetryService');
+const { TelegramService } = require('./telegram/TelegramService');
 
 let autoAccept = null;
 let ralphLoop = null;
