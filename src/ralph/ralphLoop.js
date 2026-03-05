@@ -865,6 +865,20 @@ class RalphLoopManager {
             this._endGitSession();
 
             this._addLog('[Ralph] ✅ 모든 작업이 완료되었습니다!');
+
+            // 전체 작업 완료 콜백 호출
+            if (this.onAllTasksCompleteCallback) {
+                try {
+                    const finalProgress = this.taskManager.getProgress();
+                    this.onAllTasksCompleteCallback({
+                        totalTasks: finalProgress.total,
+                        totalIterations: this.currentIteration
+                    });
+                } catch (cbErr) {
+                    this._addLog(`[Ralph] ⚠ onAllTasksCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                }
+            }
+
             vscode.window.showInformationMessage('🎉 Ralph Loop: All tasks completed!');
             this.state = LoopState.IDLE;
             this._notifyStateChange();
