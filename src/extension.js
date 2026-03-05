@@ -223,6 +223,9 @@ function activate(context) {
                 telegramService.onRalphLog(logEntry);
             };
 
+            // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달
+            ralphLoop.onTaskCompleteCallback = telegramService.sendTaskResult.bind(telegramService);
+
             telegramService.start(botToken, chatId);
             context.subscriptions.push({ dispose: () => telegramService.dispose() });
             log('[Telegram] 텔레그램 봇 서비스 시작');
