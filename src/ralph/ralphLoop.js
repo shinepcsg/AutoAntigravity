@@ -974,6 +974,19 @@ class RalphLoopManager {
                 this._sessionLock.release();
                 this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
+                // 개별 작업 완료 콜백 호출
+                if (this.onTaskCompleteCallback) {
+                    try {
+                        this.onTaskCompleteCallback({
+                            taskText: task.text,
+                            iteration: this.currentIteration,
+                            progress: `${progress.completed}/${progress.total}`
+                        });
+                    } catch (cbErr) {
+                        this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                    }
+                }
+
                 // ── PRD 변경 감지 ──
                 this._detectPrdChanges(tasksBeforeSnapshot, taskCountBefore, taskTextsBefore, this.currentIteration);
 
