@@ -64,6 +64,92 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 3. **정지**: `Ctrl+Shift+P` → `AutoAntigravity: Stop Ralph Loop`
 4. **긴급정지**: `Ctrl+Shift+P` → `AutoAntigravity: Emergency Stop`
 
+### `/write-prd` 워크플로우 등록
+
+`/write-prd` 슬래시 커맨드를 사용하면 AI 에이전트가 PRD를 자동 작성하여 Ralph Loop에 즉시 적용합니다.  
+이 워크플로우를 사용하려면 **글로벌 워크플로우** 또는 **프로젝트 워크플로우**로 등록해야 합니다.
+
+#### 방법 1: 프로젝트 워크플로우 (해당 프로젝트에서만 사용)
+
+프로젝트 루트에 `.agent/workflows/write-prd.md` 파일을 배치합니다.  
+AutoAntigravity 저장소에 이미 포함되어 있으므로, 다른 프로젝트에서 사용하려면 파일을 복사하세요.
+
+```
+your-project/
+├── .agent/
+│   └── workflows/
+│       └── write-prd.md    ← 여기에 배치
+├── PRD.md
+└── ...
+```
+
+> 💡 `.agents/workflows/`, `_agent/workflows/`, `_agents/workflows/` 경로도 지원됩니다.
+
+#### 방법 2: 글로벌 워크플로우 (모든 프로젝트에서 사용)
+
+홈 디렉토리의 `.agent/workflows/` 폴더에 파일을 배치하면 모든 프로젝트에서 `/write-prd` 커맨드를 사용할 수 있습니다.
+
+**Windows** (프로젝트 루트에서 실행):
+```powershell
+# 글로벌 워크플로우 디렉토리 생성
+New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
+
+# write-prd.md 복사
+Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
+```
+
+**Mac / Linux** (프로젝트 루트에서 실행):
+```bash
+# 글로벌 워크플로우 디렉토리 생성
+mkdir -p ~/.agent/workflows
+
+# write-prd.md 복사
+cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
+```
+
+등록 후 Antigravity 채팅에서 `/write-prd`를 입력하면 워크플로우가 실행됩니다.
+
+---
+
+### 🔀 병렬 작업 설정
+
+Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git worktree**에서 동시에 실행할 수 있습니다.
+
+#### 활성화
+
+병렬 실행은 기본적으로 활성화되어 있습니다. 설정에서 제어할 수 있습니다:
+
+| 설정 | 기본값 | 설명 |
+|---|---|---|
+| `autoAntigravity.ralphLoop.enableParallel` | `true` | 병렬 실행 활성화/비활성화 |
+| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | 동시 실행 가능한 최대 작업 수 (2~8) |
+
+#### PRD에서 병렬 작업 지정
+
+작업 항목에 `[병렬진행]` 태그를 추가하면 해당 작업들이 병렬로 실행됩니다:
+
+```markdown
+### Step 2: 독립적인 모듈 구현
+- [ ] [병렬진행] 작업 2-1: 사용자 모듈 구현 (src/user.js)
+- [ ] [병렬진행] 작업 2-2: 상품 모듈 구현 (src/product.js)
+- [ ] [병렬진행] 작업 2-3: 주문 모듈 구현 (src/order.js)
+- [ ] 검증 2: 모든 모듈의 단위 테스트 통과 확인
+```
+
+#### 병렬 작업 규칙
+
+- **연속된 `[병렬진행]` 항목**이 하나의 병렬 그룹을 형성합니다.
+- 일반 작업이 사이에 끼어있으면 **별개의 병렬 그룹**으로 구분됩니다.
+- **서로 다른 파일을 수정하는 작업**에만 사용하세요 — 같은 파일을 수정하면 머지 충돌이 발생합니다.
+- 이전 작업의 결과물에 의존하는 작업에는 **사용하지 마세요**.
+
+#### 동작 방식
+
+1. Ralph Loop가 병렬 그룹을 감지하면 각 작업마다 **독립적인 git worktree**를 생성합니다.
+2. 각 worktree에서 별도의 Antigravity 에이전트가 작업을 병렬로 실행합니다.
+3. 모든 병렬 작업이 완료되면 결과를 **메인 브랜치에 자동 머지**합니다.
+4. 머지 충돌 발생 시 AI가 자동으로 해결을 시도합니다.
+
 ---
 
 ## ⚙ 설정
@@ -79,6 +165,10 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 | `autoAntigravity.ralphLoop.autoCommit` | `true` | Git 작업별 브랜치 & 자동 커밋 |
 | `autoAntigravity.ralphLoop.autoDeleteBranch` | `true` | 머지 후 작업 브랜치 자동 삭제 |
 | `autoAntigravity.ralphLoop.iterationDelayMs` | `3000` | 반복 간 대기 (ms) |
+| `autoAntigravity.ralphLoop.allowPrdModification` | `false` | 에이전트의 PRD 수정 허용 |
+| `autoAntigravity.ralphLoop.autoStart` | `true` | PRD 파일 변경 시 Ralph Loop 자동 시작 |
+| `autoAntigravity.ralphLoop.enableParallel` | `true` | `[병렬진행]` 작업 병렬 실행 활성화 |
+| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | 동시 실행 최대 병렬 작업 수 (2~8) |
 
 ---
 
@@ -96,4 +186,4 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 MIT License — [LICENSE](LICENSE)
 
 ## 🙏 크레딧
-찬선
+박찬선
