@@ -185,6 +185,44 @@ class TaskFileManager {
             remaining: tasks.length - completed
         };
     }
+
+    /**
+     * Get session label from task file content
+     * 1) 첫 번째 `# 제목` 라인의 제목 텍스트 반환
+     * 2) 없으면 첫 번째 미완료 `- [ ]` 작업 텍스트 반환
+     * 3) 둘 다 없으면 빈 문자열 반환
+     * @returns {string}
+     */
+    getSessionLabel() {
+        if (!this.taskFilePath || !fs.existsSync(this.taskFilePath)) {
+            return '';
+        }
+
+        try {
+            const content = fs.readFileSync(this.taskFilePath, 'utf-8');
+            const lines = content.split('\n');
+
+            // 1) 첫 번째 # 제목 헤더 추출
+            for (const line of lines) {
+                const headerMatch = line.trim().match(/^#\s+(.+)$/);
+                if (headerMatch) {
+                    return headerMatch[1].trim();
+                }
+            }
+
+            // 2) # 제목이 없으면 첫 번째 미완료 작업 텍스트 사용
+            for (const line of lines) {
+                const taskMatch = line.trim().match(/^[-*]\s*\[\s*\]\s+(.+)$/);
+                if (taskMatch) {
+                    return taskMatch[1].trim();
+                }
+            }
+        } catch (e) {
+            this.log(`[Ralph] ⚠ getSessionLabel 실패: ${e.message}`);
+        }
+
+        return '';
+    }
 }
 
 module.exports = { TaskFileManager };
