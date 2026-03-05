@@ -156,8 +156,28 @@ function activate(context) {
     const telegramConfig = vscode.workspace.getConfiguration('autoAntigravity');
     const telegramEnabled = telegramConfig.get('telegram.enabled', false);
     if (telegramEnabled) {
-        const botToken = telegramConfig.get('telegram.botToken', '');
-        const chatId = telegramConfig.get('telegram.chatId', '');
+        // .env 파일에서 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 읽기
+        let botToken = '';
+        let chatId = '';
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const fs = require('fs');
+            const path = require('path');
+            const envPath = path.join(workspaceFolders[0].uri.fsPath, '.env');
+            if (fs.existsSync(envPath)) {
+                const envContent = fs.readFileSync(envPath, 'utf-8');
+                for (const line of envContent.split('\n')) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('TELEGRAM_BOT_TOKEN=')) {
+                        botToken = trimmed.substring('TELEGRAM_BOT_TOKEN='.length).trim();
+                    } else if (trimmed.startsWith('TELEGRAM_CHAT_ID=')) {
+                        chatId = trimmed.substring('TELEGRAM_CHAT_ID='.length).trim();
+                    }
+                }
+            } else {
+                log('[Telegram] .env 파일이 없습니다: ' + envPath);
+            }
+        }
         if (botToken && chatId) {
             telegramService = new TelegramService(log);
 
