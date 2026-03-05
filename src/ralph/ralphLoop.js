@@ -248,7 +248,45 @@ class RalphLoopManager {
             .get('ralphLoop.autoCommit', true);
         if (autoCommit) {
             const wsRoot = workspaceFolders[0].uri.fsPath;
-            const gitResult = this.gitManager.initSession(wsRoot);
+
+            // ── 작업 파일 기반 세션 라벨 추출 ──
+            let sessionLabel = '';
+            try {
+                const fs = require('fs');
+                const taskFilePath = this.taskManager.getTaskFile();
+                if (taskFilePath && fs.existsSync(taskFilePath)) {
+                    const content = fs.readFileSync(taskFilePath, 'utf-8');
+                    const lines = content.split('\n');
+
+                    // 1) 첫 번째 # 제목 헤더 추출
+                    for (const line of lines) {
+                        const headerMatch = line.trim().match(/^#\s+(.+)$/);
+                        if (headerMatch) {
+                            sessionLabel = headerMatch[1].trim();
+                            break;
+                        }
+                    }
+
+                    // 2) # 제목이 없으면 첫 번째 미완료 작업 텍스트 사용
+                    if (!sessionLabel) {
+                        for (const line of lines) {
+                            const taskMatch = line.trim().match(/^[-*]\s*\[\s*\]\s+(.+)$/);
+                            if (taskMatch) {
+                                sessionLabel = taskMatch[1].trim();
+                                break;
+                            }
+                        }
+                    }
+
+                    if (sessionLabel) {
+                        this._addLog(`[Ralph] 🏷 세션 라벨 추출: "${sessionLabel}"`);
+                    }
+                }
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ 세션 라벨 추출 실패: ${e.message}`, 'warn');
+            }
+
+            const gitResult = this.gitManager.initSession(wsRoot, sessionLabel);
             if (gitResult.success) {
                 this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch}`);
                 if (gitResult.sessionBranch) {
