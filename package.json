@@ -156,6 +156,21 @@
                     "minimum": 30,
                     "maximum": 600,
                     "description": "AI 모델 사용량 조회 간격 (초) — Telemetry polling interval in seconds"
+                },
+                "autoAntigravity.telegram.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "텔레그램 봇 연동 활성화 (Enable Telegram bot integration)"
+                },
+                "autoAntigravity.telegram.botToken": {
+                    "type": "string",
+                    "default": "",
+                    "description": "텔레그램 봇 토큰 — @BotFather에서 발급 (Telegram bot token from @BotFather)"
+                },
+                "autoAntigravity.telegram.chatId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "텔레그램 채팅 ID — 봇과 대화를 시작한 사용자/그룹 ID (Telegram chat ID)"
                 }
             }
         }
