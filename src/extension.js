@@ -181,21 +181,17 @@ function activate(context) {
         if (botToken && chatId) {
             telegramService = new TelegramService(log);
 
-            // 텔레그램 → 플러그인: 메시지 수신 시 PRD.md로 저장
+            // 텔레그램 → 플러그인: 메시지 수신 시 write-prd 워크플로우 실행
             telegramService.onMessageReceived = (text) => {
-                const workspaceFolders = vscode.workspace.workspaceFolders;
-                if (!workspaceFolders || workspaceFolders.length === 0) {
-                    telegramService.sendMessage('❌ 워크스페이스가 열려있지 않습니다.');
-                    return;
-                }
-                const fs = require('fs');
-                const path = require('path');
-                const taskFileName = telegramConfig.get('ralphLoop.taskFile', 'PRD.md');
-                const prdPath = path.join(workspaceFolders[0].uri.fsPath, taskFileName);
-                const prdContent = `# 텔레그램 작업 요청\n\n> **목적**: 텔레그램에서 수신된 작업 요청\n\n---\n\n## 작업 목록\n\n${text}\n\n---\n\n## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.\n`;
-                fs.writeFileSync(prdPath, prdContent, 'utf-8');
-                telegramService.sendMessage(`📋 PRD 생성 완료 — autoStart가 활성화되어 있으면 자동 시작됩니다.`);
-                log('[Telegram] PRD 파일 생성: ' + prdPath);
+                const prompt = `/write-prd ${text}`;
+                telegramService.sendMessage(`📨 작업 요청 수신 — write-prd 워크플로우 실행 중...`);
+                log('[Telegram] write-prd 워크플로우 실행: ' + text);
+                ralphLoop._sendToAgent(prompt).then(() => {
+                    telegramService.sendMessage(`✅ write-prd 워크플로우 프롬프트 전송 완료`);
+                }).catch((err) => {
+                    telegramService.sendMessage(`❌ 프롬프트 전송 실패: ${err.message}`);
+                    log('[Telegram] write-prd 실행 실패: ' + err.message);
+                });
             };
 
             // 텔레그램 → 플러그인: 상태 조회
