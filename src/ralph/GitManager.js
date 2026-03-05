@@ -95,9 +95,10 @@ class GitManager {
      * Flow: originalBranch(main) ← sessionBranch ← taskBranches
      *
      * @param {string} workspaceRoot - Workspace root path
+     * @param {string} [sessionLabel=''] - Optional label to append to the session branch name
      * @returns {{ success: boolean, originalBranch?: string, sessionBranch?: string, error?: string }}
      */
-    initSession(workspaceRoot) {
+    initSession(workspaceRoot, sessionLabel = '') {
         this._workspaceRoot = workspaceRoot;
 
         if (!this.isGitRepo()) {
@@ -124,7 +125,10 @@ class GitManager {
                 String(now.getHours()).padStart(2, '0') +
                 String(now.getMinutes()).padStart(2, '0') +
                 String(now.getSeconds()).padStart(2, '0');
-            this._sessionBranch = `ralph/session-${timestamp}`;
+            const sanitized = sessionLabel ? this._sanitizeBranchName(sessionLabel) : '';
+            this._sessionBranch = sanitized
+                ? `ralph/session-${timestamp}-${sanitized}`
+                : `ralph/session-${timestamp}`;
 
             this._execGit(['checkout', '-b', this._sessionBranch]);
             this.log(`[Git] 🌿 세션 브랜치 생성: ${this._sessionBranch} (from ${this._originalBranch})`);
