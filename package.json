@@ -65,6 +65,11 @@
                 "command": "autoAntigravity.toggleAutoAccept",
                 "key": "ctrl+alt+shift+u",
                 "mac": "cmd+alt+shift+u"
+            },
+            {
+                "command": "workbench.action.closeOtherEditors",
+                "key": "ctrl+shift+w",
+                "mac": "cmd+shift+w"
             }
         ],
         "configuration": {

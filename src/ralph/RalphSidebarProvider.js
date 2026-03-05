@@ -942,7 +942,7 @@ class RalphSidebarProvider {
         for (const m of models) {
             totalCount += (m.isGroup && m.members) ? m.members.length : 1;
         }
-        statusEl.textContent = '✅ 연결됨 — ' + totalCount + '개 모델 (' + models.length + '개 항목)';
+        statusEl.textContent = '';
 
         if (models.length === 0) {
             listEl.innerHTML = '<div class="quota-empty">모델 정보 없음</div>';
@@ -973,12 +973,7 @@ class RalphSidebarProvider {
             html += '</div>';
             html += '<div class="quota-bar"><div class="quota-bar-fill level-' + level + '" style="width:' + pct + '%"></div></div>';
 
-            // Show group members below the bar
-            if (m.isGroup && m.members && m.members.length > 0) {
-                html += '<div style="font-size:9px;opacity:0.5;margin-top:2px;line-height:1.4;">';
-                html += m.members.map(n => escapeHtml(n)).join(' · ');
-                html += '</div>';
-            }
+
 
             if (m.resetTime) {
                 html += '<div class="quota-reset" data-reset="' + escapeHtml(m.resetTime) + '">⏱ 리셋: 계산 중...</div>';

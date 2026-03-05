@@ -8,6 +8,7 @@ const path = require('path');
 const { TaskFileManager } = require('./TaskFileManager');
 const { ProgressTracker } = require('./ProgressTracker');
 const { GitManager } = require('./GitManager');
+const { AgentSessionLock } = require('./AgentSessionLock');
 
 /**
  * Ralph Loop states
@@ -28,6 +29,7 @@ class RalphLoopManager {
         this.taskManager = new TaskFileManager(log);
         this.progressTracker = new ProgressTracker(log);
         this.gitManager = new GitManager(log);
+        this._sessionLock = new AgentSessionLock(log);
 
         this.state = LoopState.IDLE;
         this.currentIteration = 0;
@@ -213,6 +215,12 @@ class RalphLoopManager {
             return;
         }
 
+        // ── Stale 락 파일 자동 정리 ──
+        const lockClean = this._sessionLock.forceClean();
+        if (lockClean.cleaned) {
+            this._addLog(`[Ralph] 🧹 이전 세션 잔존 락 파일 정리: ${lockClean.reason}`, 'warn');
+        }
+
         this.state = LoopState.RUNNING;
         this.consecutiveErrors = 0;
         this.lastError = null;
@@ -247,6 +255,7 @@ class RalphLoopManager {
     stop() {
         if (this.state === LoopState.IDLE) return;
 
+        this._sessionLock.release();
         this.state = LoopState.STOPPING;
         this._addLog('[Ralph] ⏹ 루프 정지 요청 — 현재 반복 마무리 중...');
         this._notifyStateChange();
@@ -269,6 +278,7 @@ class RalphLoopManager {
      * Emergency stop — immediate halt
      */
     emergencyStop() {
+        this._sessionLock.release();
         this._addLog('[Ralph] ⚠ 긴급 정지!', 'error');
 
         if (this.loopTimer) {
@@ -867,6 +877,9 @@ class RalphLoopManager {
             // Build the prompt for the agent
             const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
+            // ── 세션 락 획득 ──
+            this._sessionLock.acquire(this.currentIteration, task.text);
+
             // Send to Antigravity agent via CDP
             this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
             await this._sendToAgent(prompt);
@@ -884,6 +897,9 @@ class RalphLoopManager {
                 task.text,
                 'completed'
             );
+
+            // ── 세션 락 해제 (성공) ──
+            this._sessionLock.release();
             this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
             // ── PRD 변경 감지 ──
@@ -906,6 +922,9 @@ class RalphLoopManager {
             this.lastError = null;
 
         } catch (e) {
+            // ── 세션 락 해제 (실패) ──
+            this._sessionLock.release();
+
             if (e.message === 'QUOTA_REACHED') {
                 // Quota 제한으로 인해 대기한 경우
                 this._addLog(`[Ralph] 🔄 동일한 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다 (${task.text})`);
