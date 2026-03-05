@@ -328,6 +328,7 @@ function activate(context) {
 
 function deactivate() {
     if (autoUpdater) autoUpdater.dispose();
+    if (telegramService) telegramService.dispose();
     if (telemetryService) telemetryService.dispose();
     if (autoAccept) autoAccept.dispose();
     if (ralphLoop) ralphLoop.dispose();
