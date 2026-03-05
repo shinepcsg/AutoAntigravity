@@ -100,6 +100,10 @@ class RalphLoopManager {
             this._logBuffer.shift();
         }
         this.log(msg);
+        // 텔레그램 등 외부 로그 수신자에게 알림
+        if (this.onLogCallback) {
+            try { this.onLogCallback({ time, msg, level }); } catch (e) { /* ignore */ }
+        }
         this._notifyStateChange();
     }
 
