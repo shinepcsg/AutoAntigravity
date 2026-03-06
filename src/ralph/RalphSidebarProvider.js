@@ -1014,6 +1014,10 @@ class RalphSidebarProvider {
             taskFileEl.title = '';
         }
 
+        // Generate Sample PRD button visibility
+        const btnPrd = document.getElementById('btnGenerateSamplePrd');
+        btnPrd.style.display = (s.taskFile && s.taskFileExists) ? 'none' : '';
+
         // Settings
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
