@@ -2,6 +2,7 @@
 // Sends progress updates and receives commands via Telegram Bot API.
 
 const https = require('https');
+const { scanWorkflows } = require('./scanWorkflows');
 
 class TelegramService {
     constructor(log) {
@@ -21,6 +22,7 @@ class TelegramService {
         this.onAutoAcceptRequest = null;
         this.onConfigRequest = null;
         this.onQueueRequest = null;
+        this.onWorkflowRequest = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -35,13 +37,16 @@ class TelegramService {
     /**
      * Start the Telegram bot service with the given token and chat ID.
      * Begins long polling and sends a connection message.
+     * @param {string} botToken
+     * @param {string} chatId
+     * @param {string} [workspaceRoot] - Workspace root path for scanning workflow files
      */
-    async start(botToken, chatId) {
+    async start(botToken, chatId, workspaceRoot) {
         this._botToken = botToken;
         this._chatId = chatId;
         this._polling = true;
 
-        await this.setMyCommands();
+        await this.setMyCommands(workspaceRoot);
         await this.sendMessage('🤖 AutoAntigravity 텔레그램 봇 연결됨');
         this._poll();
         this._log('[Telegram] 봇 서비스 시작됨');
@@ -188,6 +193,12 @@ class TelegramService {
             if (this.onConfigRequest) this.onConfigRequest();
         } else if (text === '/queue') {
             if (this.onQueueRequest) this.onQueueRequest();
+        } else if (text.startsWith('/')) {
+            // Dynamic workflow slash command: /workflow-name optional args
+            const match = text.match(/^\/([a-zA-Z0-9_-]+)\s*(.*)/s);
+            if (match && this.onWorkflowRequest) {
+                this.onWorkflowRequest(match[1], match[2].trim());
+            }
         } else {
             if (this.onMessageReceived) this.onMessageReceived(text);
         }
@@ -243,24 +254,39 @@ class TelegramService {
         });
     }
 
+
+
     /**
      * Register slash commands with Telegram via setMyCommands API.
      * This enables the auto-complete menu when users type '/' in the chat.
+     * Includes hardcoded commands + dynamically scanned workflow commands.
+     * @param {string} [workspaceRoot] - Workspace root for scanning .agent/workflows/
      */
-    async setMyCommands() {
+    async setMyCommands(workspaceRoot) {
         try {
+            // 1) 기존 하드코딩 명령어
+            const builtInCommands = [
+                { command: 'help', description: '📖 사용 가능한 명령어 목록' },
+                { command: 'status', description: '📊 현재 상태 및 AI 사용량 조회' },
+                { command: 'start', description: '🚀 Ralph Loop 시작' },
+                { command: 'stop', description: '⏹ Ralph Loop 정지' },
+                { command: 'autoaccept', description: '⚡ AutoAccept ON/OFF 토글' },
+                { command: 'config', description: '⚙️ 현재 설정값 조회' },
+                { command: 'queue', description: '📋 작업 큐 목록 조회' }
+            ];
+
+            // 2) 동적 워크플로우 명령어 스캔 (공유 헬퍼 사용)
+            const builtInNames = new Set(builtInCommands.map(c => c.command));
+            const dynamicCommands = scanWorkflows(workspaceRoot)
+                .filter(cmd => !builtInNames.has(cmd.command))
+                .map(cmd => ({ command: cmd.command, description: cmd.description }));
+
+            const allCommands = [...builtInCommands, ...dynamicCommands];
+
             await this._telegramApiCall('setMyCommands', {
-                commands: [
-                    { command: 'help', description: '📖 사용 가능한 명령어 목록' },
-                    { command: 'status', description: '📊 현재 상태 및 AI 사용량 조회' },
-                    { command: 'start', description: '🚀 Ralph Loop 시작' },
-                    { command: 'stop', description: '⏹ Ralph Loop 정지' },
-                    { command: 'autoaccept', description: '⚡ AutoAccept ON/OFF 토글' },
-                    { command: 'config', description: '⚙️ 현재 설정값 조회' },
-                    { command: 'queue', description: '📋 작업 큐 목록 조회' }
-                ]
+                commands: allCommands
             });
-            this._log('[Telegram] setMyCommands 등록 완료');
+            this._log(`[Telegram] setMyCommands 등록 완료 (${builtInCommands.length} 기본 + ${dynamicCommands.length} 워크플로우)`);
         } catch (err) {
             this._log(`[Telegram] setMyCommands 실패: ${err.message}`);
         }

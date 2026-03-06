@@ -9,6 +9,7 @@ const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 const { AutoUpdater } = require('./updater');
 const { TelemetryService } = require('./telemetry/TelemetryService');
 const { TelegramService } = require('./telegram/TelegramService');
+const { scanWorkflows } = require('./telegram/scanWorkflows');
 
 let autoAccept = null;
 let ralphLoop = null;
@@ -98,9 +99,24 @@ function connectTelegram(context) {
 
     telegramService = new TelegramService(log);
 
-    // 텔레그램 → 플러그인: 일반 메시지 수신 시 작업 큐에 추가
-    telegramService.onMessageReceived = (text) => {
-        if (sidebarProvider) {
+    // 텔레그램 → 플러그인: 일반 메시지 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
+    telegramService.onMessageReceived = async (text) => {
+        const prompt = `/write-prd ${text}`;
+        const state = ralphLoop.getState();
+
+        if (state === LoopState.IDLE) {
+            // Ralph Loop가 idle이면 즉시 실행
+            try {
+                log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${prompt.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(prompt);
+                telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
+                log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
+            } catch (err) {
+                log(`[Telegram] ❌ 즉시 실행 프롬프트 전송 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ 즉시 실행 실패: ${err.message}`);
+            }
+        } else if (sidebarProvider) {
+            // Ralph Loop가 실행 중이면 작업 큐에 추가
             sidebarProvider._taskQueue.push(text);
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
@@ -112,7 +128,7 @@ function connectTelegram(context) {
 
     // 텔레그램 → 플러그인: 도움말
     telegramService.onHelpRequest = () => {
-        const helpMsg = [
+        const lines = [
             `📖 *AutoAntigravity 명령어 목록*`,
             ``,
             `/help — 📖 사용 가능한 명령어 목록`,
@@ -122,10 +138,24 @@ function connectTelegram(context) {
             `/autoaccept — ⚡ AutoAccept ON/OFF 토글`,
             `/config — ⚙️ 현재 설정값 조회`,
             `/queue — 📋 작업 큐 목록 조회`,
-            ``,
-            `💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`,
-        ].join('\n');
-        telegramService.sendMessage(helpMsg);
+        ];
+
+        // 동적 워크플로우 명령어 추가
+        const wsRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : undefined;
+        const builtInNames = new Set(['help', 'status', 'start', 'stop', 'autoaccept', 'config', 'queue']);
+        const workflows = scanWorkflows(wsRoot).filter(w => !builtInNames.has(w.command));
+        if (workflows.length > 0) {
+            lines.push(``);
+            lines.push(`🔧 *워크플로우 명령어*`);
+            for (const wf of workflows) {
+                lines.push(`/${wf.command} — ${wf.description}`);
+            }
+        }
+
+        lines.push(``);
+        lines.push(`💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`);
+
+        telegramService.sendMessage(lines.join('\n'));
     };
 
     // 텔레그램 → 플러그인: 상태 조회 (+ AI 사용량)
@@ -220,6 +250,35 @@ function connectTelegram(context) {
         telegramService.sendMessage(msg);
     };
 
+    // 텔레그램 → 플러그인: 동적 워크플로우 명령어 수신
+    telegramService.onWorkflowRequest = async (workflowName, argsText) => {
+        const prompt = argsText ? `/${workflowName} ${argsText}` : `/${workflowName}`;
+        const state = ralphLoop.getState();
+
+        if (state === LoopState.IDLE) {
+            // Ralph Loop가 idle이면 즉시 실행
+            try {
+                log(`[Telegram] 📤 워크플로우 프롬프트 전송: ${prompt.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(prompt);
+                telegramService.sendMessage(`🚀 워크플로우 실행 중: /${workflowName}`);
+                log(`[Telegram] ✅ 워크플로우 프롬프트 전송 완료`);
+            } catch (err) {
+                log(`[Telegram] ❌ 워크플로우 프롬프트 전송 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ 워크플로우 실행 실패: ${err.message}`);
+            }
+        } else {
+            // Ralph Loop가 실행 중이면 작업 큐에 추가
+            if (sidebarProvider) {
+                sidebarProvider._taskQueue.push(prompt);
+                sidebarProvider.updateState();
+                telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${prompt.substring(0, 80)}`);
+                log(`[Telegram] 작업 큐에 워크플로우 추가: ${prompt.substring(0, 80)}`);
+            } else {
+                telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+            }
+        }
+    };
+
     // 플러그인 → 텔레그램: Ralph Loop 로그 전달
     ralphLoop.onLogCallback = (logEntry) => {
         telegramService.onRalphLog(logEntry);
@@ -230,7 +289,8 @@ function connectTelegram(context) {
 
     // NOTE: onAllTasksCompleteCallback은 activate()에서 통합 설정 (사이드바 큐 처리 + 텔레그램 알림)
 
-    telegramService.start(botToken, chatId);
+    const wsRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : undefined;
+    telegramService.start(botToken, chatId, wsRoot);
     context.subscriptions.push({ dispose: () => telegramService.dispose() });
     log('[Telegram] 텔레그램 봇 서비스 시작');
 
