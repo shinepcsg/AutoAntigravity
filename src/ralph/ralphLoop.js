@@ -63,6 +63,9 @@ class RalphLoopManager {
         // Auto Start — FileSystemWatcher
         this._autoStartWatcher = null;
         this._autoStartDebounceTimer = null;
+
+        // 작업 큐 — 실행 중 새 작업 요청을 순차 대기
+        this._pendingTaskQueue = [];
     }
 
     /**
@@ -322,6 +325,9 @@ class RalphLoopManager {
             this.loopTimer = null;
         }
 
+        // ── 대기 큐 클리어 ──
+        this._pendingTaskQueue = [];
+
         // ── Git: End session & merge ──
         this._endGitSession();
 
@@ -342,6 +348,9 @@ class RalphLoopManager {
             clearTimeout(this.loopTimer);
             this.loopTimer = null;
         }
+
+        // ── 대기 큐 클리어 ──
+        this._pendingTaskQueue = [];
 
         // ── Git: End session & merge ──
         this._endGitSession();
@@ -421,9 +430,9 @@ class RalphLoopManager {
         const filePath = uri.fsPath;
         this._addLog(`[Ralph] 📄 작업 파일 변경 감지: ${path.basename(filePath)}`);
 
-        // 이미 실행 중이면 무시
+        // 이미 실행 중이면 큐에 추가
         if (this.state === LoopState.RUNNING) {
-            this._addLog('[Ralph] ⏭ Ralph Loop가 이미 실행 중 — autoStart 건너뜀');
+            this._enqueueTaskRequest(filePath);
             return;
         }
 
@@ -449,6 +458,77 @@ class RalphLoopManager {
 
         // Ralph Loop 시작
         await this.start();
+    }
+
+    /**
+     * Enqueue a task request for sequential processing after the current task completes.
+     * Prevents duplicate entries for the same file path.
+     * @param {string} filePath - Absolute path to the task file
+     */
+    _enqueueTaskRequest(filePath) {
+        // 동일 경로 중복 방지
+        const alreadyQueued = this._pendingTaskQueue.some(
+            (queuedPath) => queuedPath === filePath
+        );
+
+        if (alreadyQueued) {
+            this._addLog(`[Ralph] 📋 큐 중복 무시 — 이미 대기 중: ${path.basename(filePath)}`);
+            return;
+        }
+
+        this._pendingTaskQueue.push(filePath);
+        this._addLog(`[Ralph] 📋 작업 큐에 추가 (${this._pendingTaskQueue.length}개 대기): ${path.basename(filePath)}`);
+    }
+
+    /**
+     * Process the next queued task request.
+     * Dequeues one task from _pendingTaskQueue, sets up the task file, and calls start().
+     * Called after the current task completes to chain queued work.
+     * @returns {boolean} true if a queued task was started, false if queue was empty
+     */
+    async _processNextQueuedTask() {
+        if (this._pendingTaskQueue.length === 0) {
+            this._addLog('[Ralph] 📋 대기 큐 비어 있음 — 추가 작업 없음');
+            return false;
+        }
+
+        const filePath = this._pendingTaskQueue.shift();
+        this._addLog(`[Ralph] 📋 큐에서 다음 작업 꺼냄 (남은 대기: ${this._pendingTaskQueue.length}): ${path.basename(filePath)}`);
+
+        // 작업 파일 세팅
+        this.taskManager.setTaskFile(filePath);
+
+        // workspaceState에 경로 영속 저장
+        if (this._context) {
+            this._context.workspaceState.update('autoAntigravity.lastTaskFilePath', filePath);
+        }
+
+        // 미완료 작업이 있는지 확인
+        if (this.taskManager.allTasksCompleted()) {
+            this._addLog(`[Ralph] ✅ 큐 작업 파일의 모든 작업이 이미 완료: ${path.basename(filePath)}`);
+            // 아직 큐에 남은 항목이 있으면 재귀적으로 다음 처리
+            return this._processNextQueuedTask();
+        }
+
+        const progress = this.taskManager.getProgress();
+        this._addLog(`[Ralph] 🚀 큐 작업 시작: ${progress.remaining}개 미완료 작업 — ${path.basename(filePath)}`);
+
+        // 현재 상태를 IDLE로 전환하여 start()가 정상 동작하도록 함
+        this.state = LoopState.IDLE;
+        await this.start();
+        return true;
+    }
+
+    /**
+     * Get the list of queued task requests for sidebar display.
+     * Returns a shallow copy to prevent external mutation.
+     * @returns {Array<{filePath: string, fileName: string}>} Queued task entries
+     */
+    getQueuedTasks() {
+        return this._pendingTaskQueue.map((filePath) => ({
+            filePath,
+            fileName: path.basename(filePath)
+        }));
     }
 
     // ─── CDP Helpers ──────────────────────────────────────────────────
@@ -899,6 +979,14 @@ class RalphLoopManager {
         const taskGroup = this.taskManager.getNextTaskGroup();
 
         if (taskGroup.tasks.length === 0) {
+            // ── 큐에 대기 중인 작업이 있으면 먼저 처리 ──
+            if (this._pendingTaskQueue.length > 0) {
+                this._addLog('[Ralph] 📋 현재 PRD 작업 완료 — 대기 큐에서 다음 작업 시작');
+                this._endGitSession();
+                await this._processNextQueuedTask();
+                return;
+            }
+
             // ── Git: End session & merge on completion ──
             this._endGitSession();
 
