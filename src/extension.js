@@ -98,25 +98,83 @@ function connectTelegram(context) {
 
     telegramService = new TelegramService(log);
 
-    // 텔레그램 → 플러그인: 메시지 수신 시 write-prd 워크플로우 실행
+    // 텔레그램 → 플러그인: 일반 메시지 수신 시 작업 큐에 추가
     telegramService.onMessageReceived = (text) => {
-        const prompt = `/write-prd ${text}`;
-        telegramService.sendMessage(`📨 작업 요청 수신 — write-prd 워크플로우 실행 중...`);
-        log('[Telegram] write-prd 워크플로우 실행: ' + text);
-        ralphLoop._sendToAgent(prompt).then(() => {
-            telegramService.sendMessage(`✅ write-prd 워크플로우 프롬프트 전송 완료`);
-        }).catch((err) => {
-            telegramService.sendMessage(`❌ 프롬프트 전송 실패: ${err.message}`);
-            log('[Telegram] write-prd 실행 실패: ' + err.message);
-        });
+        if (sidebarProvider) {
+            sidebarProvider._taskQueue.push(text);
+            sidebarProvider.updateState();
+            telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            log('[Telegram] 작업 큐에 추가: ' + text.substring(0, 80));
+        } else {
+            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+        }
     };
 
-    // 텔레그램 → 플러그인: 상태 조회
+    // 텔레그램 → 플러그인: 도움말
+    telegramService.onHelpRequest = () => {
+        const helpMsg = [
+            `📖 *AutoAntigravity 명령어 목록*`,
+            ``,
+            `/help — 📖 사용 가능한 명령어 목록`,
+            `/status — 📊 현재 상태 및 AI 사용량 조회`,
+            `/start — 🚀 Ralph Loop 시작`,
+            `/stop — ⏹ Ralph Loop 정지`,
+            `/autoaccept — ⚡ AutoAccept ON/OFF 토글`,
+            `/config — ⚙️ 현재 설정값 조회`,
+            `/queue — 📋 작업 큐 목록 조회`,
+            ``,
+            `💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`,
+        ].join('\n');
+        telegramService.sendMessage(helpMsg);
+    };
+
+    // 텔레그램 → 플러그인: 상태 조회 (+ AI 사용량)
     telegramService.onStatusRequest = () => {
         const state = ralphLoop.getState();
         const progress = ralphLoop.taskManager.getProgress();
-        const msg = `📊 *상태*: ${state}\n📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})\n🔄 *반복*: ${ralphLoop.currentIteration}`;
-        telegramService.sendMessage(msg);
+        const autoAcceptState = autoAccept && autoAccept.isEnabled ? 'ON ⚡' : 'OFF 🔴';
+        const queueCount = sidebarProvider ? sidebarProvider._taskQueue.length : 0;
+
+        const lines = [
+            `📊 *AutoAntigravity 상태*`,
+            ``,
+            `🔄 *Ralph Loop*: ${state}`,
+            `📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})`,
+            `🔁 *반복*: ${ralphLoop.currentIteration}회차`,
+            `⚡ *AutoAccept*: ${autoAcceptState}`,
+            `📬 *작업 큐*: ${queueCount}개`,
+        ];
+
+        // AI 사용량 정보 추가
+        if (telemetryService) {
+            const quota = telemetryService.getData();
+            if (quota && quota.connected && quota.models && quota.models.length > 0) {
+                lines.push(``);
+                lines.push(`🤖 *AI 사용량*`);
+                for (const m of quota.models) {
+                    const pct = m.limit > 0 ? Math.round((m.usage / m.limit) * 100) : 0;
+                    const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
+                    lines.push(`  ${m.name}: ${m.usage}/${m.limit} (${pct}%) [${bar}]`);
+                }
+            }
+        }
+
+        telegramService.sendMessage(lines.join('\n'));
+    };
+
+    // 텔레그램 → 플러그인: Ralph Loop 시작
+    telegramService.onStartRequest = () => {
+        const state = ralphLoop.getState();
+        if (state === LoopState.RUNNING) {
+            telegramService.sendMessage('⚠️ Ralph Loop가 이미 실행 중입니다.');
+        } else {
+            ralphLoop.start().then(() => {
+                updateRalphStatusBar();
+                telegramService.sendMessage('🚀 Ralph Loop 시작됨');
+            }).catch(err => {
+                telegramService.sendMessage(`❌ Ralph Loop 시작 실패: ${err.message}`);
+            });
+        }
     };
 
     // 텔레그램 → 플러그인: 정지
@@ -126,13 +184,40 @@ function connectTelegram(context) {
         telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
     };
 
-    // 텔레그램 → 플러그인: 긴급 정지
-    telegramService.onEmergencyRequest = () => {
-        ralphLoop.stop();
-        autoAccept.disable();
+    // 텔레그램 → 플러그인: AutoAccept 토글
+    telegramService.onAutoAcceptRequest = () => {
+        const enabled = autoAccept.toggle();
         updateAutoAcceptStatusBar();
-        updateRalphStatusBar();
-        telegramService.sendMessage('🛑 긴급 정지 완료 — 모든 기능 비활성화');
+        telegramService.sendMessage(`⚡ AutoAccept: ${enabled ? 'ON ✅' : 'OFF 🔴'}`);
+    };
+
+    // 텔레그램 → 플러그인: 설정 조회
+    telegramService.onConfigRequest = () => {
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const configMsg = [
+            `⚙️ *현재 설정*`,
+            ``,
+            `🔄 *Max Iterations*: ${config.get('ralphLoop.maxIterations', 50)}`,
+            `⏱ *Iteration Delay*: ${config.get('ralphLoop.iterationDelayMs', 3000)}ms`,
+            `📝 *PRD Modification*: ${config.get('ralphLoop.allowPrdModification', false) ? 'ON' : 'OFF'}`,
+            `▶️ *Auto Start*: ${config.get('ralphLoop.autoStart', true) ? 'ON' : 'OFF'}`,
+            `💾 *Auto Commit*: ${config.get('ralphLoop.autoCommit', true) ? 'ON' : 'OFF'}`,
+            `🗑 *Auto Delete Branch*: ${config.get('ralphLoop.autoDeleteBranch', true) ? 'ON' : 'OFF'}`,
+            `🔀 *Parallel Enabled*: ${config.get('ralphLoop.enableParallel', true) ? 'ON' : 'OFF'}`,
+            `📁 *Task File*: ${config.get('ralphLoop.taskFile', 'PRD.md')}`,
+        ].join('\n');
+        telegramService.sendMessage(configMsg);
+    };
+
+    // 텔레그램 → 플러그인: 작업 큐 조회
+    telegramService.onQueueRequest = () => {
+        if (!sidebarProvider || sidebarProvider._taskQueue.length === 0) {
+            telegramService.sendMessage('📋 작업 큐가 비어있습니다.');
+            return;
+        }
+        const items = sidebarProvider._taskQueue.map((t, i) => `${i + 1}. ${t.substring(0, 60)}`);
+        const msg = [`📋 *작업 큐* (${sidebarProvider._taskQueue.length}개)`, ``, ...items].join('\n');
+        telegramService.sendMessage(msg);
     };
 
     // 플러그인 → 텔레그램: Ralph Loop 로그 전달

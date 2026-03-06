@@ -16,7 +16,11 @@ class TelegramService {
         this.onMessageReceived = null;
         this.onStatusRequest = null;
         this.onStopRequest = null;
-        this.onEmergencyRequest = null;
+        this.onHelpRequest = null;
+        this.onStartRequest = null;
+        this.onAutoAcceptRequest = null;
+        this.onConfigRequest = null;
+        this.onQueueRequest = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -37,6 +41,7 @@ class TelegramService {
         this._chatId = chatId;
         this._polling = true;
 
+        await this.setMyCommands();
         await this.sendMessage('🤖 AutoAntigravity 텔레그램 봇 연결됨');
         this._poll();
         this._log('[Telegram] 봇 서비스 시작됨');
@@ -169,12 +174,20 @@ class TelegramService {
 
         const text = message.text.trim();
 
-        if (text === '/status') {
+        if (text === '/help') {
+            if (this.onHelpRequest) this.onHelpRequest();
+        } else if (text === '/status') {
             if (this.onStatusRequest) this.onStatusRequest();
+        } else if (text === '/start') {
+            if (this.onStartRequest) this.onStartRequest();
         } else if (text === '/stop') {
             if (this.onStopRequest) this.onStopRequest();
-        } else if (text === '/emergency') {
-            if (this.onEmergencyRequest) this.onEmergencyRequest();
+        } else if (text === '/autoaccept') {
+            if (this.onAutoAcceptRequest) this.onAutoAcceptRequest();
+        } else if (text === '/config') {
+            if (this.onConfigRequest) this.onConfigRequest();
+        } else if (text === '/queue') {
+            if (this.onQueueRequest) this.onQueueRequest();
         } else {
             if (this.onMessageReceived) this.onMessageReceived(text);
         }
@@ -228,6 +241,29 @@ class TelegramService {
             req.write(postData);
             req.end();
         });
+    }
+
+    /**
+     * Register slash commands with Telegram via setMyCommands API.
+     * This enables the auto-complete menu when users type '/' in the chat.
+     */
+    async setMyCommands() {
+        try {
+            await this._telegramApiCall('setMyCommands', {
+                commands: [
+                    { command: 'help', description: '📖 사용 가능한 명령어 목록' },
+                    { command: 'status', description: '📊 현재 상태 및 AI 사용량 조회' },
+                    { command: 'start', description: '🚀 Ralph Loop 시작' },
+                    { command: 'stop', description: '⏹ Ralph Loop 정지' },
+                    { command: 'autoaccept', description: '⚡ AutoAccept ON/OFF 토글' },
+                    { command: 'config', description: '⚙️ 현재 설정값 조회' },
+                    { command: 'queue', description: '📋 작업 큐 목록 조회' }
+                ]
+            });
+            this._log('[Telegram] setMyCommands 등록 완료');
+        } catch (err) {
+            this._log(`[Telegram] setMyCommands 실패: ${err.message}`);
+        }
     }
 
     /**
