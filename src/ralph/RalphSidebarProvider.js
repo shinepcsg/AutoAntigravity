@@ -32,6 +32,7 @@ class RalphSidebarProvider {
         this.onSaveTelegramCred = null;
         this.telegramService = null;
         this._showTelegramCredForm = false;
+        this._taskQueue = [];
     }
 
     /**
@@ -383,6 +384,24 @@ class RalphSidebarProvider {
                     }
                     break;
                 }
+                case 'enqueueTask': {
+                    const text = message.text;
+                    if (text) {
+                        this._taskQueue.push(text);
+                        this._log(`[Sidebar] Task enqueued: ${text.substring(0, 50)}...`);
+                    }
+                    this.updateState();
+                    break;
+                }
+                case 'dequeueTask': {
+                    const idx = message.index;
+                    if (typeof idx === 'number' && idx >= 0 && idx < this._taskQueue.length) {
+                        const removed = this._taskQueue.splice(idx, 1);
+                        this._log(`[Sidebar] Task dequeued: ${removed[0].substring(0, 50)}...`);
+                    }
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -451,7 +470,9 @@ class RalphSidebarProvider {
                 if (!folders || folders.length === 0) return false;
                 return fs.existsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
             })(),
-            hasWritePrdGlobal: fs.existsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md'))
+            hasWritePrdGlobal: fs.existsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md')),
+            // 작업 큐
+            taskQueue: this._taskQueue.slice()
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -1450,6 +1471,22 @@ class RalphSidebarProvider {
         // write-prd 버튼 표시/숨김
         document.getElementById('btnSetWritePrdWorkspace').style.display = s.hasWritePrdWorkspace ? 'none' : '';
         document.getElementById('btnSetWritePrdGlobal').style.display = s.hasWritePrdGlobal ? 'none' : '';
+
+        // ─── Task Queue ───
+        const queueList = document.getElementById('taskQueueList');
+        const queueArr = s.taskQueue || [];
+        if (queueArr.length === 0) {
+            queueList.innerHTML = '<div style="opacity:0.4;text-align:center;padding:8px;font-size:11px;">예약된 작업이 없습니다</div>';
+        } else {
+            let qhtml = '';
+            for (let i = 0; i < queueArr.length; i++) {
+                qhtml += '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;background:var(--input-bg);border-radius:3px;margin-bottom:4px;font-size:11px;">'
+                    + '<span style="flex:1;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(queueArr[i]) + '</span>'
+                    + '<button class="task-queue-delete-btn" data-index="' + i + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;" title="삭제">✕</button>'
+                    + '</div>';
+            }
+            queueList.innerHTML = qhtml;
+        }
 
         // PRD Changes
         updatePrdChangesPanel(s.prdChanges || []);
