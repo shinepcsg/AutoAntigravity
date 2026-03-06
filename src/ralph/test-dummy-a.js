@@ -1,1 +1,1 @@
-module.exports = { name: 'dummyA', status: 'created' }
+module.exports = { name: 'dummyA', status: 'updated' }
