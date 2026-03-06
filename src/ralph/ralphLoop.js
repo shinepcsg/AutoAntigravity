@@ -63,6 +63,9 @@ class RalphLoopManager {
         // Auto Start — FileSystemWatcher
         this._autoStartWatcher = null;
         this._autoStartDebounceTimer = null;
+
+        // 작업 큐 — 실행 중 새 작업 요청을 순차 대기
+        this._pendingTaskQueue = [];
     }
 
     /**
