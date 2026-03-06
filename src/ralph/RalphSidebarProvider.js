@@ -982,6 +982,14 @@ class RalphSidebarProvider {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoInstall' });
     });
+    document.getElementById('btnToggleTelegram').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'toggleTelegram' });
+    });
+    document.getElementById('btnSaveTelegramCred').addEventListener('click', () => {
+        const token = document.getElementById('inputTelegramToken').value.trim();
+        const chatId = document.getElementById('inputTelegramChatId').value.trim();
+        vscodeApi.postMessage({ command: 'saveTelegramCred', token, chatId });
+    });
 
     // ─── State Handling ────────────────────────────────────
     window.addEventListener('message', (event) => {
@@ -1143,6 +1151,23 @@ class RalphSidebarProvider {
             } else {
                 versionBtnContainer.innerHTML = '';
             }
+        }
+
+        // ─── Telegram ───
+        const tgBtn = document.getElementById('btnToggleTelegram');
+        const tgStatusText = document.getElementById('telegramStatusText');
+        const tgCredForm = document.getElementById('telegramCredForm');
+
+        if (s.telegramConnected) {
+            tgBtn.classList.add('active');
+            tgBtn.innerHTML = '📡 연결 해제';
+            tgStatusText.textContent = '연결됨';
+            tgCredForm.style.display = 'none';
+        } else {
+            tgBtn.classList.remove('active');
+            tgBtn.innerHTML = '📡 연결';
+            tgStatusText.textContent = '연결 안됨';
+            tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
         }
 
         // PRD Changes
