@@ -447,9 +447,10 @@ class GitManager {
         const baseBranch = this._sessionBranch || this._originalBranch;
 
         const sanitized = this._sanitizeBranchName(taskText);
+        const prefix = this._sessionName ? `ralph/${this._sessionName}` : 'ralph';
         const branchName = sanitized
-            ? `ralph/parallel-${iteration}-${taskIndex}-${sanitized}`
-            : `ralph/parallel-${iteration}-${taskIndex}`;
+            ? `${prefix}/parallel-${iteration}-${taskIndex}-${sanitized}`
+            : `${prefix}/parallel-${iteration}-${taskIndex}`;
 
         // Worktree directory: .ralph-worktrees/<branchName>
         const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees', branchName.replace(/\//g, '-'));
