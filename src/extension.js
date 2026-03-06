@@ -99,9 +99,24 @@ function connectTelegram(context) {
 
     telegramService = new TelegramService(log);
 
-    // 텔레그램 → 플러그인: 일반 메시지 수신 시 작업 큐에 추가
-    telegramService.onMessageReceived = (text) => {
-        if (sidebarProvider) {
+    // 텔레그램 → 플러그인: 일반 메시지 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
+    telegramService.onMessageReceived = async (text) => {
+        const prompt = `/write-prd ${text}`;
+        const state = ralphLoop.getState();
+
+        if (state === LoopState.IDLE) {
+            // Ralph Loop가 idle이면 즉시 실행
+            try {
+                log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${prompt.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(prompt);
+                telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
+                log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
+            } catch (err) {
+                log(`[Telegram] ❌ 즉시 실행 프롬프트 전송 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ 즉시 실행 실패: ${err.message}`);
+            }
+        } else if (sidebarProvider) {
+            // Ralph Loop가 실행 중이면 작업 큐에 추가
             sidebarProvider._taskQueue.push(text);
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
