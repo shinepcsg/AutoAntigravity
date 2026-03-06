@@ -149,7 +149,7 @@ class AutoUpdater {
         );
         if (!vsixAsset) return;
 
-        await this._performUpdate(vsixAsset, this.latestVersion, authHeader);
+        await this._performUpdate(vsixAsset, this.latestVersion, authHeader, false);
     }
 
     /**
@@ -215,7 +215,7 @@ class AutoUpdater {
 
             if (autoInstall) {
                 this.log(`[Updater] Auto-install enabled — installing v${latestVersion}...`);
-                await this._performUpdate(vsixAsset, latestVersion, authHeader);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader, true);
                 return;
             }
 
@@ -227,7 +227,7 @@ class AutoUpdater {
             );
 
             if (action === '지금 업데이트') {
-                await this._performUpdate(vsixAsset, latestVersion, authHeader);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader, false);
             } else {
                 this.log('[Updater] User postponed update');
             }
@@ -242,7 +242,7 @@ class AutoUpdater {
     /**
      * Download and install the VSIX update
      */
-    async _performUpdate(vsixAsset, version, authHeader) {
+    async _performUpdate(vsixAsset, version, authHeader, autoReload = false) {
         try {
             // Show progress
             await vscode.window.withProgress(
@@ -298,15 +298,22 @@ class AutoUpdater {
                 }
             );
 
-            // Ask to reload
-            const reload = await vscode.window.showInformationMessage(
-                `✅ AutoAntigravity v${version} 설치 완료! IDE를 다시 로드해야 적용됩니다.`,
-                '지금 재시작',
-                '나중에'
-            );
-
-            if (reload === '지금 재시작') {
+            // Reload after update
+            if (autoReload) {
+                // autoInstall 활성화 시: 대화상자 없이 즉시 리로드
+                this.log(`[Updater] Auto-reload: reloading window...`);
                 await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            } else {
+                // 수동 업데이트: 기존 대화상자 표시
+                const reload = await vscode.window.showInformationMessage(
+                    `✅ AutoAntigravity v${version} 설치 완료! IDE를 다시 로드해야 적용됩니다.`,
+                    '지금 재시작',
+                    '나중에'
+                );
+
+                if (reload === '지금 재시작') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
             }
 
         } catch (e) {
