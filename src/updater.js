@@ -155,6 +155,69 @@ class AutoUpdater {
     }
 
     /**
+     * Install a specific version by fetching its release from Gitea API,
+     * downloading the VSIX, installing it, and immediately reloading.
+     * Called from sidebar version buttons — no confirmation dialog needed.
+     * @param {string} version - Target version string (e.g. "1.2.3")
+     */
+    async installSpecificVersion(version) {
+        try {
+            this.log(`[Updater] Installing specific version: v${version}...`);
+
+            const authHeader = await this._getAuthHeader();
+
+            // Fetch releases list and find the matching version
+            const release = await new Promise((resolve, reject) => {
+                const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases?limit=50`;
+                this._httpGet(url, authHeader, (err, data) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        const releases = JSON.parse(data);
+                        if (!Array.isArray(releases)) {
+                            resolve(null);
+                            return;
+                        }
+                        const match = releases.find(r => {
+                            const v = (r.tag_name || '').replace(/^v/, '');
+                            return v === version && !r.draft;
+                        });
+                        resolve(match || null);
+                    } catch (e) {
+                        reject(new Error(`Failed to parse releases: ${e.message}`));
+                    }
+                });
+            });
+
+            if (!release) {
+                this.log(`[Updater] ⚠ Release v${version} not found`);
+                vscode.window.showWarningMessage(`v${version} 릴리즈를 찾을 수 없습니다.`);
+                return;
+            }
+
+            // Find the .vsix asset
+            const vsixAsset = (release.assets || []).find(a =>
+                a.name && a.name.endsWith('.vsix')
+            );
+
+            if (!vsixAsset) {
+                this.log(`[Updater] ⚠ No .vsix asset in v${version} release`);
+                vscode.window.showWarningMessage(`v${version} 릴리즈에 VSIX 파일이 없습니다.`);
+                return;
+            }
+
+            // Install with autoReload = true (button click is intentional, no dialog)
+            await this._performUpdate(vsixAsset, version, authHeader, true);
+
+        } catch (e) {
+            this.log(`[Updater] ❌ installSpecificVersion failed: ${e.message}`);
+            vscode.window.showErrorMessage(`v${version} 설치 실패: ${e.message}`);
+        }
+    }
+
+    /**
      * Update the exposed state and notify listeners
      */
     _setUpdateState(available, version, assetName) {
