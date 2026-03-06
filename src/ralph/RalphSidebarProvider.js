@@ -964,6 +964,33 @@ class RalphSidebarProvider {
         // Auto Install checkbox
         document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
 
+        // Version Buttons (available updates)
+        const versionBtnContainer = document.getElementById('versionButtons');
+        const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
+        if (versions.length > 0) {
+            let vhtml = '';
+            for (const v of versions) {
+                vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
+                    + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
+                    + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
+                    + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+            }
+            versionBtnContainer.innerHTML = vhtml;
+            // Attach click handlers
+            versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    vscodeApi.postMessage({
+                        command: 'installSpecificVersion',
+                        version: btn.getAttribute('data-version'),
+                        assetName: btn.getAttribute('data-asset'),
+                        tagName: btn.getAttribute('data-tag')
+                    });
+                });
+            });
+        } else {
+            versionBtnContainer.innerHTML = '';
+        }
+
         // PRD Changes
         updatePrdChangesPanel(s.prdChanges || []);
 
