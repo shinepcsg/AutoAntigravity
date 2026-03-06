@@ -142,8 +142,22 @@ class RalphSidebarProvider {
                 case 'toggleAutoInstall': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('updater.autoInstall', false);
-                    await config.update('updater.autoInstall', !current, vscode.ConfigurationTarget.Global);
-                    this._log(`[Sidebar] Auto Install: ${!current ? 'ON' : 'OFF'}`);
+                    if (!current) {
+                        // OFF→ON: 경고 다이얼로그 표시
+                        const answer = await vscode.window.showWarningMessage(
+                            '⚠ 자동 업데이트 설치를 활성화하면 새 버전 감지 시 확인 없이 즉시 설치되고 IDE가 자동으로 리로드됩니다. 작업 중인 내용이 손실될 수 있습니다. 활성화하시겠습니까?',
+                            { modal: true },
+                            '활성화'
+                        );
+                        if (answer === '활성화') {
+                            await config.update('updater.autoInstall', true, vscode.ConfigurationTarget.Global);
+                            this._log('[Sidebar] Auto Install: ON');
+                        }
+                    } else {
+                        // ON→OFF: 즉시 비활성화
+                        await config.update('updater.autoInstall', false, vscode.ConfigurationTarget.Global);
+                        this._log('[Sidebar] Auto Install: OFF');
+                    }
                     this.updateState();
                     break;
                 }
@@ -1061,7 +1075,6 @@ class RalphSidebarProvider {
 
     <!-- ═══ Auto Accept Section ═══ -->
     <div class="section">
-        <div class="section-title">⚡ Auto Accept</div>
         <button id="btnToggleAutoAccept" class="btn btn-toggle">
             <span id="autoAcceptIcon">🚫</span>
             <span id="autoAcceptLabel">OFF</span>
@@ -1114,10 +1127,10 @@ class RalphSidebarProvider {
     <!-- ═══ Task File Section ═══ -->
     <div class="section">
         <div class="section-title">📋 작업 파일</div>
-        <div id="taskFileName" class="task-file-name">선택되지 않음</div>
-        <button id="btnSelectTaskFile" class="btn btn-secondary">
-            📂 파일 선택
-        </button>
+        <div style="display:flex; align-items:center; gap:4px; margin-bottom:6px;">
+            <div id="taskFileName" class="task-file-name" style="flex:1; margin-bottom:0;">선택되지 않음</div>
+            <button id="btnSelectTaskFile" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px;">📂</button>
+        </div>
         <button id="btnGenerateSamplePrd" class="btn btn-secondary">
             📝 PRD샘플 생성
         </button>
@@ -1138,7 +1151,7 @@ class RalphSidebarProvider {
     </div>
 
     <!-- ═══ AI Quota Section ═══ -->
-    <div class="section">
+    <div id="quotaSection" class="section">
         <div class="quota-header">
             <div class="section-title">🔋 AI 사용량</div>
             <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
@@ -1151,12 +1164,8 @@ class RalphSidebarProvider {
 
     <!-- ═══ Telegram Section ═══ -->
     <div class="section telegram-section">
-        <div class="section-title">📡 Telegram</div>
-        <div class="telegram-status">
-            <span id="telegramStatusText">연결 안됨</span>
-        </div>
         <button id="btnToggleTelegram" class="btn btn-toggle">
-            📡 연결
+            📡 텔레그램 연결
         </button>
         <div id="telegramCredForm" class="telegram-form" style="display:none;">
             <label for="inputTelegramToken">Bot Token</label>
@@ -1175,8 +1184,8 @@ class RalphSidebarProvider {
             <input id="inputMaxIter" type="number" min="1" max="999" value="50" />
         </div>
         <div class="form-row">
-            <label>반복 간격 (ms)</label>
-            <input id="inputDelay" type="number" min="500" max="60000" step="500" value="3000" />
+            <label>작업간 반복 간격 (초)</label>
+            <input id="inputDelay" type="number" min="1" max="120" step="1" value="3" />
         </div>
 
         <label id="labelAllowPrdMod" class="toggle-row">
@@ -1248,7 +1257,7 @@ class RalphSidebarProvider {
         vscodeApi.postMessage({ command: 'setMaxIterations', value: parseInt(e.target.value, 10) || 50 });
     });
     document.getElementById('inputDelay').addEventListener('change', (e) => {
-        vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(e.target.value, 10) || 3000 });
+        vscodeApi.postMessage({ command: 'setIterationDelay', value: (parseInt(e.target.value, 10) || 3) * 1000 });
     });
 
     document.getElementById('labelAllowPrdMod').addEventListener('click', (e) => {
@@ -1392,7 +1401,7 @@ class RalphSidebarProvider {
 
         // Settings
         document.getElementById('inputMaxIter').value = s.maxIterations;
-        document.getElementById('inputDelay').value = s.iterationDelay;
+        document.getElementById('inputDelay').value = s.iterationDelay / 1000;
 
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
         document.getElementById('chkAutoStart').checked = s.autoStart || false;
@@ -1463,18 +1472,15 @@ class RalphSidebarProvider {
 
         // ─── Telegram ───
         const tgBtn = document.getElementById('btnToggleTelegram');
-        const tgStatusText = document.getElementById('telegramStatusText');
         const tgCredForm = document.getElementById('telegramCredForm');
 
         if (s.telegramConnected) {
             tgBtn.classList.add('active');
-            tgBtn.innerHTML = '📡 연결 해제';
-            tgStatusText.textContent = '연결됨';
+            tgBtn.innerHTML = '📡 텔레그램 연결 해제';
             tgCredForm.style.display = 'none';
         } else {
             tgBtn.classList.remove('active');
-            tgBtn.innerHTML = '📡 연결';
-            tgStatusText.textContent = '연결 안됨';
+            tgBtn.innerHTML = '📡 텔레그램 연결';
             tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
         }
 
@@ -1573,16 +1579,23 @@ class RalphSidebarProvider {
     let lastQuotaModels = [];
 
     function updateQuotaPanel(quota) {
+        const sectionEl = document.getElementById('quotaSection');
         const statusEl = document.getElementById('quotaStatus');
         const listEl = document.getElementById('quotaList');
 
         if (!quota.connected) {
-            statusEl.textContent = '⚠ 연결 안 됨 — language_server를 찾을 수 없습니다';
-            listEl.innerHTML = '<div class="quota-empty">Antigravity가 실행 중인지 확인하세요</div>';
+            sectionEl.style.display = 'none';
             return;
         }
 
         const models = quota.models || [];
+        if (models.length === 0) {
+            sectionEl.style.display = 'none';
+            return;
+        }
+
+        sectionEl.style.display = '';
+
         lastQuotaModels = models;
 
         // Count total individual models (expand groups)
