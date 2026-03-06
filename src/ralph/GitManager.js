@@ -453,8 +453,8 @@ class GitManager {
             ? `${prefix}/parallel-${iteration}-${taskIndex}-${sanitized}`
             : `${prefix}/parallel-${iteration}-${taskIndex}`;
 
-        // Worktree directory: .ralph-worktrees/<branchName>
-        const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees', branchName.replace(/\//g, '-'));
+        // Worktree directory: .ralph-worktrees/<branchName> (folder structure preserved)
+        const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees', ...branchName.split('/'));
 
         try {
             // Ensure the parent directory exists
