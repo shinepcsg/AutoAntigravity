@@ -1040,11 +1040,7 @@ class RalphLoopManager {
                 // 개별 작업 완료 콜백 호출
                 if (this.onTaskCompleteCallback) {
                     try {
-                        this.onTaskCompleteCallback({
-                            taskText: task.text,
-                            iteration: this.currentIteration,
-                            progress: `${progress.completed}/${progress.total}`
-                        });
+                        this.onTaskCompleteCallback(task.text, this.currentIteration, progress);
                     } catch (cbErr) {
                         this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                     }
