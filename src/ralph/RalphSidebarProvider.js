@@ -384,8 +384,21 @@ class RalphSidebarProvider {
                 case 'enqueueTask': {
                     const text = message.text;
                     if (text) {
-                        this._taskQueue.push(text);
-                        this._log(`[Sidebar] Task enqueued: ${text.substring(0, 50)}...`);
+                        const isIdle = this.ralphLoop && this.ralphLoop.getState() === 'idle';
+                        if (isIdle) {
+                            // idle 상태 → 큐에 넣지 않고 즉시 실행
+                            const prompt = `/write-prd ${text}`;
+                            this._log(`[Sidebar] 📤 즉시 실행 (idle): ${text.substring(0, 50)}...`);
+                            this.ralphLoop._sendToAgent(prompt).then(() => {
+                                this._log(`[Sidebar] ✅ write-prd 프롬프트 전송 완료`);
+                            }).catch(err => {
+                                this._log(`[Sidebar] ❌ write-prd 프롬프트 전송 실패: ${err.message}`);
+                            });
+                        } else {
+                            // 실행 중 → 큐에 추가
+                            this._taskQueue.push(text);
+                            this._log(`[Sidebar] Task enqueued: ${text.substring(0, 50)}...`);
+                        }
                     }
                     this.updateState();
                     break;
