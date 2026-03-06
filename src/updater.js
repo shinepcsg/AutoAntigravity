@@ -30,6 +30,7 @@ class AutoUpdater {
         this.updateAvailable = false;
         this.latestVersion = null;
         this.latestAssetName = null;
+        this.availableVersions = []; // [{ version, assetName, tagName }]
         this.onUpdateStateChange = null; // callback: () => void
     }
 
@@ -124,13 +125,14 @@ class AutoUpdater {
      */
     /**
      * Get the current update state for sidebar display
-     * @returns {{ available: boolean, version: string|null, asset: string|null }}
+     * @returns {{ available: boolean, version: string|null, asset: string|null, availableVersions: Array<{ version: string, assetName: string, tagName: string }> }}
      */
     getUpdateState() {
         return {
             available: this.updateAvailable,
             version: this.latestVersion,
-            asset: this.latestAssetName
+            asset: this.latestAssetName,
+            availableVersions: this.availableVersions
         };
     }
 
@@ -149,7 +151,70 @@ class AutoUpdater {
         );
         if (!vsixAsset) return;
 
-        await this._performUpdate(vsixAsset, this.latestVersion, authHeader);
+        await this._performUpdate(vsixAsset, this.latestVersion, authHeader, false);
+    }
+
+    /**
+     * Install a specific version by fetching its release from Gitea API,
+     * downloading the VSIX, installing it, and immediately reloading.
+     * Called from sidebar version buttons — no confirmation dialog needed.
+     * @param {string} version - Target version string (e.g. "1.2.3")
+     */
+    async installSpecificVersion(version) {
+        try {
+            this.log(`[Updater] Installing specific version: v${version}...`);
+
+            const authHeader = await this._getAuthHeader();
+
+            // Fetch releases list and find the matching version
+            const release = await new Promise((resolve, reject) => {
+                const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases?limit=50`;
+                this._httpGet(url, authHeader, (err, data) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    try {
+                        const releases = JSON.parse(data);
+                        if (!Array.isArray(releases)) {
+                            resolve(null);
+                            return;
+                        }
+                        const match = releases.find(r => {
+                            const v = (r.tag_name || '').replace(/^v/, '');
+                            return v === version && !r.draft;
+                        });
+                        resolve(match || null);
+                    } catch (e) {
+                        reject(new Error(`Failed to parse releases: ${e.message}`));
+                    }
+                });
+            });
+
+            if (!release) {
+                this.log(`[Updater] ⚠ Release v${version} not found`);
+                vscode.window.showWarningMessage(`v${version} 릴리즈를 찾을 수 없습니다.`);
+                return;
+            }
+
+            // Find the .vsix asset
+            const vsixAsset = (release.assets || []).find(a =>
+                a.name && a.name.endsWith('.vsix')
+            );
+
+            if (!vsixAsset) {
+                this.log(`[Updater] ⚠ No .vsix asset in v${version} release`);
+                vscode.window.showWarningMessage(`v${version} 릴리즈에 VSIX 파일이 없습니다.`);
+                return;
+            }
+
+            // Install with autoReload = true (button click is intentional, no dialog)
+            await this._performUpdate(vsixAsset, version, authHeader, true);
+
+        } catch (e) {
+            this.log(`[Updater] ❌ installSpecificVersion failed: ${e.message}`);
+            vscode.window.showErrorMessage(`v${version} 설치 실패: ${e.message}`);
+        }
     }
 
     /**
@@ -159,6 +224,9 @@ class AutoUpdater {
         this.updateAvailable = available;
         this.latestVersion = version;
         this.latestAssetName = assetName;
+        if (!available) {
+            this.availableVersions = [];
+        }
         if (this.onUpdateStateChange) {
             try { this.onUpdateStateChange(); } catch (e) { /* ignore */ }
         }
@@ -209,13 +277,22 @@ class AutoUpdater {
             // Update exposed state for sidebar
             this._setUpdateState(true, latestVersion, vsixAsset.name);
 
+            // Fetch all available versions for sidebar version buttons
+            try {
+                this.availableVersions = await this.fetchAvailableVersions();
+                this.log(`[Updater] Found ${this.availableVersions.length} available version(s)`);
+            } catch (e) {
+                this.log(`[Updater] ⚠ Failed to fetch available versions: ${e.message}`);
+                this.availableVersions = [];
+            }
+
             // 4. Check auto-install setting
             const config = vscode.workspace.getConfiguration('autoAntigravity');
             const autoInstall = config.get('updater.autoInstall', false);
 
             if (autoInstall) {
                 this.log(`[Updater] Auto-install enabled — installing v${latestVersion}...`);
-                await this._performUpdate(vsixAsset, latestVersion, authHeader);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader, true);
                 return;
             }
 
@@ -227,7 +304,7 @@ class AutoUpdater {
             );
 
             if (action === '지금 업데이트') {
-                await this._performUpdate(vsixAsset, latestVersion, authHeader);
+                await this._performUpdate(vsixAsset, latestVersion, authHeader, false);
             } else {
                 this.log('[Updater] User postponed update');
             }
@@ -242,7 +319,7 @@ class AutoUpdater {
     /**
      * Download and install the VSIX update
      */
-    async _performUpdate(vsixAsset, version, authHeader) {
+    async _performUpdate(vsixAsset, version, authHeader, autoReload = false) {
         try {
             // Show progress
             await vscode.window.withProgress(
@@ -298,15 +375,22 @@ class AutoUpdater {
                 }
             );
 
-            // Ask to reload
-            const reload = await vscode.window.showInformationMessage(
-                `✅ AutoAntigravity v${version} 설치 완료! IDE를 다시 로드해야 적용됩니다.`,
-                '지금 재시작',
-                '나중에'
-            );
-
-            if (reload === '지금 재시작') {
+            // Reload after update
+            if (autoReload) {
+                // autoInstall 활성화 시: 대화상자 없이 즉시 리로드
+                this.log(`[Updater] Auto-reload: reloading window...`);
                 await vscode.commands.executeCommand('workbench.action.reloadWindow');
+            } else {
+                // 수동 업데이트: 기존 대화상자 표시
+                const reload = await vscode.window.showInformationMessage(
+                    `✅ AutoAntigravity v${version} 설치 완료! IDE를 다시 로드해야 적용됩니다.`,
+                    '지금 재시작',
+                    '나중에'
+                );
+
+                if (reload === '지금 재시작') {
+                    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
             }
 
         } catch (e) {
@@ -362,6 +446,63 @@ class AutoUpdater {
                     // Find the first non-draft, non-prerelease
                     const latest = releases.find(r => !r.draft && !r.prerelease) || releases[0];
                     resolve(latest);
+                } catch (e) {
+                    reject(new Error(`Failed to parse releases list: ${e.message}`));
+                }
+            });
+        });
+    }
+
+    /**
+     * Fetch all available versions newer than the current one.
+     * Uses the Gitea releases API with a higher limit to get more releases,
+     * then filters to only those with a higher semver and a .vsix asset.
+     * @returns {Promise<Array<{ version: string, assetName: string, tagName: string }>>}
+     */
+    async fetchAvailableVersions() {
+        const authHeader = await this._getAuthHeader();
+        const currentVersion = this.getCurrentVersion();
+
+        return new Promise((resolve, reject) => {
+            const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases?limit=50`;
+            this._httpGet(url, authHeader, (err, data) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                try {
+                    const releases = JSON.parse(data);
+                    if (!Array.isArray(releases) || releases.length === 0) {
+                        resolve([]);
+                        return;
+                    }
+
+                    const result = [];
+                    for (const r of releases) {
+                        // Skip drafts and prereleases
+                        if (r.draft || r.prerelease) continue;
+
+                        const version = (r.tag_name || '').replace(/^v/, '');
+                        if (!version) continue;
+
+                        // Only include versions higher than the current one
+                        if (this._semverCompare(version, currentVersion) <= 0) continue;
+
+                        // Must have a .vsix asset
+                        const vsixAsset = (r.assets || []).find(a => a.name && a.name.endsWith('.vsix'));
+                        if (!vsixAsset) continue;
+
+                        result.push({
+                            version,
+                            assetName: vsixAsset.name,
+                            tagName: r.tag_name
+                        });
+                    }
+
+                    // Sort descending by version (newest first)
+                    result.sort((a, b) => this._semverCompare(b.version, a.version));
+
+                    resolve(result);
                 } catch (e) {
                     reject(new Error(`Failed to parse releases list: ${e.message}`));
                 }

@@ -130,6 +130,11 @@ class RalphSidebarProvider {
                         this.autoUpdater.installUpdate();
                     }
                     break;
+                case 'installSpecificVersion':
+                    if (this.autoUpdater && message.version) {
+                        this.autoUpdater.installSpecificVersion(message.version);
+                    }
+                    break;
                 case 'toggleAutoInstall': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('updater.autoInstall', false);
@@ -186,7 +191,7 @@ class RalphSidebarProvider {
             // 텔레메트리
             quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] },
             // 업데이트 정보
-            updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false },
+            updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
             autoInstall: config.get('updater.autoInstall', false)
         };
 
@@ -612,6 +617,40 @@ class RalphSidebarProvider {
         font-size: 11px;
         padding: 5px 10px;
     }
+
+    /* ─── Version Buttons ─── */
+    .version-buttons {
+        margin-top: 8px;
+    }
+    .version-buttons:empty {
+        display: none;
+    }
+    .version-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 5px 10px;
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 500;
+        background: rgba(76, 175, 80, 0.08);
+        color: var(--fg);
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .version-btn:hover {
+        background: rgba(76, 175, 80, 0.2);
+        border-color: var(--success);
+    }
+    .version-btn:active {
+        opacity: 0.7;
+    }
+    .version-btn + .version-btn {
+        margin-top: 4px;
+    }
 </style>
 </head>
 <body>
@@ -743,6 +782,7 @@ class RalphSidebarProvider {
             <input id="chkAutoInstall" type="checkbox" />
             ⬆ 자동 업데이트 설치
         </label>
+        <div id="versionButtons" class="version-buttons"></div>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -928,6 +968,33 @@ class RalphSidebarProvider {
 
         // Auto Install checkbox
         document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
+
+        // Version Buttons (available updates)
+        const versionBtnContainer = document.getElementById('versionButtons');
+        const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
+        if (versions.length > 0) {
+            let vhtml = '';
+            for (const v of versions) {
+                vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
+                    + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
+                    + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
+                    + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+            }
+            versionBtnContainer.innerHTML = vhtml;
+            // Attach click handlers
+            versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    vscodeApi.postMessage({
+                        command: 'installSpecificVersion',
+                        version: btn.getAttribute('data-version'),
+                        assetName: btn.getAttribute('data-asset'),
+                        tagName: btn.getAttribute('data-tag')
+                    });
+                });
+            });
+        } else {
+            versionBtnContainer.innerHTML = '';
+        }
 
         // PRD Changes
         updatePrdChangesPanel(s.prdChanges || []);
