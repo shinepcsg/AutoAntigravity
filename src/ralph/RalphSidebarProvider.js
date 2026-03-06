@@ -444,7 +444,14 @@ class RalphSidebarProvider {
             // 텔레그램 상태
             telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
             telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId),
-            showTelegramCredForm: this._showTelegramCredForm || false
+            showTelegramCredForm: this._showTelegramCredForm || false,
+            // write-prd 워크플로우 존재 여부
+            hasWritePrdWorkspace: (() => {
+                const folders = vscode.workspace.workspaceFolders;
+                if (!folders || folders.length === 0) return false;
+                return fs.existsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
+            })(),
+            hasWritePrdGlobal: fs.existsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md'))
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -1355,6 +1362,10 @@ class RalphSidebarProvider {
             tgStatusText.textContent = '연결 안됨';
             tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
         }
+
+        // write-prd 버튼 표시/숨김
+        document.getElementById('btnSetWritePrdWorkspace').style.display = s.hasWritePrdWorkspace ? 'none' : '';
+        document.getElementById('btnSetWritePrdGlobal').style.display = s.hasWritePrdGlobal ? 'none' : '';
 
         // PRD Changes
         updatePrdChangesPanel(s.prdChanges || []);
