@@ -1151,7 +1151,7 @@ class RalphSidebarProvider {
     </div>
 
     <!-- ═══ AI Quota Section ═══ -->
-    <div class="section">
+    <div id="quotaSection" class="section">
         <div class="quota-header">
             <div class="section-title">🔋 AI 사용량</div>
             <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
@@ -1586,16 +1586,23 @@ class RalphSidebarProvider {
     let lastQuotaModels = [];
 
     function updateQuotaPanel(quota) {
+        const sectionEl = document.getElementById('quotaSection');
         const statusEl = document.getElementById('quotaStatus');
         const listEl = document.getElementById('quotaList');
 
         if (!quota.connected) {
-            statusEl.textContent = '⚠ 연결 안 됨 — language_server를 찾을 수 없습니다';
-            listEl.innerHTML = '<div class="quota-empty">Antigravity가 실행 중인지 확인하세요</div>';
+            sectionEl.style.display = 'none';
             return;
         }
 
         const models = quota.models || [];
+        if (models.length === 0) {
+            sectionEl.style.display = 'none';
+            return;
+        }
+
+        sectionEl.style.display = '';
+
         lastQuotaModels = models;
 
         // Count total individual models (expand groups)
