@@ -2,9 +2,7 @@
 // Sends progress updates and receives commands via Telegram Bot API.
 
 const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const { scanWorkflows } = require('./scanWorkflows');
 
 class TelegramService {
     constructor(log) {
@@ -256,45 +254,7 @@ class TelegramService {
         });
     }
 
-    /**
-     * Scan workflow .md files from given directory, parse YAML frontmatter description.
-     * Excludes 'write-prd'. Returns array of { command, description }.
-     * @param {string} dirPath - Directory to scan
-     * @returns {{ command: string, description: string }[]}
-     */
-    _scanWorkflowCommands(dirPath) {
-        const commands = [];
-        try {
-            if (!fs.existsSync(dirPath)) return commands;
-            const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md'));
-            for (const file of files) {
-                const name = file.replace(/\.md$/, '');
-                if (name === 'write-prd') continue;
 
-                // Telegram command format: lowercase, alphanumeric + underscores only, 1-32 chars
-                const cmdName = name.replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '').toLowerCase().substring(0, 32);
-                if (!cmdName) continue;
-
-                // Read YAML frontmatter description
-                let description = `📂 워크플로우: ${name}`;
-                try {
-                    const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
-                    const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-                    if (fmMatch) {
-                        const descMatch = fmMatch[1].match(/description:\s*(.+)/i);
-                        if (descMatch) {
-                            description = descMatch[1].trim().substring(0, 256);
-                        }
-                    }
-                } catch (_) { /* ignore read errors */ }
-
-                commands.push({ command: cmdName, description });
-            }
-        } catch (err) {
-            this._log(`[Telegram] 워크플로우 스캔 오류 (${dirPath}): ${err.message}`);
-        }
-        return commands;
-    }
 
     /**
      * Register slash commands with Telegram via setMyCommands API.
@@ -315,33 +275,11 @@ class TelegramService {
                 { command: 'queue', description: '📋 작업 큐 목록 조회' }
             ];
 
-            // 2) 동적 워크플로우 명령어 스캔
-            const workflowCommands = new Map(); // command name → description (중복 방지)
-
-            // 2a) 워크스페이스 경로: <workspaceRoot>/.agent/workflows/
-            if (workspaceRoot) {
-                const wsDir = path.join(workspaceRoot, '.agent', 'workflows');
-                for (const cmd of this._scanWorkflowCommands(wsDir)) {
-                    workflowCommands.set(cmd.command, cmd.description);
-                }
-            }
-
-            // 2b) 글로벌 경로: ~/.agent/workflows/
-            const globalDir = path.join(os.homedir(), '.agent', 'workflows');
-            for (const cmd of this._scanWorkflowCommands(globalDir)) {
-                if (!workflowCommands.has(cmd.command)) {
-                    workflowCommands.set(cmd.command, cmd.description);
-                }
-            }
-
-            // 3) 빌트인 명령어와 중복되는 워크플로우 제거
+            // 2) 동적 워크플로우 명령어 스캔 (공유 헬퍼 사용)
             const builtInNames = new Set(builtInCommands.map(c => c.command));
-            const dynamicCommands = [];
-            for (const [command, description] of workflowCommands) {
-                if (!builtInNames.has(command)) {
-                    dynamicCommands.push({ command, description });
-                }
-            }
+            const dynamicCommands = scanWorkflows(workspaceRoot)
+                .filter(cmd => !builtInNames.has(cmd.command))
+                .map(cmd => ({ command: cmd.command, description: cmd.description }));
 
             const allCommands = [...builtInCommands, ...dynamicCommands];
 

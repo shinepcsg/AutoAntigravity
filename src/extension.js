@@ -9,6 +9,7 @@ const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 const { AutoUpdater } = require('./updater');
 const { TelemetryService } = require('./telemetry/TelemetryService');
 const { TelegramService } = require('./telegram/TelegramService');
+const { scanWorkflows } = require('./telegram/scanWorkflows');
 
 let autoAccept = null;
 let ralphLoop = null;
@@ -112,7 +113,7 @@ function connectTelegram(context) {
 
     // 텔레그램 → 플러그인: 도움말
     telegramService.onHelpRequest = () => {
-        const helpMsg = [
+        const lines = [
             `📖 *AutoAntigravity 명령어 목록*`,
             ``,
             `/help — 📖 사용 가능한 명령어 목록`,
@@ -122,10 +123,24 @@ function connectTelegram(context) {
             `/autoaccept — ⚡ AutoAccept ON/OFF 토글`,
             `/config — ⚙️ 현재 설정값 조회`,
             `/queue — 📋 작업 큐 목록 조회`,
-            ``,
-            `💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`,
-        ].join('\n');
-        telegramService.sendMessage(helpMsg);
+        ];
+
+        // 동적 워크플로우 명령어 추가
+        const wsRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : undefined;
+        const builtInNames = new Set(['help', 'status', 'start', 'stop', 'autoaccept', 'config', 'queue']);
+        const workflows = scanWorkflows(wsRoot).filter(w => !builtInNames.has(w.command));
+        if (workflows.length > 0) {
+            lines.push(``);
+            lines.push(`🔧 *워크플로우 명령어*`);
+            for (const wf of workflows) {
+                lines.push(`/${wf.command} — ${wf.description}`);
+            }
+        }
+
+        lines.push(``);
+        lines.push(`💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`);
+
+        telegramService.sendMessage(lines.join('\n'));
     };
 
     // 텔레그램 → 플러그인: 상태 조회 (+ AI 사용량)
