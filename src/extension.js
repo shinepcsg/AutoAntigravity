@@ -143,8 +143,7 @@ function connectTelegram(context) {
     // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달
     ralphLoop.onTaskCompleteCallback = telegramService.sendTaskResult.bind(telegramService);
 
-    // 플러그인 → 텔레그램: 전체 작업 완료 결과 전달
-    ralphLoop.onAllTasksCompleteCallback = telegramService.sendAllTasksCompleted.bind(telegramService);
+    // NOTE: onAllTasksCompleteCallback은 activate()에서 통합 설정 (사이드바 큐 처리 + 텔레그램 알림)
 
     telegramService.start(botToken, chatId);
     context.subscriptions.push({ dispose: () => telegramService.dispose() });
@@ -163,11 +162,10 @@ function disconnectTelegram() {
         telegramService = null;
         log('[Telegram] 텔레그램 봇 서비스 해제');
     }
-    // Ralph Loop 콜백 정리
+    // Ralph Loop 콜백 정리 (onAllTasksCompleteCallback은 activate()에서 관리)
     if (ralphLoop) {
         ralphLoop.onLogCallback = null;
         ralphLoop.onTaskCompleteCallback = null;
-        ralphLoop.onAllTasksCompleteCallback = null;
     }
     // sidebar에 참조 동기화
     if (sidebarProvider) {
@@ -193,6 +191,41 @@ function activate(context) {
     ralphLoop.restoreTaskFile();
     ralphLoop.onStateChange = () => {
         updateRalphStatusBar();
+    };
+
+    // ─── 전체 작업 완료 시: 사이드바 큐 처리 + 텔레그램 알림 ──────────
+    ralphLoop.onAllTasksCompleteCallback = async (totalTasks, totalIterations) => {
+        // 1) 텔레그램 알림 (연결 시)
+        if (telegramService && typeof telegramService.sendAllTasksCompleted === 'function') {
+            try {
+                telegramService.sendAllTasksCompleted(totalTasks, totalIterations);
+            } catch (e) {
+                log(`[Queue] 텔레그램 완료 알림 실패: ${e.message}`);
+            }
+        }
+
+        // 2) 사이드바 큐에 항목이 있으면 다음 작업을 write-prd 워크플로우로 전송
+        if (sidebarProvider && sidebarProvider._taskQueue.length > 0) {
+            const nextTask = sidebarProvider._taskQueue.shift();
+            log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (남은: ${sidebarProvider._taskQueue.length}): ${nextTask.substring(0, 80)}`);
+            sidebarProvider.updateState(); // 큐 UI 갱신
+
+            const prompt = `/write-prd ${nextTask}`;
+            try {
+                log(`[Queue] 📤 write-prd 워크플로우 프롬프트 전송 중...`);
+                await ralphLoop._sendToAgent(prompt);
+                log(`[Queue] ✅ write-prd 워크플로우 프롬프트 전송 완료`);
+
+                if (telegramService && typeof telegramService.sendMessage === 'function') {
+                    telegramService.sendMessage(`📬 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
+                }
+            } catch (err) {
+                log(`[Queue] ❌ write-prd 프롬프트 전송 실패: ${err.message}`);
+                if (telegramService && typeof telegramService.sendMessage === 'function') {
+                    telegramService.sendMessage(`❌ 큐 작업 전송 실패: ${err.message}`);
+                }
+            }
+        }
     };
 
     // ─── Auto Start (FileSystemWatcher) ──────────────────────────────
