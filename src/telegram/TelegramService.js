@@ -19,6 +19,15 @@ class TelegramService {
         this.onEmergencyRequest = null;
     }
 
+    /** @returns {string|null} Current bot token */
+    get botToken() { return this._botToken; }
+
+    /** @returns {string|null} Current chat ID */
+    get chatId() { return this._chatId; }
+
+    /** @returns {boolean} Whether the service is actively polling */
+    isConnected() { return this._polling; }
+
     /**
      * Start the Telegram bot service with the given token and chat ID.
      * Begins long polling and sends a connection message.

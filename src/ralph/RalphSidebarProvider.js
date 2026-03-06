@@ -1015,9 +1015,9 @@ class RalphSidebarProvider {
         vscodeApi.postMessage({ command: 'toggleTelegram' });
     });
     document.getElementById('btnSaveTelegramCred').addEventListener('click', () => {
-        const token = document.getElementById('inputTelegramToken').value.trim();
+        const botToken = document.getElementById('inputTelegramToken').value.trim();
         const chatId = document.getElementById('inputTelegramChatId').value.trim();
-        vscodeApi.postMessage({ command: 'saveTelegramCred', token, chatId });
+        vscodeApi.postMessage({ command: 'saveTelegramCred', botToken, chatId });
     });
 
     // ─── State Handling ────────────────────────────────────
