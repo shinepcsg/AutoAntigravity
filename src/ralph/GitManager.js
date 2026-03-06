@@ -12,7 +12,8 @@ class GitManager {
     constructor(log) {
         this.log = log;
         this._originalBranch = null;   // Branch name before Ralph Loop started (e.g. main)
-        this._sessionBranch = null;    // Session branch created at loop start (ralph/session-xxx)
+        this._sessionName = null;      // Session name segment (session-{timestamp}-{label})
+        this._sessionBranch = null;    // Session branch (ralph/{sessionName}/session)
         this._workBranch = null;       // Work branch for the current task
         this._workspaceRoot = null;    // Workspace root path for git commands
     }
@@ -126,9 +127,10 @@ class GitManager {
                 String(now.getMinutes()).padStart(2, '0') +
                 String(now.getSeconds()).padStart(2, '0');
             const sanitized = sessionLabel ? this._sanitizeBranchName(sessionLabel) : '';
-            this._sessionBranch = sanitized
-                ? `ralph/session-${timestamp}-${sanitized}`
-                : `ralph/session-${timestamp}`;
+            this._sessionName = sanitized
+                ? `session-${timestamp}-${sanitized}`
+                : `session-${timestamp}`;
+            this._sessionBranch = `ralph/${this._sessionName}/session`;
 
             this._execGit(['checkout', '-b', this._sessionBranch]);
             this.log(`[Git] 🌿 세션 브랜치 생성: ${this._sessionBranch} (from ${this._originalBranch})`);
@@ -137,6 +139,7 @@ class GitManager {
         } catch (e) {
             this.log(`[Git] ❌ 세션 초기화 실패: ${e.message}`);
             this._originalBranch = null;
+            this._sessionName = null;
             this._sessionBranch = null;
             return { success: false, error: e.message };
         }
@@ -191,11 +194,12 @@ class GitManager {
                 this.log('[Git] ✅ 스태시 완료');
             }
 
-            // Create branch name: ralph/task-{iteration}-{sanitized_name}
+            // Create branch name: ralph/{sessionName}/task-{iteration}-{sanitized_name}
             const sanitized = this._sanitizeBranchName(taskText);
+            const prefix = this._sessionName ? `ralph/${this._sessionName}` : 'ralph';
             const branchName = sanitized
-                ? `ralph/task-${iteration}-${sanitized}`
-                : `ralph/task-${iteration}`;
+                ? `${prefix}/task-${iteration}-${sanitized}`
+                : `${prefix}/task-${iteration}`;
             this._workBranch = branchName;
 
             this._execGit(['checkout', '-b', this._workBranch]);
@@ -367,6 +371,7 @@ class GitManager {
                     this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
                     this._restoreStash();
                     this._originalBranch = null;
+                    this._sessionName = null;
                     this._sessionBranch = null;
                     this._workBranch = null;
                     return { success: true, merged: false, sessionMerged: false };
@@ -385,6 +390,7 @@ class GitManager {
 
                     this._restoreStash();
                     this._originalBranch = null;
+                    this._sessionName = null;
                     this._sessionBranch = null;
                     this._workBranch = null;
                     return { success: true, merged: true, sessionMerged: true };
@@ -398,6 +404,7 @@ class GitManager {
 
                     this._restoreStash();
                     this._originalBranch = null;
+                    this._sessionName = null;
                     this._sessionBranch = null;
                     this._workBranch = null;
                     return { success: false, merged: false, sessionMerged: false, error: `Session merge conflict: ${mergeErr.message}` };
@@ -406,6 +413,7 @@ class GitManager {
             } catch (e) {
                 this.log(`[Git] ❌ 세션 종료 중 에러: ${e.message}`);
                 this._originalBranch = null;
+                this._sessionName = null;
                 this._sessionBranch = null;
                 this._workBranch = null;
                 return { success: false, merged: false, sessionMerged: false, error: e.message };
@@ -414,6 +422,7 @@ class GitManager {
 
         // No session branch — just clean up
         this._originalBranch = null;
+        this._sessionName = null;
         this._sessionBranch = null;
         this._workBranch = null;
         return { success: true, merged: false, sessionMerged: false };
@@ -439,9 +448,10 @@ class GitManager {
         const baseBranch = this._sessionBranch || this._originalBranch;
 
         const sanitized = this._sanitizeBranchName(taskText);
+        const prefix = this._sessionName ? `ralph/${this._sessionName}` : 'ralph';
         const branchName = sanitized
-            ? `ralph/parallel-${iteration}-${taskIndex}-${sanitized}`
-            : `ralph/parallel-${iteration}-${taskIndex}`;
+            ? `${prefix}/parallel-${iteration}-${taskIndex}-${sanitized}`
+            : `${prefix}/parallel-${iteration}-${taskIndex}`;
 
         // Worktree directory: .ralph-worktrees/<branchName>
         const worktreeDir = path.join(this._workspaceRoot, '.ralph-worktrees', branchName.replace(/\//g, '-'));
