@@ -130,6 +130,11 @@ class RalphSidebarProvider {
                         this.autoUpdater.installUpdate();
                     }
                     break;
+                case 'installSpecificVersion':
+                    if (this.autoUpdater && message.version) {
+                        this.autoUpdater.installSpecificVersion(message.version);
+                    }
+                    break;
                 case 'toggleAutoInstall': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('updater.autoInstall', false);
