@@ -26,7 +26,6 @@ class RalphSidebarProvider {
         this.onToggleAutoAccept = null;
         this.onStartRalph = null;
         this.onStopRalph = null;
-        this.onEmergencyStop = null;
         this.onSelectTaskFile = null;
     }
 
@@ -58,9 +57,6 @@ class RalphSidebarProvider {
                     break;
                 case 'stopRalph':
                     if (this.onStopRalph) this.onStopRalph();
-                    break;
-                case 'emergencyStop':
-                    if (this.onEmergencyStop) this.onEmergencyStop();
                     break;
                 case 'selectTaskFile':
                     if (this.onSelectTaskFile) this.onSelectTaskFile();
