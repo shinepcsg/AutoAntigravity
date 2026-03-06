@@ -949,6 +949,69 @@ class RalphSidebarProvider {
     .telegram-input:focus {
         outline: 1px solid var(--accent);
     }
+
+    /* ─── Task Queue Section ─── */
+    .task-queue-textarea {
+        width: 100%;
+        padding: 6px 8px;
+        margin-bottom: 8px;
+        background: var(--input-bg);
+        color: var(--input-fg);
+        border: 1px solid var(--input-border);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        resize: vertical;
+        line-height: 1.4;
+    }
+    .task-queue-textarea:focus {
+        outline: 1px solid var(--accent);
+    }
+    .task-queue-list {
+        margin-top: 10px;
+    }
+    .task-queue-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        background: var(--input-bg);
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    .task-queue-item-text {
+        flex: 1;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+    .task-queue-item-index {
+        flex-shrink: 0;
+        font-weight: 600;
+        opacity: 0.5;
+        min-width: 18px;
+    }
+    .task-queue-delete-btn {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--danger);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0 2px;
+        opacity: 0.6;
+        transition: opacity 0.15s;
+    }
+    .task-queue-delete-btn:hover {
+        opacity: 1;
+    }
+    .task-queue-empty {
+        opacity: 0.4;
+        text-align: center;
+        padding: 8px;
+        font-size: 11px;
+    }
 </style>
 </head>
 <body>
@@ -1007,6 +1070,14 @@ class RalphSidebarProvider {
         <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
             ⏹ 정지
         </button>
+    </div>
+
+    <!-- ═══ Task Queue Section ═══ -->
+    <div class="section">
+        <div class="section-title">📬 작업 큐</div>
+        <textarea id="inputTaskQueue" class="task-queue-textarea" rows="3" placeholder="다음 작업 내용을 입력하세요..."></textarea>
+        <button id="btnEnqueueTask" class="btn btn-primary">📥 작업 예약</button>
+        <div id="taskQueueList" class="task-queue-list"></div>
     </div>
 
     <!-- ═══ Task File Section ═══ -->
@@ -1182,6 +1253,19 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnSetWritePrdGlobal').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'setWritePrdGlobal' });
+    });
+    document.getElementById('btnEnqueueTask').addEventListener('click', () => {
+        const text = document.getElementById('inputTaskQueue').value.trim();
+        if (text) {
+            vscodeApi.postMessage({ command: 'enqueueTask', text });
+            document.getElementById('inputTaskQueue').value = '';
+        }
+    });
+    document.getElementById('taskQueueList').addEventListener('click', (e) => {
+        const btn = e.target.closest('.task-queue-delete-btn');
+        if (btn && btn.dataset.index !== undefined) {
+            vscodeApi.postMessage({ command: 'dequeueTask', index: parseInt(btn.dataset.index, 10) });
+        }
     });
 
     // ─── State Handling ────────────────────────────────────
