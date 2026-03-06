@@ -1164,12 +1164,8 @@ class RalphSidebarProvider {
 
     <!-- ═══ Telegram Section ═══ -->
     <div class="section telegram-section">
-        <div class="section-title">📡 Telegram</div>
-        <div class="telegram-status">
-            <span id="telegramStatusText">연결 안됨</span>
-        </div>
         <button id="btnToggleTelegram" class="btn btn-toggle">
-            📡 연결
+            📡 텔레그램 연결
         </button>
         <div id="telegramCredForm" class="telegram-form" style="display:none;">
             <label for="inputTelegramToken">Bot Token</label>
@@ -1476,18 +1472,15 @@ class RalphSidebarProvider {
 
         // ─── Telegram ───
         const tgBtn = document.getElementById('btnToggleTelegram');
-        const tgStatusText = document.getElementById('telegramStatusText');
         const tgCredForm = document.getElementById('telegramCredForm');
 
         if (s.telegramConnected) {
             tgBtn.classList.add('active');
-            tgBtn.innerHTML = '📡 연결 해제';
-            tgStatusText.textContent = '연결됨';
+            tgBtn.innerHTML = '📡 텔레그램 연결 해제';
             tgCredForm.style.display = 'none';
         } else {
             tgBtn.classList.remove('active');
-            tgBtn.innerHTML = '📡 연결';
-            tgStatusText.textContent = '연결 안됨';
+            tgBtn.innerHTML = '📡 텔레그램 연결';
             tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
         }
 
