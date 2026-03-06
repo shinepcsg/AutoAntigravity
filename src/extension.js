@@ -331,7 +331,7 @@ function activate(context) {
         if (sidebarProvider) sidebarProvider.updateState();
     };
 
-    autoUpdater.start();
+    autoUpdater.start().catch(e => log(`[Updater] start failed: ${e.message}`));
     context.subscriptions.push({ dispose: () => autoUpdater.dispose() });
 }
 
