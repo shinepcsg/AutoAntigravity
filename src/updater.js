@@ -377,6 +377,63 @@ class AutoUpdater {
     }
 
     /**
+     * Fetch all available versions newer than the current one.
+     * Uses the Gitea releases API with a higher limit to get more releases,
+     * then filters to only those with a higher semver and a .vsix asset.
+     * @returns {Promise<Array<{ version: string, assetName: string, tagName: string }>>}
+     */
+    async fetchAvailableVersions() {
+        const authHeader = await this._getAuthHeader();
+        const currentVersion = this.getCurrentVersion();
+
+        return new Promise((resolve, reject) => {
+            const url = `${GITEA_URL}/api/v1/repos/${REPO}/releases?limit=50`;
+            this._httpGet(url, authHeader, (err, data) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                try {
+                    const releases = JSON.parse(data);
+                    if (!Array.isArray(releases) || releases.length === 0) {
+                        resolve([]);
+                        return;
+                    }
+
+                    const result = [];
+                    for (const r of releases) {
+                        // Skip drafts and prereleases
+                        if (r.draft || r.prerelease) continue;
+
+                        const version = (r.tag_name || '').replace(/^v/, '');
+                        if (!version) continue;
+
+                        // Only include versions higher than the current one
+                        if (this._semverCompare(version, currentVersion) <= 0) continue;
+
+                        // Must have a .vsix asset
+                        const vsixAsset = (r.assets || []).find(a => a.name && a.name.endsWith('.vsix'));
+                        if (!vsixAsset) continue;
+
+                        result.push({
+                            version,
+                            assetName: vsixAsset.name,
+                            tagName: r.tag_name
+                        });
+                    }
+
+                    // Sort descending by version (newest first)
+                    result.sort((a, b) => this._semverCompare(b.version, a.version));
+
+                    resolve(result);
+                } catch (e) {
+                    reject(new Error(`Failed to parse releases list: ${e.message}`));
+                }
+            });
+        });
+    }
+
+    /**
      * HTTP GET with optional auth and redirect following
      * @param {string} url
      * @param {string|null} authHeader - Authorization header value
