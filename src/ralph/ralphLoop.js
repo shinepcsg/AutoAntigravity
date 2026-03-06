@@ -349,6 +349,9 @@ class RalphLoopManager {
             this.loopTimer = null;
         }
 
+        // ── 대기 큐 클리어 ──
+        this._pendingTaskQueue = [];
+
         // ── Git: End session & merge ──
         this._endGitSession();
 
