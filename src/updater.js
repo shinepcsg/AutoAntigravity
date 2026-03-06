@@ -36,9 +36,17 @@ class AutoUpdater {
 
     /**
      * Start the auto-updater (called on extension activation)
-     * Checks immediately, then periodically
+     * Checks Git credentials first; if none, auto-update is disabled.
+     * If credentials exist, checks immediately, then periodically.
      */
-    start() {
+    async start() {
+        // 자격증명 확인 — 없으면 자동 업데이트 비활성화
+        const authHeader = await this._getAuthHeader();
+        if (!authHeader) {
+            this.log('[Updater] ⚠ Git 자격증명 없음 — 자동 업데이트 비활성화');
+            return;
+        }
+
         // 즉시 체크 (활성화되자마자 업데이트 확인)
         this.checkForUpdates();
 
