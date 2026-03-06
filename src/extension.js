@@ -208,7 +208,7 @@ function activate(context) {
 
             // 텔레그램 → 플러그인: 긴급 정지
             telegramService.onEmergencyRequest = () => {
-                ralphLoop.emergencyStop();
+                ralphLoop.stop();
                 autoAccept.disable();
                 updateAutoAcceptStatusBar();
                 updateRalphStatusBar();
