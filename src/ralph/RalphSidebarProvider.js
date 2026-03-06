@@ -27,6 +27,10 @@ class RalphSidebarProvider {
         this.onStartRalph = null;
         this.onStopRalph = null;
         this.onSelectTaskFile = null;
+        this.onToggleTelegram = null;
+        this.onSaveTelegramCred = null;
+        this.telegramService = null;
+        this._showTelegramCredForm = false;
     }
 
     /**
@@ -209,6 +213,27 @@ class RalphSidebarProvider {
                     }
                     break;
                 }
+                case 'toggleTelegram': {
+                    // If no credentials, show the credential form
+                    const hasCred = !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId);
+                    if (!hasCred) {
+                        this._showTelegramCredForm = true;
+                        this.updateState();
+                    } else {
+                        if (this.onToggleTelegram) await this.onToggleTelegram();
+                        this.updateState();
+                    }
+                    break;
+                }
+                case 'saveTelegramCred': {
+                    const { botToken, chatId } = message;
+                    if (botToken && chatId && this.onSaveTelegramCred) {
+                        await this.onSaveTelegramCred(botToken, chatId);
+                    }
+                    this._showTelegramCredForm = false;
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -266,7 +291,11 @@ class RalphSidebarProvider {
             // 업데이트 정보
             updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
             autoInstall: config.get('updater.autoInstall', false),
-            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null)
+            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null),
+            // 텔레그램 상태
+            telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
+            telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId),
+            showTelegramCredForm: this._showTelegramCredForm || false
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
