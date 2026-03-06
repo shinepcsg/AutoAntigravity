@@ -3,6 +3,8 @@
 
 const vscode = require('vscode');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 class RalphSidebarProvider {
     static viewType = 'autoAntigravity.ralphSidebar';
@@ -141,6 +143,74 @@ class RalphSidebarProvider {
                     await config.update('updater.autoInstall', !current, vscode.ConfigurationTarget.Global);
                     this._log(`[Sidebar] Auto Install: ${!current ? 'ON' : 'OFF'}`);
                     this.updateState();
+                    break;
+                }
+                case 'generateSamplePrd': {
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (!workspaceFolders || workspaceFolders.length === 0) {
+                        vscode.window.showWarningMessage('워크스페이스가 열려있지 않습니다.');
+                        break;
+                    }
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const taskFileName = config.get('ralphLoop.taskFile', 'PRD.md');
+                    const rootPath = workspaceFolders[0].uri.fsPath;
+                    const prdPath = path.join(rootPath, taskFileName);
+
+                    const sampleContent = [
+                        '# [프로젝트 이름] PRD',
+                        '',
+                        '> **목적**: [이 PRD의 목적을 간략히 설명]',
+                        '',
+                        '---',
+                        '',
+                        '## 작업 목록',
+                        '',
+                        '### Step 1: [단계 제목]',
+                        '- [ ] 작업 1-1: [구체적인 작업 설명]',
+                        '- [ ] 작업 1-2: [구체적인 작업 설명]',
+                        '- [ ] 검증 1: [이 단계의 검증 방법]',
+                        '',
+                        '### Step 2: [독립적 작업들]',
+                        '- [ ] [병렬진행] 작업 2-1: [독립적인 작업 A]',
+                        '- [ ] [병렬진행] 작업 2-2: [독립적인 작업 B]',
+                        '- [ ] [병렬진행] 작업 2-3: [독립적인 작업 C]',
+                        '- [ ] 검증 2: [병렬 작업 통합 검증]',
+                        '',
+                        '### Step 3: [단계 제목]',
+                        '- [ ] 작업 3-1: [구체적인 작업 설명]',
+                        '- [ ] 검증 3: [이 단계의 검증 방법]',
+                        '',
+                        '---',
+                        '',
+                        '## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.',
+                        ''
+                    ].join('\n');
+
+                    const doWrite = async () => {
+                        try {
+                            fs.writeFileSync(prdPath, sampleContent, 'utf8');
+                            const doc = await vscode.workspace.openTextDocument(prdPath);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                            this._log(`[Sidebar] Sample PRD created: ${taskFileName}`);
+                            vscode.window.showInformationMessage(`샘플 PRD가 생성되었습니다: ${taskFileName}`);
+                        } catch (err) {
+                            this._log(`[Sidebar] Failed to create sample PRD: ${err.message}`);
+                            vscode.window.showErrorMessage(`PRD 생성 실패: ${err.message}`);
+                        }
+                    };
+
+                    if (fs.existsSync(prdPath)) {
+                        const answer = await vscode.window.showWarningMessage(
+                            `${taskFileName} 파일이 이미 존재합니다. 덮어쓰시겠습니까?`,
+                            { modal: true },
+                            '덮어쓰기'
+                        );
+                        if (answer === '덮어쓰기') {
+                            await doWrite();
+                        }
+                    } else {
+                        await doWrite();
+                    }
                     break;
                 }
                 case 'ready':
@@ -721,6 +791,9 @@ class RalphSidebarProvider {
         <button id="btnSelectTaskFile" class="btn btn-secondary">
             📂 파일 선택
         </button>
+        <button id="btnGenerateSamplePrd" class="btn btn-secondary">
+            📝 PRD샘플 생성
+        </button>
     </div>
 
     <!-- ═══ PRD Changes Section ═══ -->
@@ -811,6 +884,9 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'selectTaskFile' });
+    });
+    document.getElementById('btnGenerateSamplePrd').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'generateSamplePrd' });
     });
     document.getElementById('btnRefreshQuota').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'refreshQuota' });
