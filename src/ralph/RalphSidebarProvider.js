@@ -857,6 +857,7 @@ class RalphSidebarProvider {
             ⬆ 자동 업데이트 설치
         </label>
         <div id="versionButtons" class="version-buttons"></div>
+        <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">⚠ Git 권한 없음 — 자동 업데이트가 비활성화되어 있습니다.</div>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -1030,44 +1031,61 @@ class RalphSidebarProvider {
             document.getElementById('versionText').textContent = 'v' + s.version;
         }
 
-        // Update Banner
+        // Updater Active — hide update UI if no Git credentials
         const updateBanner = document.getElementById('updateBanner');
         const updateVersionText = document.getElementById('updateVersionText');
-        if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
-            updateBanner.classList.add('visible');
-            updateVersionText.textContent = 'v' + s.version + ' → v' + s.updateInfo.version;
-        } else {
-            updateBanner.classList.remove('visible');
-        }
-
-        // Auto Install checkbox
-        document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
-
-        // Version Buttons (available updates)
+        const labelAutoInstall = document.getElementById('labelAutoInstall');
         const versionBtnContainer = document.getElementById('versionButtons');
-        const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
-        if (versions.length > 0) {
-            let vhtml = '';
-            for (const v of versions) {
-                vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
-                    + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
-                    + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
-                    + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+        const noGitCredMsg = document.getElementById('noGitCredMsg');
+
+        if (!s.updaterActive) {
+            // Git 권한 없음: 업데이트 관련 UI 숨기기
+            updateBanner.classList.remove('visible');
+            labelAutoInstall.style.display = 'none';
+            versionBtnContainer.style.display = 'none';
+            noGitCredMsg.style.display = '';
+        } else {
+            // 업데이트 활성: UI 표시
+            labelAutoInstall.style.display = '';
+            versionBtnContainer.style.display = '';
+            noGitCredMsg.style.display = 'none';
+
+            // Update Banner
+            if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
+                updateBanner.classList.add('visible');
+                updateVersionText.textContent = 'v' + s.version + ' → v' + s.updateInfo.version;
+            } else {
+                updateBanner.classList.remove('visible');
             }
-            versionBtnContainer.innerHTML = vhtml;
-            // Attach click handlers
-            versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    vscodeApi.postMessage({
-                        command: 'installSpecificVersion',
-                        version: btn.getAttribute('data-version'),
-                        assetName: btn.getAttribute('data-asset'),
-                        tagName: btn.getAttribute('data-tag')
+
+            // Auto Install checkbox
+            document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
+
+            // Version Buttons (available updates)
+            const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
+            if (versions.length > 0) {
+                let vhtml = '';
+                for (const v of versions) {
+                    vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
+                        + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
+                        + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
+                        + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+                }
+                versionBtnContainer.innerHTML = vhtml;
+                // Attach click handlers
+                versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        vscodeApi.postMessage({
+                            command: 'installSpecificVersion',
+                            version: btn.getAttribute('data-version'),
+                            assetName: btn.getAttribute('data-asset'),
+                            tagName: btn.getAttribute('data-tag')
+                        });
                     });
                 });
-            });
-        } else {
-            versionBtnContainer.innerHTML = '';
+            } else {
+                versionBtnContainer.innerHTML = '';
+            }
         }
 
         // PRD Changes
