@@ -24,6 +24,7 @@ class TelegramService {
         this.onAutoAcceptRequest = null;
         this.onConfigRequest = null;
         this.onQueueRequest = null;
+        this.onWorkflowRequest = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -194,6 +195,12 @@ class TelegramService {
             if (this.onConfigRequest) this.onConfigRequest();
         } else if (text === '/queue') {
             if (this.onQueueRequest) this.onQueueRequest();
+        } else if (text.startsWith('/')) {
+            // Dynamic workflow slash command: /workflow-name optional args
+            const match = text.match(/^\/([a-zA-Z0-9_-]+)\s*(.*)/s);
+            if (match && this.onWorkflowRequest) {
+                this.onWorkflowRequest(match[1], match[2].trim());
+            }
         } else {
             if (this.onMessageReceived) this.onMessageReceived(text);
         }
