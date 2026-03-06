@@ -424,9 +424,9 @@ class RalphLoopManager {
         const filePath = uri.fsPath;
         this._addLog(`[Ralph] 📄 작업 파일 변경 감지: ${path.basename(filePath)}`);
 
-        // 이미 실행 중이면 무시
+        // 이미 실행 중이면 큐에 추가
         if (this.state === LoopState.RUNNING) {
-            this._addLog('[Ralph] ⏭ Ralph Loop가 이미 실행 중 — autoStart 건너뜀');
+            this._enqueueTaskRequest(filePath);
             return;
         }
 
