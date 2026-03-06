@@ -294,6 +294,13 @@ function activate(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('autoAntigravity.checkForUpdates', () => {
             if (autoUpdater) {
+                if (!autoUpdater._authHeader) {
+                    vscode.window.showWarningMessage(
+                        'AutoAntigravity: Git 자격 증명이 없어 업데이트를 확인할 수 없습니다. Git 저장소 접근 권한을 확인하세요.'
+                    );
+                    log('[Updater] checkForUpdates 차단됨 — _authHeader가 null');
+                    return;
+                }
                 autoUpdater.checkForUpdates();
             }
         })
