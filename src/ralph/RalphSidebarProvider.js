@@ -944,6 +944,8 @@ class RalphSidebarProvider {
         </label>
         <div id="versionButtons" class="version-buttons"></div>
         <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">⚠ Git 권한 없음 — 자동 업데이트가 비활성화되어 있습니다.</div>
+        <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">📋 write-prd (워크스페이스)</button>
+        <button id="btnSetWritePrdGlobal" class="btn btn-secondary">📋 write-prd (글로벌)</button>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -1018,6 +1020,12 @@ class RalphSidebarProvider {
         const botToken = document.getElementById('inputTelegramToken').value.trim();
         const chatId = document.getElementById('inputTelegramChatId').value.trim();
         vscodeApi.postMessage({ command: 'saveTelegramCred', botToken, chatId });
+    });
+    document.getElementById('btnSetWritePrdWorkspace').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'setWritePrdWorkspace' });
+    });
+    document.getElementById('btnSetWritePrdGlobal').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'setWritePrdGlobal' });
     });
 
     // ─── State Handling ────────────────────────────────────
