@@ -30,10 +30,6 @@
                 "title": "AutoAntigravity: Stop Ralph Loop"
             },
             {
-                "command": "autoAntigravity.emergencyStop",
-                "title": "AutoAntigravity: Emergency Stop"
-            },
-            {
                 "command": "autoAntigravity.selectTaskFile",
                 "title": "AutoAntigravity: Select Task File"
             },
