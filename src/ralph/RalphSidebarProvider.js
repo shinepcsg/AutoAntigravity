@@ -142,8 +142,22 @@ class RalphSidebarProvider {
                 case 'toggleAutoInstall': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('updater.autoInstall', false);
-                    await config.update('updater.autoInstall', !current, vscode.ConfigurationTarget.Global);
-                    this._log(`[Sidebar] Auto Install: ${!current ? 'ON' : 'OFF'}`);
+                    if (!current) {
+                        // OFF→ON: 경고 다이얼로그 표시
+                        const answer = await vscode.window.showWarningMessage(
+                            '⚠ 자동 업데이트 설치를 활성화하면 새 버전 감지 시 확인 없이 즉시 설치되고 IDE가 자동으로 리로드됩니다. 작업 중인 내용이 손실될 수 있습니다. 활성화하시겠습니까?',
+                            { modal: true },
+                            '활성화'
+                        );
+                        if (answer === '활성화') {
+                            await config.update('updater.autoInstall', true, vscode.ConfigurationTarget.Global);
+                            this._log('[Sidebar] Auto Install: ON');
+                        }
+                    } else {
+                        // ON→OFF: 즉시 비활성화
+                        await config.update('updater.autoInstall', false, vscode.ConfigurationTarget.Global);
+                        this._log('[Sidebar] Auto Install: OFF');
+                    }
                     this.updateState();
                     break;
                 }
