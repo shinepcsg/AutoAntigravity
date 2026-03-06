@@ -513,6 +513,18 @@ class RalphLoopManager {
         return true;
     }
 
+    /**
+     * Get the list of queued task requests for sidebar display.
+     * Returns a shallow copy to prevent external mutation.
+     * @returns {Array<{filePath: string, fileName: string}>} Queued task entries
+     */
+    getQueuedTasks() {
+        return this._pendingTaskQueue.map((filePath) => ({
+            filePath,
+            fileName: path.basename(filePath)
+        }));
+    }
+
     // ─── CDP Helpers ──────────────────────────────────────────────────
 
     /**
