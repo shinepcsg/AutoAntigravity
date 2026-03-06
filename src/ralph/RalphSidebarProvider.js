@@ -5,6 +5,7 @@ const vscode = require('vscode');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 class RalphSidebarProvider {
     static viewType = 'autoAntigravity.ralphSidebar';
@@ -27,6 +28,11 @@ class RalphSidebarProvider {
         this.onStartRalph = null;
         this.onStopRalph = null;
         this.onSelectTaskFile = null;
+        this.onToggleTelegram = null;
+        this.onSaveTelegramCred = null;
+        this.telegramService = null;
+        this._showTelegramCredForm = false;
+        this._taskQueue = [];
     }
 
     /**
@@ -209,6 +215,193 @@ class RalphSidebarProvider {
                     }
                     break;
                 }
+                case 'toggleTelegram': {
+                    // If no credentials, show the credential form
+                    const hasCred = !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId);
+                    if (!hasCred) {
+                        this._showTelegramCredForm = true;
+                        this.updateState();
+                    } else {
+                        if (this.onToggleTelegram) await this.onToggleTelegram();
+                        this.updateState();
+                    }
+                    break;
+                }
+                case 'saveTelegramCred': {
+                    const { botToken, chatId } = message;
+                    if (botToken && chatId && this.onSaveTelegramCred) {
+                        await this.onSaveTelegramCred(botToken, chatId);
+                    }
+                    this._showTelegramCredForm = false;
+                    this.updateState();
+                    break;
+                }
+                case 'setWritePrdWorkspace':
+                case 'setWritePrdGlobal': {
+                    const isGlobal = message.command === 'setWritePrdGlobal';
+                    let targetDir;
+                    if (isGlobal) {
+                        targetDir = path.join(os.homedir(), '.agent', 'workflows');
+                    } else {
+                        const folders = vscode.workspace.workspaceFolders;
+                        if (!folders || folders.length === 0) {
+                            vscode.window.showWarningMessage('워크스페이스가 열려있지 않습니다.');
+                            break;
+                        }
+                        targetDir = path.join(folders[0].uri.fsPath, '.agent', 'workflows');
+                    }
+                    const targetPath = path.join(targetDir, 'write-prd.md');
+
+                    const templateContent = [
+                        '---',
+                        'description: PRD(작업 목록) 작성 후 AutoAntigravity Ralph Loop 작업 파일로 자동 적용',
+                        '---',
+                        '',
+                        '# PRD 작성 워크플로우',
+                        '',
+                        '이 워크플로우는 AI 에이전트가 PRD를 작성하여 AutoAntigravity Ralph Loop의 작업 파일로 즉시 적용하는 과정을 안내합니다.',
+                        '',
+                        '## 사전 조건',
+                        '',
+                        '- AutoAntigravity 플러그인이 설치되어 있어야 합니다.',
+                        '- `autoAntigravity.ralphLoop.autoStart` 설정이 `true`일 경우, PRD 저장 즉시 Ralph Loop가 자동 시작됩니다.',
+                        '',
+                        '## PRD 작성 규칙',
+                        '',
+                        '1. **파일 경로**: 워크스페이스 루트의 `PRD.md` (설정에서 변경 가능: `autoAntigravity.ralphLoop.taskFile`)',
+                        '2. **체크박스 형식 필수**: Ralph Loop의 `TaskFileManager`는 `- [ ]` / `- [x]` 패턴만 인식합니다.',
+                        '3. **작업 분해**: 큰 작업은 적당히 작은 하위 작업으로 분리하세요 (예: Step 3-1, 3-2, ...).',
+                        '   - **단일 파일 수정이거나 논리적으로 밀접한 2~3개 변경은 하나의 Step으로 묶을 것** (예: 같은 클래스의 메서드 추가 + 해당 메서드 호출부 수정은 한 Step)',
+                        '   - **검증/빌드 등 1분 이내 완료 가능한 작업은 별도 Step으로 분리하지 말고 이전 Step의 검증 항목으로 포함할 것**',
+                        '   - **Step 하나당 예상 작업 시간이 최소 3~5분 이상이 되도록 구성할 것 — 1~2줄 수정만으로 끝나는 작업을 독립 Step으로 만들지 말 것**',
+                        '   - **PRD 내 Step 수가 전체적으로 10개를 넘지 않도록 할 것 — 지나친 세분화는 오히려 컨텍스트 전환 비용을 증가시킨다**',
+                        '4. **각 Step 끝에 검증 항목**을 포함하세요.',
+                        '5. **마지막 줄**에 반드시 다음을 포함하세요:',
+                        '   ```',
+                        '   ## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.',
+                        '   ```',
+                        '',
+                        '## 병렬 작업 (`[병렬진행]` 태그)',
+                        '',
+                        '**이전 작업 완료와 무관하게 독립적으로 실행 가능한 작업**에는 `[병렬진행]` 태그를 붙입니다.',
+                        'Ralph Loop가 이 태그를 인식하여 독립적인 git worktree에서 동시에 실행합니다.',
+                        '',
+                        '### 문법',
+                        '',
+                        '```markdown',
+                        '- [ ] [병렬진행] 작업 설명',
+                        '```',
+                        '',
+                        '### 규칙',
+                        '',
+                        '1. **연속된 `[병렬진행]` 항목**이 하나의 병렬 그룹을 형성합니다.',
+                        '2. 병렬 그룹 사이에 일반 작업이 끼어 있으면 **별개의 그룹**으로 구분됩니다.',
+                        '3. **서로 다른 파일을 수정하는 작업**에 사용하세요 — 같은 파일을 수정하면 머지 충돌이 발생합니다.',
+                        '',
+                        '### AI 판단 기준',
+                        '',
+                        'AI가 `[병렬진행]` 태그를 붙일 때 고려할 사항:',
+                        '- ✅ 서로 다른 모듈/파일을 수정하는 작업',
+                        '- ✅ 서로 의존성이 없는 독립적 작업',
+                        '- ❌ 이전 작업의 결과물에 의존하는 작업',
+                        '- ❌ 같은 파일을 동시에 수정해야 하는 작업',
+                        '',
+                        '## PRD 템플릿',
+                        '',
+                        '```markdown',
+                        '# [프로젝트/기능 이름] PRD',
+                        '',
+                        '> **목적**: [이 PRD의 목적을 간략히 설명]',
+                        '',
+                        '---',
+                        '',
+                        '## 작업 목록',
+                        '',
+                        '### Step 1: [단계 제목]',
+                        '- [ ] 작업 1-1: [구체적인 작업 설명]',
+                        '- [ ] 작업 1-2: [구체적인 작업 설명]',
+                        '- [ ] 검증 1: [이 단계의 검증 방법]',
+                        '',
+                        '### Step 2: [독립적 작업들]',
+                        '- [ ] [병렬진행] 작업 2-1: [독립적인 작업 A]',
+                        '- [ ] [병렬진행] 작업 2-2: [독립적인 작업 B]',
+                        '- [ ] [병렬진행] 작업 2-3: [독립적인 작업 C]',
+                        '- [ ] 검증 2: [병렬 작업 통합 검증]',
+                        '',
+                        '### Step 3: [단계 제목]',
+                        '- [ ] 작업 3-1: [구체적인 작업 설명]',
+                        '- [ ] 검증 3: [이 단계의 검증 방법]',
+                        '',
+                        '---',
+                        '',
+                        '## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.',
+                        '```',
+                        '',
+                        '## 실행 단계',
+                        '',
+                        '// turbo-all',
+                        '',
+                        '1. 사용자의 요구사항을 분석하고 위 템플릿에 따라 PRD를 작성합니다.',
+                        '2. 워크스페이스 루트에 `PRD.md`로 저장합니다.',
+                        '3. `autoStart`가 활성화되어 있으면 Ralph Loop가 자동으로 시작됩니다.',
+                        '4. `autoStart`가 비활성화되어 있으면 사용자에게 사이드바에서 Start를 누르도록 안내합니다.',
+                        '',
+                        '## 주의사항',
+                        '',
+                        '- `- [x]` 완료 마킹은 **직접 하지 마세요** — Ralph Loop가 자동으로 관리합니다.',
+                        '- `progress.txt`는 수정하지 마세요 — ProgressTracker가 관리합니다.',
+                        '- 이미 완료된 작업은 수정하지 마세요.',
+                        '- `[병렬진행]` 태그는 **반드시 서로 독립적인 작업에만** 사용하세요.',
+                        ''
+                    ].join('\n');
+
+                    const writeTemplate = async () => {
+                        try {
+                            fs.mkdirSync(targetDir, { recursive: true });
+                            fs.writeFileSync(targetPath, templateContent, 'utf8');
+                            this._log(`[Sidebar] write-prd workflow created: ${targetPath}`);
+                            vscode.window.showInformationMessage(`write-prd 워크플로우가 생성되었습니다: ${targetPath}`);
+                            const doc = await vscode.workspace.openTextDocument(targetPath);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                        } catch (err) {
+                            this._log(`[Sidebar] Failed to create write-prd workflow: ${err.message}`);
+                            vscode.window.showErrorMessage(`write-prd 워크플로우 생성 실패: ${err.message}`);
+                        }
+                        this.updateState();
+                    };
+
+                    if (fs.existsSync(targetPath)) {
+                        const answer = await vscode.window.showWarningMessage(
+                            `write-prd.md 파일이 이미 존재합니다. 덮어쓰시겠습니까?`,
+                            { modal: true },
+                            '덮어쓰기'
+                        );
+                        if (answer === '덮어쓰기') {
+                            await writeTemplate();
+                        }
+                    } else {
+                        await writeTemplate();
+                    }
+                    break;
+                }
+                case 'enqueueTask': {
+                    const text = message.text;
+                    if (text) {
+                        this._taskQueue.push(text);
+                        this._log(`[Sidebar] Task enqueued: ${text.substring(0, 50)}...`);
+                    }
+                    this.updateState();
+                    break;
+                }
+                case 'dequeueTask': {
+                    const idx = message.index;
+                    if (typeof idx === 'number' && idx >= 0 && idx < this._taskQueue.length) {
+                        const removed = this._taskQueue.splice(idx, 1);
+                        this._log(`[Sidebar] Task dequeued: ${removed[0].substring(0, 50)}...`);
+                    }
+                    this.updateState();
+                    break;
+                }
                 case 'ready':
                     this.updateState();
                     break;
@@ -266,7 +459,20 @@ class RalphSidebarProvider {
             // 업데이트 정보
             updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
             autoInstall: config.get('updater.autoInstall', false),
-            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null)
+            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null),
+            // 텔레그램 상태
+            telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
+            telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId),
+            showTelegramCredForm: this._showTelegramCredForm || false,
+            // write-prd 워크플로우 존재 여부
+            hasWritePrdWorkspace: (() => {
+                const folders = vscode.workspace.workspaceFolders;
+                if (!folders || folders.length === 0) return false;
+                return fs.existsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
+            })(),
+            hasWritePrdGlobal: fs.existsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md')),
+            // 작업 큐
+            taskQueue: this._taskQueue.slice()
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -725,6 +931,108 @@ class RalphSidebarProvider {
     .version-btn + .version-btn {
         margin-top: 4px;
     }
+
+    /* ─── Telegram Section ─── */
+    .telegram-section .telegram-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 12px;
+    }
+    .telegram-section .telegram-status-text {
+        opacity: 0.85;
+    }
+    .telegram-form {
+        margin-top: 10px;
+        padding: 10px;
+        background: var(--input-bg);
+        border-radius: 6px;
+        border: 1px solid var(--border);
+    }
+    .telegram-form label {
+        display: block;
+        font-size: 11px;
+        margin-bottom: 3px;
+        opacity: 0.7;
+    }
+    .telegram-input {
+        width: 100%;
+        padding: 5px 8px;
+        margin-bottom: 8px;
+        background: var(--bg);
+        color: var(--input-fg);
+        border: 1px solid var(--input-border);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+    }
+    .telegram-input:focus {
+        outline: 1px solid var(--accent);
+    }
+
+    /* ─── Task Queue Section ─── */
+    .task-queue-textarea {
+        width: 100%;
+        padding: 6px 8px;
+        margin-bottom: 8px;
+        background: var(--input-bg);
+        color: var(--input-fg);
+        border: 1px solid var(--input-border);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+        resize: vertical;
+        line-height: 1.4;
+    }
+    .task-queue-textarea:focus {
+        outline: 1px solid var(--accent);
+    }
+    .task-queue-list {
+        margin-top: 10px;
+    }
+    .task-queue-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        background: var(--input-bg);
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    .task-queue-item-text {
+        flex: 1;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+    .task-queue-item-index {
+        flex-shrink: 0;
+        font-weight: 600;
+        opacity: 0.5;
+        min-width: 18px;
+    }
+    .task-queue-delete-btn {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--danger);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0 2px;
+        opacity: 0.6;
+        transition: opacity 0.15s;
+    }
+    .task-queue-delete-btn:hover {
+        opacity: 1;
+    }
+    .task-queue-empty {
+        opacity: 0.4;
+        text-align: center;
+        padding: 8px;
+        font-size: 11px;
+    }
 </style>
 </head>
 <body>
@@ -785,6 +1093,14 @@ class RalphSidebarProvider {
         </button>
     </div>
 
+    <!-- ═══ Task Queue Section ═══ -->
+    <div class="section">
+        <div class="section-title">📬 작업 큐</div>
+        <textarea id="inputTaskQueue" class="task-queue-textarea" rows="3" placeholder="다음 작업 내용을 입력하세요..."></textarea>
+        <button id="btnEnqueueTask" class="btn btn-primary">📥 작업 예약</button>
+        <div id="taskQueueList" class="task-queue-list"></div>
+    </div>
+
     <!-- ═══ Task File Section ═══ -->
     <div class="section">
         <div class="section-title">📋 작업 파일</div>
@@ -823,6 +1139,24 @@ class RalphSidebarProvider {
         </div>
     </div>
 
+    <!-- ═══ Telegram Section ═══ -->
+    <div class="section telegram-section">
+        <div class="section-title">📡 Telegram</div>
+        <div class="telegram-status">
+            <span id="telegramStatusText">연결 안됨</span>
+        </div>
+        <button id="btnToggleTelegram" class="btn btn-toggle">
+            📡 연결
+        </button>
+        <div id="telegramCredForm" class="telegram-form" style="display:none;">
+            <label for="inputTelegramToken">Bot Token</label>
+            <input id="inputTelegramToken" class="telegram-input" type="text" placeholder="123456:ABC-DEF..." />
+            <label for="inputTelegramChatId">Chat ID</label>
+            <input id="inputTelegramChatId" class="telegram-input" type="text" placeholder="-100xxxxxxxxxx" />
+            <button id="btnSaveTelegramCred" class="btn btn-primary">💾 저장</button>
+        </div>
+    </div>
+
     <!-- ═══ Settings Section ═══ -->
     <div class="section">
         <div class="section-title">⚙ 설정</div>
@@ -858,6 +1192,8 @@ class RalphSidebarProvider {
         </label>
         <div id="versionButtons" class="version-buttons"></div>
         <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">⚠ Git 권한 없음 — 자동 업데이트가 비활성화되어 있습니다.</div>
+        <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">📋 write-prd (워크스페이스)</button>
+        <button id="btnSetWritePrdGlobal" class="btn btn-secondary">📋 write-prd (글로벌)</button>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -924,6 +1260,33 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoInstall' });
+    });
+    document.getElementById('btnToggleTelegram').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'toggleTelegram' });
+    });
+    document.getElementById('btnSaveTelegramCred').addEventListener('click', () => {
+        const botToken = document.getElementById('inputTelegramToken').value.trim();
+        const chatId = document.getElementById('inputTelegramChatId').value.trim();
+        vscodeApi.postMessage({ command: 'saveTelegramCred', botToken, chatId });
+    });
+    document.getElementById('btnSetWritePrdWorkspace').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'setWritePrdWorkspace' });
+    });
+    document.getElementById('btnSetWritePrdGlobal').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'setWritePrdGlobal' });
+    });
+    document.getElementById('btnEnqueueTask').addEventListener('click', () => {
+        const text = document.getElementById('inputTaskQueue').value.trim();
+        if (text) {
+            vscodeApi.postMessage({ command: 'enqueueTask', text });
+            document.getElementById('inputTaskQueue').value = '';
+        }
+    });
+    document.getElementById('taskQueueList').addEventListener('click', (e) => {
+        const btn = e.target.closest('.task-queue-delete-btn');
+        if (btn && btn.dataset.index !== undefined) {
+            vscodeApi.postMessage({ command: 'dequeueTask', index: parseInt(btn.dataset.index, 10) });
+        }
     });
 
     // ─── State Handling ────────────────────────────────────
@@ -1086,6 +1449,43 @@ class RalphSidebarProvider {
             } else {
                 versionBtnContainer.innerHTML = '';
             }
+        }
+
+        // ─── Telegram ───
+        const tgBtn = document.getElementById('btnToggleTelegram');
+        const tgStatusText = document.getElementById('telegramStatusText');
+        const tgCredForm = document.getElementById('telegramCredForm');
+
+        if (s.telegramConnected) {
+            tgBtn.classList.add('active');
+            tgBtn.innerHTML = '📡 연결 해제';
+            tgStatusText.textContent = '연결됨';
+            tgCredForm.style.display = 'none';
+        } else {
+            tgBtn.classList.remove('active');
+            tgBtn.innerHTML = '📡 연결';
+            tgStatusText.textContent = '연결 안됨';
+            tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
+        }
+
+        // write-prd 버튼 표시/숨김
+        document.getElementById('btnSetWritePrdWorkspace').style.display = s.hasWritePrdWorkspace ? 'none' : '';
+        document.getElementById('btnSetWritePrdGlobal').style.display = s.hasWritePrdGlobal ? 'none' : '';
+
+        // ─── Task Queue ───
+        const queueList = document.getElementById('taskQueueList');
+        const queueArr = s.taskQueue || [];
+        if (queueArr.length === 0) {
+            queueList.innerHTML = '<div style="opacity:0.4;text-align:center;padding:8px;font-size:11px;">예약된 작업이 없습니다</div>';
+        } else {
+            let qhtml = '';
+            for (let i = 0; i < queueArr.length; i++) {
+                qhtml += '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;background:var(--input-bg);border-radius:3px;margin-bottom:4px;font-size:11px;">'
+                    + '<span style="flex:1;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(queueArr[i]) + '</span>'
+                    + '<button class="task-queue-delete-btn" data-index="' + i + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;" title="삭제">✕</button>'
+                    + '</div>';
+            }
+            queueList.innerHTML = qhtml;
         }
 
         // PRD Changes
