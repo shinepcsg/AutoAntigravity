@@ -30,6 +30,7 @@ class AutoUpdater {
         this.updateAvailable = false;
         this.latestVersion = null;
         this.latestAssetName = null;
+        this.availableVersions = []; // [{ version, assetName, tagName }]
         this.onUpdateStateChange = null; // callback: () => void
     }
 
@@ -124,13 +125,14 @@ class AutoUpdater {
      */
     /**
      * Get the current update state for sidebar display
-     * @returns {{ available: boolean, version: string|null, asset: string|null }}
+     * @returns {{ available: boolean, version: string|null, asset: string|null, availableVersions: Array<{ version: string, assetName: string, tagName: string }> }}
      */
     getUpdateState() {
         return {
             available: this.updateAvailable,
             version: this.latestVersion,
-            asset: this.latestAssetName
+            asset: this.latestAssetName,
+            availableVersions: this.availableVersions
         };
     }
 
@@ -159,6 +161,9 @@ class AutoUpdater {
         this.updateAvailable = available;
         this.latestVersion = version;
         this.latestAssetName = assetName;
+        if (!available) {
+            this.availableVersions = [];
+        }
         if (this.onUpdateStateChange) {
             try { this.onUpdateStateChange(); } catch (e) { /* ignore */ }
         }
@@ -208,6 +213,15 @@ class AutoUpdater {
 
             // Update exposed state for sidebar
             this._setUpdateState(true, latestVersion, vsixAsset.name);
+
+            // Fetch all available versions for sidebar version buttons
+            try {
+                this.availableVersions = await this.fetchAvailableVersions();
+                this.log(`[Updater] Found ${this.availableVersions.length} available version(s)`);
+            } catch (e) {
+                this.log(`[Updater] ⚠ Failed to fetch available versions: ${e.message}`);
+                this.availableVersions = [];
+            }
 
             // 4. Check auto-install setting
             const config = vscode.workspace.getConfiguration('autoAntigravity');
