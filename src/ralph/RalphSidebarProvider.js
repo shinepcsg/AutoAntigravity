@@ -725,6 +725,45 @@ class RalphSidebarProvider {
     .version-btn + .version-btn {
         margin-top: 4px;
     }
+
+    /* ─── Telegram Section ─── */
+    .telegram-section .telegram-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 12px;
+    }
+    .telegram-section .telegram-status-text {
+        opacity: 0.85;
+    }
+    .telegram-form {
+        margin-top: 10px;
+        padding: 10px;
+        background: var(--input-bg);
+        border-radius: 6px;
+        border: 1px solid var(--border);
+    }
+    .telegram-form label {
+        display: block;
+        font-size: 11px;
+        margin-bottom: 3px;
+        opacity: 0.7;
+    }
+    .telegram-input {
+        width: 100%;
+        padding: 5px 8px;
+        margin-bottom: 8px;
+        background: var(--bg);
+        color: var(--input-fg);
+        border: 1px solid var(--input-border);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 12px;
+    }
+    .telegram-input:focus {
+        outline: 1px solid var(--accent);
+    }
 </style>
 </head>
 <body>
@@ -820,6 +859,24 @@ class RalphSidebarProvider {
         <div id="quotaStatus" class="quota-status">연결 중...</div>
         <div id="quotaList" class="quota-list">
             <div class="quota-empty">데이터 로딩 중...</div>
+        </div>
+    </div>
+
+    <!-- ═══ Telegram Section ═══ -->
+    <div class="section telegram-section">
+        <div class="section-title">📡 Telegram</div>
+        <div class="telegram-status">
+            <span id="telegramStatusText">연결 안됨</span>
+        </div>
+        <button id="btnToggleTelegram" class="btn btn-toggle">
+            📡 연결
+        </button>
+        <div id="telegramCredForm" class="telegram-form" style="display:none;">
+            <label for="inputTelegramToken">Bot Token</label>
+            <input id="inputTelegramToken" class="telegram-input" type="text" placeholder="123456:ABC-DEF..." />
+            <label for="inputTelegramChatId">Chat ID</label>
+            <input id="inputTelegramChatId" class="telegram-input" type="text" placeholder="-100xxxxxxxxxx" />
+            <button id="btnSaveTelegramCred" class="btn btn-primary">💾 저장</button>
         </div>
     </div>
 
