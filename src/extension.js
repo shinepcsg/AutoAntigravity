@@ -67,6 +67,115 @@ function updateRalphStatusBar() {
     if (sidebarProvider) sidebarProvider.updateState();
 }
 
+// ─── Telegram Connect / Disconnect ────────────────────────────────────
+function connectTelegram(context) {
+    // .env 파일에서 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 읽기
+    let botToken = '';
+    let chatId = '';
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(workspaceFolders[0].uri.fsPath, '.env');
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf-8');
+            for (const line of envContent.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('TELEGRAM_BOT_TOKEN=')) {
+                    botToken = trimmed.substring('TELEGRAM_BOT_TOKEN='.length).trim();
+                } else if (trimmed.startsWith('TELEGRAM_CHAT_ID=')) {
+                    chatId = trimmed.substring('TELEGRAM_CHAT_ID='.length).trim();
+                }
+            }
+        } else {
+            log('[Telegram] .env 파일이 없습니다: ' + envPath);
+        }
+    }
+    if (!botToken || !chatId) {
+        log('[Telegram] 텔레그램 활성화되었으나 botToken 또는 chatId가 비어있습니다.');
+        return;
+    }
+
+    telegramService = new TelegramService(log);
+
+    // 텔레그램 → 플러그인: 메시지 수신 시 write-prd 워크플로우 실행
+    telegramService.onMessageReceived = (text) => {
+        const prompt = `/write-prd ${text}`;
+        telegramService.sendMessage(`📨 작업 요청 수신 — write-prd 워크플로우 실행 중...`);
+        log('[Telegram] write-prd 워크플로우 실행: ' + text);
+        ralphLoop._sendToAgent(prompt).then(() => {
+            telegramService.sendMessage(`✅ write-prd 워크플로우 프롬프트 전송 완료`);
+        }).catch((err) => {
+            telegramService.sendMessage(`❌ 프롬프트 전송 실패: ${err.message}`);
+            log('[Telegram] write-prd 실행 실패: ' + err.message);
+        });
+    };
+
+    // 텔레그램 → 플러그인: 상태 조회
+    telegramService.onStatusRequest = () => {
+        const state = ralphLoop.getState();
+        const progress = ralphLoop.taskManager.getProgress();
+        const msg = `📊 *상태*: ${state}\n📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})\n🔄 *반복*: ${ralphLoop.currentIteration}`;
+        telegramService.sendMessage(msg);
+    };
+
+    // 텔레그램 → 플러그인: 정지
+    telegramService.onStopRequest = () => {
+        ralphLoop.stop();
+        updateRalphStatusBar();
+        telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
+    };
+
+    // 텔레그램 → 플러그인: 긴급 정지
+    telegramService.onEmergencyRequest = () => {
+        ralphLoop.stop();
+        autoAccept.disable();
+        updateAutoAcceptStatusBar();
+        updateRalphStatusBar();
+        telegramService.sendMessage('🛑 긴급 정지 완료 — 모든 기능 비활성화');
+    };
+
+    // 플러그인 → 텔레그램: Ralph Loop 로그 전달
+    ralphLoop.onLogCallback = (logEntry) => {
+        telegramService.onRalphLog(logEntry);
+    };
+
+    // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달
+    ralphLoop.onTaskCompleteCallback = telegramService.sendTaskResult.bind(telegramService);
+
+    // 플러그인 → 텔레그램: 전체 작업 완료 결과 전달
+    ralphLoop.onAllTasksCompleteCallback = telegramService.sendAllTasksCompleted.bind(telegramService);
+
+    telegramService.start(botToken, chatId);
+    context.subscriptions.push({ dispose: () => telegramService.dispose() });
+    log('[Telegram] 텔레그램 봇 서비스 시작');
+
+    // sidebar에 참조 동기화
+    if (sidebarProvider) {
+        sidebarProvider.telegramService = telegramService;
+        sidebarProvider.updateState();
+    }
+}
+
+function disconnectTelegram() {
+    if (telegramService) {
+        telegramService.dispose();
+        telegramService = null;
+        log('[Telegram] 텔레그램 봇 서비스 해제');
+    }
+    // Ralph Loop 콜백 정리
+    if (ralphLoop) {
+        ralphLoop.onLogCallback = null;
+        ralphLoop.onTaskCompleteCallback = null;
+        ralphLoop.onAllTasksCompleteCallback = null;
+    }
+    // sidebar에 참조 동기화
+    if (sidebarProvider) {
+        sidebarProvider.telegramService = null;
+        sidebarProvider.updateState();
+    }
+}
+
 // ─── Activation ───────────────────────────────────────────────────────
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('AutoAntigravity');
@@ -126,6 +235,39 @@ function activate(context) {
     sidebarProvider.onSelectTaskFile = () => {
         vscode.commands.executeCommand('autoAntigravity.selectTaskFile');
     };
+    sidebarProvider.onToggleTelegram = async () => {
+        if (telegramService) {
+            disconnectTelegram();
+        } else {
+            connectTelegram(context);
+        }
+    };
+    sidebarProvider.onSaveTelegramCred = async (botToken, chatId) => {
+        // .env에 자격증명 저장
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const fs = require('fs');
+            const path = require('path');
+            const envPath = path.join(workspaceFolders[0].uri.fsPath, '.env');
+            let lines = [];
+            if (fs.existsSync(envPath)) {
+                lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+            }
+            // 기존 키를 업데이트하거나 추가
+            let foundToken = false, foundChat = false;
+            lines = lines.map(l => {
+                if (l.trim().startsWith('TELEGRAM_BOT_TOKEN=')) { foundToken = true; return `TELEGRAM_BOT_TOKEN=${botToken}`; }
+                if (l.trim().startsWith('TELEGRAM_CHAT_ID=')) { foundChat = true; return `TELEGRAM_CHAT_ID=${chatId}`; }
+                return l;
+            });
+            if (!foundToken) lines.push(`TELEGRAM_BOT_TOKEN=${botToken}`);
+            if (!foundChat) lines.push(`TELEGRAM_CHAT_ID=${chatId}`);
+            fs.writeFileSync(envPath, lines.join('\n'), 'utf-8');
+            log(`[Telegram] .env에 자격증명 저장 완료: ${envPath}`);
+        }
+        // 저장 후 연결
+        connectTelegram(context);
+    };
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
@@ -150,88 +292,11 @@ function activate(context) {
     context.subscriptions.push({ dispose: () => telemetryService.dispose() });
 
     // ─── Initialize Telegram Service ──────────────────────────────────
+    sidebarProvider.telegramService = telegramService; // 초기 null 참조
     const telegramConfig = vscode.workspace.getConfiguration('autoAntigravity');
     const telegramEnabled = telegramConfig.get('telegram.enabled', false);
     if (telegramEnabled) {
-        // .env 파일에서 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 읽기
-        let botToken = '';
-        let chatId = '';
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const fs = require('fs');
-            const path = require('path');
-            const envPath = path.join(workspaceFolders[0].uri.fsPath, '.env');
-            if (fs.existsSync(envPath)) {
-                const envContent = fs.readFileSync(envPath, 'utf-8');
-                for (const line of envContent.split('\n')) {
-                    const trimmed = line.trim();
-                    if (trimmed.startsWith('TELEGRAM_BOT_TOKEN=')) {
-                        botToken = trimmed.substring('TELEGRAM_BOT_TOKEN='.length).trim();
-                    } else if (trimmed.startsWith('TELEGRAM_CHAT_ID=')) {
-                        chatId = trimmed.substring('TELEGRAM_CHAT_ID='.length).trim();
-                    }
-                }
-            } else {
-                log('[Telegram] .env 파일이 없습니다: ' + envPath);
-            }
-        }
-        if (botToken && chatId) {
-            telegramService = new TelegramService(log);
-
-            // 텔레그램 → 플러그인: 메시지 수신 시 write-prd 워크플로우 실행
-            telegramService.onMessageReceived = (text) => {
-                const prompt = `/write-prd ${text}`;
-                telegramService.sendMessage(`📨 작업 요청 수신 — write-prd 워크플로우 실행 중...`);
-                log('[Telegram] write-prd 워크플로우 실행: ' + text);
-                ralphLoop._sendToAgent(prompt).then(() => {
-                    telegramService.sendMessage(`✅ write-prd 워크플로우 프롬프트 전송 완료`);
-                }).catch((err) => {
-                    telegramService.sendMessage(`❌ 프롬프트 전송 실패: ${err.message}`);
-                    log('[Telegram] write-prd 실행 실패: ' + err.message);
-                });
-            };
-
-            // 텔레그램 → 플러그인: 상태 조회
-            telegramService.onStatusRequest = () => {
-                const state = ralphLoop.getState();
-                const progress = ralphLoop.taskManager.getProgress();
-                const msg = `📊 *상태*: ${state}\n📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})\n🔄 *반복*: ${ralphLoop.currentIteration}`;
-                telegramService.sendMessage(msg);
-            };
-
-            // 텔레그램 → 플러그인: 정지
-            telegramService.onStopRequest = () => {
-                ralphLoop.stop();
-                updateRalphStatusBar();
-                telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
-            };
-
-            // 텔레그램 → 플러그인: 긴급 정지
-            telegramService.onEmergencyRequest = () => {
-                ralphLoop.stop();
-                autoAccept.disable();
-                updateAutoAcceptStatusBar();
-                updateRalphStatusBar();
-                telegramService.sendMessage('🛑 긴급 정지 완료 — 모든 기능 비활성화');
-            };
-
-            // 플러그인 → 텔레그램: Ralph Loop 로그 전달
-            ralphLoop.onLogCallback = (logEntry) => {
-                telegramService.onRalphLog(logEntry);
-            };
-
-            // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달
-            ralphLoop.onTaskCompleteCallback = telegramService.sendTaskResult.bind(telegramService);
-
-            // 플러그인 → 텔레그램: 전체 작업 완료 결과 전달
-            ralphLoop.onAllTasksCompleteCallback = telegramService.sendAllTasksCompleted.bind(telegramService);
-
-            telegramService.start(botToken, chatId);
-            context.subscriptions.push({ dispose: () => telegramService.dispose() });
-            log('[Telegram] 텔레그램 봇 서비스 시작');
-        } else {
-            log('[Telegram] 텔레그램 활성화되었으나 botToken 또는 chatId가 비어있습니다.');
-        }
+        connectTelegram(context);
     }
 
     // ─── Status Bar Items ─────────────────────────────────────────────
