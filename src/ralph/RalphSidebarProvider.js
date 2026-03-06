@@ -251,10 +251,7 @@ class RalphSidebarProvider {
                     ? this.ralphLoop.taskManager.getTaskFile()
                     : null;
                 if (!tf) return false;
-                const wsFolders = vscode.workspace.workspaceFolders;
-                if (!wsFolders || wsFolders.length === 0) return false;
-                const fullPath = path.join(wsFolders[0].uri.fsPath, tf);
-                return fs.existsSync(fullPath);
+                return fs.existsSync(tf);
             })(),
             progress: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getProgress()
