@@ -1189,8 +1189,8 @@ class RalphSidebarProvider {
             <input id="inputMaxIter" type="number" min="1" max="999" value="50" />
         </div>
         <div class="form-row">
-            <label>반복 간격 (ms)</label>
-            <input id="inputDelay" type="number" min="500" max="60000" step="500" value="3000" />
+            <label>작업간 반복 간격 (초)</label>
+            <input id="inputDelay" type="number" min="1" max="120" step="1" value="3" />
         </div>
 
         <label id="labelAllowPrdMod" class="toggle-row">
@@ -1262,7 +1262,7 @@ class RalphSidebarProvider {
         vscodeApi.postMessage({ command: 'setMaxIterations', value: parseInt(e.target.value, 10) || 50 });
     });
     document.getElementById('inputDelay').addEventListener('change', (e) => {
-        vscodeApi.postMessage({ command: 'setIterationDelay', value: parseInt(e.target.value, 10) || 3000 });
+        vscodeApi.postMessage({ command: 'setIterationDelay', value: (parseInt(e.target.value, 10) || 3) * 1000 });
     });
 
     document.getElementById('labelAllowPrdMod').addEventListener('click', (e) => {
@@ -1406,7 +1406,7 @@ class RalphSidebarProvider {
 
         // Settings
         document.getElementById('inputMaxIter').value = s.maxIterations;
-        document.getElementById('inputDelay').value = s.iterationDelay;
+        document.getElementById('inputDelay').value = s.iterationDelay / 1000;
 
         document.getElementById('chkAllowPrdMod').checked = s.allowPrdModification || false;
         document.getElementById('chkAutoStart').checked = s.autoStart || false;
