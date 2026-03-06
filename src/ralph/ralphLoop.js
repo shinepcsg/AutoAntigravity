@@ -454,6 +454,26 @@ class RalphLoopManager {
         await this.start();
     }
 
+    /**
+     * Enqueue a task request for sequential processing after the current task completes.
+     * Prevents duplicate entries for the same file path.
+     * @param {string} filePath - Absolute path to the task file
+     */
+    _enqueueTaskRequest(filePath) {
+        // 동일 경로 중복 방지
+        const alreadyQueued = this._pendingTaskQueue.some(
+            (queuedPath) => queuedPath === filePath
+        );
+
+        if (alreadyQueued) {
+            this._addLog(`[Ralph] 📋 큐 중복 무시 — 이미 대기 중: ${path.basename(filePath)}`);
+            return;
+        }
+
+        this._pendingTaskQueue.push(filePath);
+        this._addLog(`[Ralph] 📋 작업 큐에 추가 (${this._pendingTaskQueue.length}개 대기): ${path.basename(filePath)}`);
+    }
+
     // ─── CDP Helpers ──────────────────────────────────────────────────
 
     /**
