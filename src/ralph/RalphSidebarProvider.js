@@ -779,9 +779,6 @@ class RalphSidebarProvider {
         <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
             ⏹ 정지
         </button>
-        <button id="btnEmergency" class="btn btn-danger" style="display:none;">
-            🛑 긴급 정지
-        </button>
     </div>
 
     <!-- ═══ Task File Section ═══ -->
@@ -879,9 +876,6 @@ class RalphSidebarProvider {
     document.getElementById('btnStopRalph').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'stopRalph' });
     });
-    document.getElementById('btnEmergency').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'emergencyStop' });
-    });
     document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'selectTaskFile' });
     });
@@ -966,7 +960,6 @@ class RalphSidebarProvider {
         const progressArea = document.getElementById('progressArea');
         const btnStart = document.getElementById('btnStartRalph');
         const btnStop = document.getElementById('btnStopRalph');
-        const btnEmergency = document.getElementById('btnEmergency');
 
         switch (s.ralphState) {
             case 'running':
@@ -975,13 +968,11 @@ class RalphSidebarProvider {
                 progressArea.style.display = 'block';
                 btnStart.style.display = 'none';
                 btnStop.style.display = '';
-                btnEmergency.style.display = '';
                 break;
             case 'stopping':
                 statusText.textContent = 'STOPPING...';
                 btnStart.style.display = 'none';
                 btnStop.style.display = 'none';
-                btnEmergency.style.display = '';
                 break;
             default:
                 statusText.textContent = 'IDLE';
@@ -989,7 +980,6 @@ class RalphSidebarProvider {
                 progressArea.style.display = s.progress && s.progress.total > 0 ? 'block' : 'none';
                 btnStart.style.display = '';
                 btnStop.style.display = 'none';
-                btnEmergency.style.display = 'none';
         }
 
         // Iteration
