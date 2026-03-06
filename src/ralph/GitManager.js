@@ -327,7 +327,7 @@ class GitManager {
      * End the entire session:
      * 1. End active task branch (merge into session branch)
      * 2. Merge session branch into original branch (main)
-     * Called on stop/emergencyStop/all-tasks-completed.
+     * Called on stop/all-tasks-completed.
      *
      * @param {{ autoDeleteBranch: boolean }} [options]
      * @returns {{ success: boolean, merged: boolean, sessionMerged: boolean, error?: string }}
