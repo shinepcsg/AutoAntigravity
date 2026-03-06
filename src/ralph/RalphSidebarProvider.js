@@ -1127,10 +1127,10 @@ class RalphSidebarProvider {
     <!-- ═══ Task File Section ═══ -->
     <div class="section">
         <div class="section-title">📋 작업 파일</div>
-        <div id="taskFileName" class="task-file-name">선택되지 않음</div>
-        <button id="btnSelectTaskFile" class="btn btn-secondary">
-            📂 파일 선택
-        </button>
+        <div style="display:flex; align-items:center; gap:4px; margin-bottom:6px;">
+            <div id="taskFileName" class="task-file-name" style="flex:1; margin-bottom:0;">선택되지 않음</div>
+            <button id="btnSelectTaskFile" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px;">📂</button>
+        </div>
         <button id="btnGenerateSamplePrd" class="btn btn-secondary">
             📝 PRD샘플 생성
         </button>
