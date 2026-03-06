@@ -194,11 +194,12 @@ class GitManager {
                 this.log('[Git] ✅ 스태시 완료');
             }
 
-            // Create branch name: ralph/task-{iteration}-{sanitized_name}
+            // Create branch name: ralph/{sessionName}/task-{iteration}-{sanitized_name}
             const sanitized = this._sanitizeBranchName(taskText);
+            const prefix = this._sessionName ? `ralph/${this._sessionName}` : 'ralph';
             const branchName = sanitized
-                ? `ralph/task-${iteration}-${sanitized}`
-                : `ralph/task-${iteration}`;
+                ? `${prefix}/task-${iteration}-${sanitized}`
+                : `${prefix}/task-${iteration}`;
             this._workBranch = branchName;
 
             this._execGit(['checkout', '-b', this._workBranch]);
