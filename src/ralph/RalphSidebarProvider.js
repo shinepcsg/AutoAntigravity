@@ -612,6 +612,40 @@ class RalphSidebarProvider {
         font-size: 11px;
         padding: 5px 10px;
     }
+
+    /* ─── Version Buttons ─── */
+    .version-buttons {
+        margin-top: 8px;
+    }
+    .version-buttons:empty {
+        display: none;
+    }
+    .version-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 5px 10px;
+        border: 1px solid rgba(76, 175, 80, 0.3);
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 500;
+        background: rgba(76, 175, 80, 0.08);
+        color: var(--fg);
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .version-btn:hover {
+        background: rgba(76, 175, 80, 0.2);
+        border-color: var(--success);
+    }
+    .version-btn:active {
+        opacity: 0.7;
+    }
+    .version-btn + .version-btn {
+        margin-top: 4px;
+    }
 </style>
 </head>
 <body>
@@ -743,6 +777,7 @@ class RalphSidebarProvider {
             <input id="chkAutoInstall" type="checkbox" />
             ⬆ 자동 업데이트 설치
         </label>
+        <div id="versionButtons" class="version-buttons"></div>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
