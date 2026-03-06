@@ -948,11 +948,7 @@ class RalphLoopManager {
                     // 병렬 그룹 완료 콜백 호출
                     if (this.onTaskCompleteCallback) {
                         try {
-                            this.onTaskCompleteCallback({
-                                taskText: '병렬 그룹',
-                                iteration: this.currentIteration,
-                                progress: `${progress.completed}/${progress.total}`
-                            });
+                            this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress);
                         } catch (cbErr) {
                             this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                         }
