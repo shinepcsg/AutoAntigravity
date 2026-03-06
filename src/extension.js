@@ -230,7 +230,8 @@ function connectTelegram(context) {
 
     // NOTE: onAllTasksCompleteCallback은 activate()에서 통합 설정 (사이드바 큐 처리 + 텔레그램 알림)
 
-    telegramService.start(botToken, chatId);
+    const wsRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : undefined;
+    telegramService.start(botToken, chatId, wsRoot);
     context.subscriptions.push({ dispose: () => telegramService.dispose() });
     log('[Telegram] 텔레그램 봇 서비스 시작');
 
