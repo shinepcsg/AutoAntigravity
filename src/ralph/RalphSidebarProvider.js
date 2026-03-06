@@ -26,7 +26,6 @@ class RalphSidebarProvider {
         this.onToggleAutoAccept = null;
         this.onStartRalph = null;
         this.onStopRalph = null;
-        this.onEmergencyStop = null;
         this.onSelectTaskFile = null;
     }
 
@@ -58,9 +57,6 @@ class RalphSidebarProvider {
                     break;
                 case 'stopRalph':
                     if (this.onStopRalph) this.onStopRalph();
-                    break;
-                case 'emergencyStop':
-                    if (this.onEmergencyStop) this.onEmergencyStop();
                     break;
                 case 'selectTaskFile':
                     if (this.onSelectTaskFile) this.onSelectTaskFile();
@@ -250,6 +246,13 @@ class RalphSidebarProvider {
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
+            taskFileExists: (() => {
+                const tf = this.ralphLoop && this.ralphLoop.taskManager
+                    ? this.ralphLoop.taskManager.getTaskFile()
+                    : null;
+                if (!tf) return false;
+                return fs.existsSync(tf);
+            })(),
             progress: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getProgress()
                 : { total: 0, completed: 0, remaining: 0 },
@@ -262,7 +265,8 @@ class RalphSidebarProvider {
             quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] },
             // 업데이트 정보
             updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
-            autoInstall: config.get('updater.autoInstall', false)
+            autoInstall: config.get('updater.autoInstall', false),
+            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null)
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
@@ -779,9 +783,6 @@ class RalphSidebarProvider {
         <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
             ⏹ 정지
         </button>
-        <button id="btnEmergency" class="btn btn-danger" style="display:none;">
-            🛑 긴급 정지
-        </button>
     </div>
 
     <!-- ═══ Task File Section ═══ -->
@@ -856,6 +857,7 @@ class RalphSidebarProvider {
             ⬆ 자동 업데이트 설치
         </label>
         <div id="versionButtons" class="version-buttons"></div>
+        <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">⚠ Git 권한 없음 — 자동 업데이트가 비활성화되어 있습니다.</div>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -878,9 +880,6 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnStopRalph').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'stopRalph' });
-    });
-    document.getElementById('btnEmergency').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'emergencyStop' });
     });
     document.getElementById('btnSelectTaskFile').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'selectTaskFile' });
@@ -966,7 +965,6 @@ class RalphSidebarProvider {
         const progressArea = document.getElementById('progressArea');
         const btnStart = document.getElementById('btnStartRalph');
         const btnStop = document.getElementById('btnStopRalph');
-        const btnEmergency = document.getElementById('btnEmergency');
 
         switch (s.ralphState) {
             case 'running':
@@ -975,13 +973,11 @@ class RalphSidebarProvider {
                 progressArea.style.display = 'block';
                 btnStart.style.display = 'none';
                 btnStop.style.display = '';
-                btnEmergency.style.display = '';
                 break;
             case 'stopping':
                 statusText.textContent = 'STOPPING...';
                 btnStart.style.display = 'none';
                 btnStop.style.display = 'none';
-                btnEmergency.style.display = '';
                 break;
             default:
                 statusText.textContent = 'IDLE';
@@ -989,7 +985,6 @@ class RalphSidebarProvider {
                 progressArea.style.display = s.progress && s.progress.total > 0 ? 'block' : 'none';
                 btnStart.style.display = '';
                 btnStop.style.display = 'none';
-                btnEmergency.style.display = 'none';
         }
 
         // Iteration
@@ -1018,6 +1013,10 @@ class RalphSidebarProvider {
             taskFileEl.title = '';
         }
 
+        // Generate Sample PRD button visibility
+        const btnPrd = document.getElementById('btnGenerateSamplePrd');
+        btnPrd.style.display = (s.taskFile && s.taskFileExists) ? 'none' : '';
+
         // Settings
         document.getElementById('inputMaxIter').value = s.maxIterations;
         document.getElementById('inputDelay').value = s.iterationDelay;
@@ -1032,44 +1031,61 @@ class RalphSidebarProvider {
             document.getElementById('versionText').textContent = 'v' + s.version;
         }
 
-        // Update Banner
+        // Updater Active — hide update UI if no Git credentials
         const updateBanner = document.getElementById('updateBanner');
         const updateVersionText = document.getElementById('updateVersionText');
-        if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
-            updateBanner.classList.add('visible');
-            updateVersionText.textContent = 'v' + s.version + ' → v' + s.updateInfo.version;
-        } else {
-            updateBanner.classList.remove('visible');
-        }
-
-        // Auto Install checkbox
-        document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
-
-        // Version Buttons (available updates)
+        const labelAutoInstall = document.getElementById('labelAutoInstall');
         const versionBtnContainer = document.getElementById('versionButtons');
-        const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
-        if (versions.length > 0) {
-            let vhtml = '';
-            for (const v of versions) {
-                vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
-                    + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
-                    + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
-                    + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+        const noGitCredMsg = document.getElementById('noGitCredMsg');
+
+        if (!s.updaterActive) {
+            // Git 권한 없음: 업데이트 관련 UI 숨기기
+            updateBanner.classList.remove('visible');
+            labelAutoInstall.style.display = 'none';
+            versionBtnContainer.style.display = 'none';
+            noGitCredMsg.style.display = '';
+        } else {
+            // 업데이트 활성: UI 표시
+            labelAutoInstall.style.display = '';
+            versionBtnContainer.style.display = '';
+            noGitCredMsg.style.display = 'none';
+
+            // Update Banner
+            if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
+                updateBanner.classList.add('visible');
+                updateVersionText.textContent = 'v' + s.version + ' → v' + s.updateInfo.version;
+            } else {
+                updateBanner.classList.remove('visible');
             }
-            versionBtnContainer.innerHTML = vhtml;
-            // Attach click handlers
-            versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    vscodeApi.postMessage({
-                        command: 'installSpecificVersion',
-                        version: btn.getAttribute('data-version'),
-                        assetName: btn.getAttribute('data-asset'),
-                        tagName: btn.getAttribute('data-tag')
+
+            // Auto Install checkbox
+            document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
+
+            // Version Buttons (available updates)
+            const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
+            if (versions.length > 0) {
+                let vhtml = '';
+                for (const v of versions) {
+                    vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
+                        + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
+                        + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
+                        + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
+                }
+                versionBtnContainer.innerHTML = vhtml;
+                // Attach click handlers
+                versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        vscodeApi.postMessage({
+                            command: 'installSpecificVersion',
+                            version: btn.getAttribute('data-version'),
+                            assetName: btn.getAttribute('data-asset'),
+                            tagName: btn.getAttribute('data-tag')
+                        });
                     });
                 });
-            });
-        } else {
-            versionBtnContainer.innerHTML = '';
+            } else {
+                versionBtnContainer.innerHTML = '';
+            }
         }
 
         // PRD Changes

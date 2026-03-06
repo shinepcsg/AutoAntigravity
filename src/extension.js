@@ -123,9 +123,6 @@ function activate(context) {
     sidebarProvider.onStopRalph = () => {
         vscode.commands.executeCommand('autoAntigravity.stopRalphLoop');
     };
-    sidebarProvider.onEmergencyStop = () => {
-        vscode.commands.executeCommand('autoAntigravity.emergencyStop');
-    };
     sidebarProvider.onSelectTaskFile = () => {
         vscode.commands.executeCommand('autoAntigravity.selectTaskFile');
     };
@@ -211,7 +208,7 @@ function activate(context) {
 
             // 텔레그램 → 플러그인: 긴급 정지
             telegramService.onEmergencyRequest = () => {
-                ralphLoop.emergencyStop();
+                ralphLoop.stop();
                 autoAccept.disable();
                 updateAutoAcceptStatusBar();
                 updateRalphStatusBar();
@@ -284,16 +281,6 @@ function activate(context) {
         })
     );
 
-    // Emergency stop
-    context.subscriptions.push(
-        vscode.commands.registerCommand('autoAntigravity.emergencyStop', () => {
-            ralphLoop.emergencyStop();
-            autoAccept.disable();
-            updateAutoAcceptStatusBar();
-            updateRalphStatusBar();
-            log('⚠ EMERGENCY STOP — all features disabled');
-        })
-    );
 
     // Select task file
     context.subscriptions.push(
@@ -307,6 +294,13 @@ function activate(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('autoAntigravity.checkForUpdates', () => {
             if (autoUpdater) {
+                if (!autoUpdater._authHeader) {
+                    vscode.window.showWarningMessage(
+                        'AutoAntigravity: Git 자격 증명이 없어 업데이트를 확인할 수 없습니다. Git 저장소 접근 권한을 확인하세요.'
+                    );
+                    log('[Updater] checkForUpdates 차단됨 — _authHeader가 null');
+                    return;
+                }
                 autoUpdater.checkForUpdates();
             }
         })
@@ -344,7 +338,7 @@ function activate(context) {
         if (sidebarProvider) sidebarProvider.updateState();
     };
 
-    autoUpdater.start();
+    autoUpdater.start().catch(e => log(`[Updater] start failed: ${e.message}`));
     context.subscriptions.push({ dispose: () => autoUpdater.dispose() });
 }
 

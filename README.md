@@ -21,7 +21,7 @@ PRD.md 기반 **반복적 에이전트 자율 실행** 시스템입니다.
 - **진행 기록**: `progress.txt`에 각 반복의 결과를 append-only로 기록
 - **자동 커밋**: 매 반복마다 Git 자동 커밋
 - **컨텍스트 갱신**: 매 반복마다 새 세션으로 컨텍스트 윈도우 한계 극복
-- **안전장치**: 최대 반복 횟수, 긴급 정지 기능
+- **안전장치**: 최대 반복 횟수 제한
 
 ---
 
@@ -62,7 +62,7 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
    ```
 2. **시작**: `Ctrl+Shift+P` → `AutoAntigravity: Start Ralph Loop`
 3. **정지**: `Ctrl+Shift+P` → `AutoAntigravity: Stop Ralph Loop`
-4. **긴급정지**: `Ctrl+Shift+P` → `AutoAntigravity: Emergency Stop`
+
 
 ### `/write-prd` 워크플로우 등록
 

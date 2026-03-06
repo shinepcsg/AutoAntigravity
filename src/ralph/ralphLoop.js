@@ -337,35 +337,13 @@ class RalphLoopManager {
         this._notifyStateChange();
     }
 
-    /**
-     * Emergency stop — immediate halt
-     */
-    emergencyStop() {
-        this._sessionLock.release();
-        this._addLog('[Ralph] ⚠ 긴급 정지!', 'error');
-
-        if (this.loopTimer) {
-            clearTimeout(this.loopTimer);
-            this.loopTimer = null;
-        }
-
-        // ── 대기 큐 클리어 ──
-        this._pendingTaskQueue = [];
-
-        // ── Git: End session & merge ──
-        this._endGitSession();
-
-        this.state = LoopState.IDLE;
-        vscode.window.showWarningMessage('🛑 Ralph Loop EMERGENCY STOPPED');
-        this._notifyStateChange();
-    }
 
     /**
      * Dispose / cleanup
      */
     dispose() {
         this.disableAutoStart();
-        this.emergencyStop();
+        this.stop();
     }
 
     // ─── Auto Start (FileSystemWatcher) ───────────────────────────────
