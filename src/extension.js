@@ -123,9 +123,6 @@ function activate(context) {
     sidebarProvider.onStopRalph = () => {
         vscode.commands.executeCommand('autoAntigravity.stopRalphLoop');
     };
-    sidebarProvider.onEmergencyStop = () => {
-        vscode.commands.executeCommand('autoAntigravity.emergencyStop');
-    };
     sidebarProvider.onSelectTaskFile = () => {
         vscode.commands.executeCommand('autoAntigravity.selectTaskFile');
     };
@@ -284,16 +281,6 @@ function activate(context) {
         })
     );
 
-    // Emergency stop
-    context.subscriptions.push(
-        vscode.commands.registerCommand('autoAntigravity.emergencyStop', () => {
-            ralphLoop.emergencyStop();
-            autoAccept.disable();
-            updateAutoAcceptStatusBar();
-            updateRalphStatusBar();
-            log('⚠ EMERGENCY STOP — all features disabled');
-        })
-    );
 
     // Select task file
     context.subscriptions.push(
