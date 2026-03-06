@@ -973,6 +973,14 @@ class RalphLoopManager {
         const taskGroup = this.taskManager.getNextTaskGroup();
 
         if (taskGroup.tasks.length === 0) {
+            // ── 큐에 대기 중인 작업이 있으면 먼저 처리 ──
+            if (this._pendingTaskQueue.length > 0) {
+                this._addLog('[Ralph] 📋 현재 PRD 작업 완료 — 대기 큐에서 다음 작업 시작');
+                this._endGitSession();
+                await this._processNextQueuedTask();
+                return;
+            }
+
             // ── Git: End session & merge on completion ──
             this._endGitSession();
 
