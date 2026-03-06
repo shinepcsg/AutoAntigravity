@@ -265,7 +265,8 @@ class RalphSidebarProvider {
             quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] },
             // 업데이트 정보
             updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
-            autoInstall: config.get('updater.autoInstall', false)
+            autoInstall: config.get('updater.autoInstall', false),
+            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null)
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
