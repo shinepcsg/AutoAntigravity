@@ -908,10 +908,7 @@ class RalphLoopManager {
             if (this.onAllTasksCompleteCallback) {
                 try {
                     const finalProgress = this.taskManager.getProgress();
-                    this.onAllTasksCompleteCallback({
-                        totalTasks: finalProgress.total,
-                        totalIterations: this.currentIteration
-                    });
+                    this.onAllTasksCompleteCallback(finalProgress.total, this.currentIteration);
                 } catch (cbErr) {
                     this._addLog(`[Ralph] ⚠ onAllTasksCompleteCallback 에러: ${cbErr.message}`, 'warn');
                 }
@@ -951,11 +948,7 @@ class RalphLoopManager {
                     // 병렬 그룹 완료 콜백 호출
                     if (this.onTaskCompleteCallback) {
                         try {
-                            this.onTaskCompleteCallback({
-                                taskText: '병렬 그룹',
-                                iteration: this.currentIteration,
-                                progress: `${progress.completed}/${progress.total}`
-                            });
+                            this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress);
                         } catch (cbErr) {
                             this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                         }
@@ -1043,11 +1036,7 @@ class RalphLoopManager {
                 // 개별 작업 완료 콜백 호출
                 if (this.onTaskCompleteCallback) {
                     try {
-                        this.onTaskCompleteCallback({
-                            taskText: task.text,
-                            iteration: this.currentIteration,
-                            progress: `${progress.completed}/${progress.total}`
-                        });
+                        this.onTaskCompleteCallback(task.text, this.currentIteration, progress);
                     } catch (cbErr) {
                         this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                     }
