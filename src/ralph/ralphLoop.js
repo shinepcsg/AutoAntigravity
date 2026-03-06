@@ -474,6 +474,45 @@ class RalphLoopManager {
         this._addLog(`[Ralph] 📋 작업 큐에 추가 (${this._pendingTaskQueue.length}개 대기): ${path.basename(filePath)}`);
     }
 
+    /**
+     * Process the next queued task request.
+     * Dequeues one task from _pendingTaskQueue, sets up the task file, and calls start().
+     * Called after the current task completes to chain queued work.
+     * @returns {boolean} true if a queued task was started, false if queue was empty
+     */
+    async _processNextQueuedTask() {
+        if (this._pendingTaskQueue.length === 0) {
+            this._addLog('[Ralph] 📋 대기 큐 비어 있음 — 추가 작업 없음');
+            return false;
+        }
+
+        const filePath = this._pendingTaskQueue.shift();
+        this._addLog(`[Ralph] 📋 큐에서 다음 작업 꺼냄 (남은 대기: ${this._pendingTaskQueue.length}): ${path.basename(filePath)}`);
+
+        // 작업 파일 세팅
+        this.taskManager.setTaskFile(filePath);
+
+        // workspaceState에 경로 영속 저장
+        if (this._context) {
+            this._context.workspaceState.update('autoAntigravity.lastTaskFilePath', filePath);
+        }
+
+        // 미완료 작업이 있는지 확인
+        if (this.taskManager.allTasksCompleted()) {
+            this._addLog(`[Ralph] ✅ 큐 작업 파일의 모든 작업이 이미 완료: ${path.basename(filePath)}`);
+            // 아직 큐에 남은 항목이 있으면 재귀적으로 다음 처리
+            return this._processNextQueuedTask();
+        }
+
+        const progress = this.taskManager.getProgress();
+        this._addLog(`[Ralph] 🚀 큐 작업 시작: ${progress.remaining}개 미완료 작업 — ${path.basename(filePath)}`);
+
+        // 현재 상태를 IDLE로 전환하여 start()가 정상 동작하도록 함
+        this.state = LoopState.IDLE;
+        await this.start();
+        return true;
+    }
+
     // ─── CDP Helpers ──────────────────────────────────────────────────
 
     /**
