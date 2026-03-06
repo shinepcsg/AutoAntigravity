@@ -908,10 +908,7 @@ class RalphLoopManager {
             if (this.onAllTasksCompleteCallback) {
                 try {
                     const finalProgress = this.taskManager.getProgress();
-                    this.onAllTasksCompleteCallback({
-                        totalTasks: finalProgress.total,
-                        totalIterations: this.currentIteration
-                    });
+                    this.onAllTasksCompleteCallback(finalProgress.total, this.currentIteration);
                 } catch (cbErr) {
                     this._addLog(`[Ralph] ⚠ onAllTasksCompleteCallback 에러: ${cbErr.message}`, 'warn');
                 }
