@@ -164,7 +164,7 @@ Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git wor
 | `autoAntigravity.ralphLoop.progressFile` | `progress.txt` | 진행 파일명 |
 | `autoAntigravity.ralphLoop.autoCommit` | `true` | Git 작업별 브랜치 & 자동 커밋 |
 | `autoAntigravity.ralphLoop.autoDeleteBranch` | `true` | 머지 후 작업 브랜치 자동 삭제 |
-| `autoAntigravity.ralphLoop.iterationDelayMs` | `3000` | 반복 간 대기 (ms) |
+| `autoAntigravity.ralphLoop.iterationDelayMs` | `1500` | 반복 간 대기 (ms) |
 | `autoAntigravity.ralphLoop.allowPrdModification` | `false` | 에이전트의 PRD 수정 허용 |
 | `autoAntigravity.ralphLoop.autoStart` | `true` | PRD 파일 변경 시 Ralph Loop 자동 시작 |
 | `autoAntigravity.ralphLoop.enableParallel` | `true` | `[병렬진행]` 작업 병렬 실행 활성화 |

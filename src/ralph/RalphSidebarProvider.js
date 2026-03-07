@@ -475,7 +475,7 @@ class RalphSidebarProvider {
             ralphState: this.ralphLoop ? this.ralphLoop.getState() : 'idle',
             currentIteration: this.ralphLoop ? this.ralphLoop.currentIteration : 0,
             maxIterations: config.get('ralphLoop.maxIterations', 50),
-            iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
+            iterationDelay: config.get('ralphLoop.iterationDelayMs', 1500),
 
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
             autoStart: config.get('ralphLoop.autoStart', true),
@@ -1239,7 +1239,7 @@ class RalphSidebarProvider {
         </div>
         <div class="form-row">
             <label>작업간 반복 간격 (초)</label>
-            <input id="inputDelay" type="number" min="1" max="120" step="1" value="3" />
+            <input id="inputDelay" type="number" min="0.5" max="120" step="0.5" value="1.5" />
         </div>
 
         <label id="labelAllowPrdMod" class="toggle-row">

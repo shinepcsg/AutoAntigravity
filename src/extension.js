@@ -296,7 +296,7 @@ function connectTelegram(context) {
             `⚙️ *현재 설정*`,
             ``,
             `🔄 *Max Iterations*: ${config.get('ralphLoop.maxIterations', 50)}`,
-            `⏱ *Iteration Delay*: ${config.get('ralphLoop.iterationDelayMs', 3000)}ms`,
+            `⏱ *Iteration Delay*: ${config.get('ralphLoop.iterationDelayMs', 1500)}ms`,
             `📝 *PRD Modification*: ${config.get('ralphLoop.allowPrdModification', false) ? 'ON' : 'OFF'}`,
             `▶️ *Auto Start*: ${config.get('ralphLoop.autoStart', true) ? 'ON' : 'OFF'}`,
             `💾 *Auto Commit*: ${config.get('ralphLoop.autoCommit', true) ? 'ON' : 'OFF'}`,
