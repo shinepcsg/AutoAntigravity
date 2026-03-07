@@ -253,53 +253,59 @@ class RalphLoopManager {
         const autoCommit = vscode.workspace.getConfiguration('autoAntigravity')
             .get('ralphLoop.autoCommit', true);
         if (autoCommit) {
-            const wsRoot = workspaceFolders[0].uri.fsPath;
+            // 이미 활성 세션이 있으면 건너뜀 (텔레그램/큐에서 미리 생성된 경우)
+            const existingSession = this.gitManager.getSessionInfo();
+            if (existingSession.active) {
+                this._addLog(`[Ralph] 📌 기존 세션 사용: ${existingSession.sessionBranch || existingSession.originalBranch}`);
+            } else {
+                const wsRoot = workspaceFolders[0].uri.fsPath;
 
-            // ── 작업 파일 기반 세션 라벨 추출 ──
-            let sessionLabel = '';
-            try {
-                const fs = require('fs');
-                const taskFilePath = this.taskManager.getTaskFile();
-                if (taskFilePath && fs.existsSync(taskFilePath)) {
-                    const content = fs.readFileSync(taskFilePath, 'utf-8');
-                    const lines = content.split('\n');
+                // ── 작업 파일 기반 세션 라벨 추출 ──
+                let sessionLabel = '';
+                try {
+                    const fs = require('fs');
+                    const taskFilePath = this.taskManager.getTaskFile();
+                    if (taskFilePath && fs.existsSync(taskFilePath)) {
+                        const content = fs.readFileSync(taskFilePath, 'utf-8');
+                        const lines = content.split('\n');
 
-                    // 1) 첫 번째 # 제목 헤더 추출
-                    for (const line of lines) {
-                        const headerMatch = line.trim().match(/^#\s+(.+)$/);
-                        if (headerMatch) {
-                            sessionLabel = headerMatch[1].trim();
-                            break;
-                        }
-                    }
-
-                    // 2) # 제목이 없으면 첫 번째 미완료 작업 텍스트 사용
-                    if (!sessionLabel) {
+                        // 1) 첫 번째 # 제목 헤더 추출
                         for (const line of lines) {
-                            const taskMatch = line.trim().match(/^[-*]\s*\[\s*\]\s+(.+)$/);
-                            if (taskMatch) {
-                                sessionLabel = taskMatch[1].trim();
+                            const headerMatch = line.trim().match(/^#\s+(.+)$/);
+                            if (headerMatch) {
+                                sessionLabel = headerMatch[1].trim();
                                 break;
                             }
                         }
-                    }
 
-                    if (sessionLabel) {
-                        this._addLog(`[Ralph] 🏷 세션 라벨 추출: "${sessionLabel}"`);
-                    }
-                }
-            } catch (e) {
-                this._addLog(`[Ralph] ⚠ 세션 라벨 추출 실패: ${e.message}`, 'warn');
-            }
+                        // 2) # 제목이 없으면 첫 번째 미완료 작업 텍스트 사용
+                        if (!sessionLabel) {
+                            for (const line of lines) {
+                                const taskMatch = line.trim().match(/^[-*]\s*\[\s*\]\s+(.+)$/);
+                                if (taskMatch) {
+                                    sessionLabel = taskMatch[1].trim();
+                                    break;
+                                }
+                            }
+                        }
 
-            const gitResult = this.gitManager.initSession(wsRoot, sessionLabel);
-            if (gitResult.success) {
-                this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch}`);
-                if (gitResult.sessionBranch) {
-                    this._addLog(`[Ralph] 🌿 Git 세션 브랜치: ${gitResult.sessionBranch} (작업별 브랜치 → 세션 → 원본 모드)`);
+                        if (sessionLabel) {
+                            this._addLog(`[Ralph] 🏷 세션 라벨 추출: "${sessionLabel}"`);
+                        }
+                    }
+                } catch (e) {
+                    this._addLog(`[Ralph] ⚠ 세션 라벨 추출 실패: ${e.message}`, 'warn');
                 }
-            } else {
-                this._addLog(`[Ralph] ⚠ Git 브랜치 관리 비활성 — ${gitResult.error || '알 수 없는 오류'}`, 'warn');
+
+                const gitResult = this.gitManager.initSession(wsRoot, sessionLabel);
+                if (gitResult.success) {
+                    this._addLog(`[Ralph] 📌 Git 원본 브랜치: ${gitResult.originalBranch}`);
+                    if (gitResult.sessionBranch) {
+                        this._addLog(`[Ralph] 🌿 Git 세션 브랜치: ${gitResult.sessionBranch} (작업별 브랜치 → 세션 → 원본 모드)`);
+                    }
+                } else {
+                    this._addLog(`[Ralph] ⚠ Git 브랜치 관리 비활성 — ${gitResult.error || '알 수 없는 오류'}`, 'warn');
+                }
             }
         }
 

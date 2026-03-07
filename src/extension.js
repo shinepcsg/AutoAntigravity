@@ -69,6 +69,35 @@ function updateRalphStatusBar() {
     if (sidebarProvider) sidebarProvider.updateState();
 }
 
+// ─── Git Session Helper ────────────────────────────────────────────────
+/**
+ * IDLE 상태에서 _sendToAgent 직접 호출 전에 Git 세션 브랜치를 미리 생성.
+ * 이렇게 해야 PRD 작성 커밋도 세션 브랜치에서 이루어짐.
+ * @param {string} label - 세션 라벨 (작업 설명 등)
+ */
+function _initGitSessionIfIdle(label) {
+    const autoCommit = vscode.workspace.getConfiguration('autoAntigravity')
+        .get('ralphLoop.autoCommit', true);
+    if (!autoCommit) return;
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const wsRoot = workspaceFolders && workspaceFolders.length > 0
+        ? workspaceFolders[0].uri.fsPath : null;
+    if (!wsRoot) return;
+
+    // 이미 활성 세션이 있으면 건너뜀
+    const existing = ralphLoop.gitManager.getSessionInfo();
+    if (existing.active) {
+        log(`[Git] 📌 기존 세션 사용: ${existing.sessionBranch || existing.originalBranch}`);
+        return;
+    }
+
+    const gitResult = ralphLoop.gitManager.initSession(wsRoot, label);
+    if (gitResult.success) {
+        log(`[Git] 🌿 세션 브랜치 생성: ${gitResult.sessionBranch}`);
+    }
+}
+
 // ─── Telegram Connect / Disconnect ────────────────────────────────────
 function connectTelegram(context) {
     _extensionContext = context;
@@ -107,6 +136,9 @@ function connectTelegram(context) {
         const state = ralphLoop.getState();
 
         if (state === LoopState.IDLE) {
+            // Git 세션 초기화 (PRD 작성도 세션 브랜치에서 진행)
+            _initGitSessionIfIdle(text);
+
             // Ralph Loop가 idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${prompt.substring(0, 80)}`);
@@ -258,6 +290,9 @@ function connectTelegram(context) {
         const state = ralphLoop.getState();
 
         if (state === LoopState.IDLE) {
+            // Git 세션 초기화 (워크플로우도 세션 브랜치에서 진행)
+            _initGitSessionIfIdle(workflowName);
+
             // Ralph Loop가 idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 워크플로우 프롬프트 전송: ${prompt.substring(0, 80)}`);
@@ -336,6 +371,9 @@ function connectTelegram(context) {
         const state = ralphLoop.getState();
 
         if (state === LoopState.IDLE) {
+            // Git 세션 초기화 (미디어 작업도 세션 브랜치에서 진행)
+            _initGitSessionIfIdle(captionText || '미디어-첨부-작업');
+
             // idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
@@ -446,6 +484,9 @@ function activate(context) {
 
             // 큐 작업에 의한 PRD 변경 시 autoStart 무관하게 자동 시작되도록 플래그 설정
             ralphLoop._forceNextAutoStart = true;
+
+            // Git 세션 초기화 (큐 작업도 세션 브랜치에서 진행)
+            _initGitSessionIfIdle(nextTask);
 
             const prompt = `/write-prd ${nextTask}`;
             try {
