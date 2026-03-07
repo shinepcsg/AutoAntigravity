@@ -475,7 +475,7 @@ class RalphSidebarProvider {
             ralphState: this.ralphLoop ? this.ralphLoop.getState() : 'idle',
             currentIteration: this.ralphLoop ? this.ralphLoop.currentIteration : 0,
             maxIterations: config.get('ralphLoop.maxIterations', 50),
-            iterationDelay: config.get('ralphLoop.iterationDelayMs', 3000),
+            iterationDelay: config.get('ralphLoop.iterationDelayMs', 1500),
 
             allowPrdModification: config.get('ralphLoop.allowPrdModification', false),
             autoStart: config.get('ralphLoop.autoStart', true),
@@ -1239,7 +1239,7 @@ class RalphSidebarProvider {
         </div>
         <div class="form-row">
             <label>작업간 반복 간격 (초)</label>
-            <input id="inputDelay" type="number" min="1" max="120" step="1" value="3" />
+            <input id="inputDelay" type="number" min="0.5" max="120" step="0.5" value="1.5" />
         </div>
 
         <label id="labelAllowPrdMod" class="toggle-row">
@@ -1418,6 +1418,7 @@ class RalphSidebarProvider {
 
         switch (s.ralphState) {
             case 'running':
+                pill.style.display = '';
                 statusText.textContent = 'RUNNING';
                 iterArea.style.display = 'block';
                 progressArea.style.display = 'block';
@@ -1425,14 +1426,17 @@ class RalphSidebarProvider {
                 btnStop.style.display = '';
                 break;
             case 'stopping':
+                pill.style.display = '';
                 statusText.textContent = 'STOPPING...';
+                progressArea.style.display = 'none';
                 btnStart.style.display = 'none';
                 btnStop.style.display = 'none';
                 break;
             default:
+                pill.style.display = 'none';
                 statusText.textContent = 'IDLE';
                 iterArea.style.display = 'none';
-                progressArea.style.display = s.progress && s.progress.total > 0 ? 'block' : 'none';
+                progressArea.style.display = 'none';
                 btnStart.style.display = '';
                 btnStop.style.display = 'none';
         }
@@ -1738,11 +1742,10 @@ class RalphSidebarProvider {
                 } else {
                     const h = Math.floor(diff / 3600000);
                     const m = Math.floor((diff % 3600000) / 60000);
-                    const s = Math.floor((diff % 60000) / 1000);
-                    el.textContent = '⏱ 리셋까지 ' + h + '시간 ' + m + '분 ' + s + '초';
+                    el.textContent = '⏱ 리셋까지 ' + h + '시간 ' + m + '분';
                 }
             });
-        }, 1000);
+        }, 60000);
     }
 
     // Request initial state
