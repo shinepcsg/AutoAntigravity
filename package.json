@@ -125,7 +125,7 @@
                 },
                 "autoAntigravity.ralphLoop.iterationDelayMs": {
                     "type": "number",
-                    "default": 3000,
+                    "default": 1500,
                     "description": "Delay between iterations in milliseconds"
                 },
                 "autoAntigravity.ralphLoop.allowPrdModification": {

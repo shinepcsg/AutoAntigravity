@@ -1215,7 +1215,7 @@ class RalphLoopManager {
 
         // Schedule next iteration
         if (this.state === LoopState.RUNNING) {
-            const delay = config.get('ralphLoop.iterationDelayMs', 3000);
+            const delay = config.get('ralphLoop.iterationDelayMs', 1500);
             this._addLog(`[Ralph] ⏱ 다음 반복까지 ${delay}ms 대기...`);
             this.loopTimer = setTimeout(() => this._runNextIteration(), delay);
         }
