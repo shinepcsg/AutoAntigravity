@@ -245,7 +245,9 @@ class RalphSidebarProvider {
                 }
                 case 'toggleTelegram': {
                     // If no credentials, show the credential form
-                    const hasCred = !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId);
+                    // Check telegramService first, then fall back to .env file
+                    const hasCred = !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId)
+                        || (() => { const c = this._getEnvTelegramCreds(); return !!(c.botToken && c.chatId); })();
                     if (!hasCred) {
                         this._showTelegramCredForm = true;
                         this.updateState();
@@ -501,7 +503,8 @@ class RalphSidebarProvider {
             updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null),
             // 텔레그램 상태
             telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
-            telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId),
+            telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId)
+                || (() => { const c = this._getEnvTelegramCreds(); return !!(c.botToken && c.chatId); })(),
             showTelegramCredForm: this._showTelegramCredForm || false,
             // write-prd 워크플로우 존재 여부
             hasWritePrdWorkspace: (() => {
@@ -515,6 +518,32 @@ class RalphSidebarProvider {
         };
 
         this._view.webview.postMessage({ command: 'updateState', state });
+    }
+
+    /**
+     * Read TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from workspace .env file.
+     * Used as fallback when telegramService is null (disconnected).
+     * @returns {{ botToken: string, chatId: string }}
+     */
+    _getEnvTelegramCreds() {
+        let botToken = '';
+        let chatId = '';
+        const folders = vscode.workspace.workspaceFolders;
+        if (folders && folders.length > 0) {
+            const envPath = path.join(folders[0].uri.fsPath, '.env');
+            if (fs.existsSync(envPath)) {
+                const content = fs.readFileSync(envPath, 'utf-8');
+                for (const line of content.split('\n')) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('TELEGRAM_BOT_TOKEN=')) {
+                        botToken = trimmed.substring('TELEGRAM_BOT_TOKEN='.length).trim();
+                    } else if (trimmed.startsWith('TELEGRAM_CHAT_ID=')) {
+                        chatId = trimmed.substring('TELEGRAM_CHAT_ID='.length).trim();
+                    }
+                }
+            }
+        }
+        return { botToken, chatId };
     }
 
     /**
