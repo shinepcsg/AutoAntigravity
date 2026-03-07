@@ -229,6 +229,14 @@ class TelegramService {
             if (this.onConfigRequest) this.onConfigRequest();
         } else if (text === '/queue') {
             if (this.onQueueRequest) this.onQueueRequest();
+        } else if (text.startsWith('/task')) {
+            // /task 명령: 뒤의 텍스트를 onTaskRequest 콜백으로 전달
+            const taskText = text.replace(/^\/task\s*/, '').trim();
+            if (!taskText) {
+                this.sendMessage('사용법: `/task [작업 내용]`\n예: `/task 로그인 페이지 버그 수정`');
+            } else if (this.onTaskRequest) {
+                this.onTaskRequest(taskText);
+            }
         } else if (text.startsWith('/')) {
             // Dynamic workflow slash command: /workflow-name optional args
             const match = text.match(/^\/([a-zA-Z0-9_-]+)\s*(.*)/s);
