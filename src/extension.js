@@ -432,8 +432,12 @@ function connectTelegram(context) {
         telegramService.onRalphLog(logEntry);
     };
 
-    // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달
-    ralphLoop.onTaskCompleteCallback = telegramService.sendTaskResult.bind(telegramService);
+    // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달 (detailedNotification 플래그에 따라 조건부)
+    ralphLoop.onTaskCompleteCallback = (taskText, iteration, progress) => {
+        if (telegramService.detailedNotification) {
+            telegramService.sendTaskResult(taskText, iteration, progress);
+        }
+    };
 
     // NOTE: onAllTasksCompleteCallback은 activate()에서 통합 설정 (사이드바 큐 처리 + 텔레그램 알림)
 
