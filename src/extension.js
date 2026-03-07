@@ -101,8 +101,8 @@ function connectTelegram(context) {
 
     telegramService = new TelegramService(log);
 
-    // 텔레그램 → 플러그인: 일반 메시지 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
-    telegramService.onMessageReceived = async (text) => {
+    // 텔레그램 → 플러그인: /task 명령 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
+    telegramService.onTaskRequest = async (text) => {
         const prompt = `/write-prd ${text}`;
         const state = ralphLoop.getState();
 
@@ -155,7 +155,7 @@ function connectTelegram(context) {
         }
 
         lines.push(``);
-        lines.push(`💬 일반 텍스트를 보내면 *작업 큐*에 자동 추가됩니다.`);
+        lines.push(`💡 작업을 요청하려면 \`/task [작업 내용]\`을 사용하세요.`);
 
         telegramService.sendMessage(lines.join('\n'));
     };
