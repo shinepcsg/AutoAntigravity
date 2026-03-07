@@ -1181,9 +1181,7 @@ class RalphLoopManager {
                     this.gitManager.commitIteration(this.currentIteration, task.text);
                     const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
                     const mergeResult = this.gitManager.endTaskBranch(autoDeleteBranch);
-                    if (mergeResult.success && mergeResult.merged) {
-                        this._addLog(`[Git] ✅ 작업 브랜치 → 원본 브랜치 머지 완료`);
-                    } else if (!mergeResult.success) {
+                    if (!mergeResult.success) {
                         this._addLog(`[Git] ⚠ 머지 중 문제: ${mergeResult.error}`, 'warn');
                     }
                 }

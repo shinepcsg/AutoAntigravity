@@ -267,11 +267,14 @@ class GitManager {
             this._execGit(['checkout', mergeTo]);
 
             try {
-                // Extract task description from branch name for commit message
+                // Extract iteration number from branch name for a concise merge message
                 // Branch format: ralph/{sessionName}/task-{iteration}-{description}
-                const taskDesc = workBranch.replace(/^.*\/task-/, '작업 ');
+                // The full task description is already in the prior commit message,
+                // so only include the short iteration id in the merge commit.
+                const iterMatch = workBranch.match(/\/task-(\d+(?:-\d+)?)/);
+                const iterTag = iterMatch ? `#${iterMatch[1]}` : workBranch.split('/').pop();
                 this._execGit(['merge', workBranch, '--no-ff', '-m',
-                    `merge: ${taskDesc}`]);
+                    `merge: ${iterTag}`]);
                 this.log('[Git] ✅ 머지 완료');
 
                 // Delete work branch after merge (if option enabled)
