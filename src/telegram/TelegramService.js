@@ -25,6 +25,7 @@ class TelegramService {
         this.onQueueRequest = null;
         this.onWorkflowRequest = null;
         this.onMediaReceived = null;
+        this.onTaskRequest = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -235,7 +236,8 @@ class TelegramService {
                 this.onWorkflowRequest(match[1], match[2].trim());
             }
         } else {
-            if (this.onMessageReceived) this.onMessageReceived(text);
+            // 일반 텍스트 메시지 → /task 사용 안내
+            this.sendMessage('작업을 요청하려면 `/task [작업 내용]`을 사용하세요.');
         }
     }
 
