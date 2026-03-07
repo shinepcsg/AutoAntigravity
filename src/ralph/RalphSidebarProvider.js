@@ -1547,10 +1547,13 @@ class RalphSidebarProvider {
             tgBtn.classList.add('active');
             tgBtn.innerHTML = '📡 텔레그램 연결 해제';
             tgCredForm.style.display = 'none';
+            document.getElementById('labelTelegramDetail').style.display = '';
+            document.getElementById('chkTelegramDetail').checked = !!s.telegramDetailedNotification;
         } else {
             tgBtn.classList.remove('active');
             tgBtn.innerHTML = '📡 텔레그램 연결';
             tgCredForm.style.display = s.showTelegramCredForm ? '' : 'none';
+            document.getElementById('labelTelegramDetail').style.display = 'none';
         }
 
         // write-prd 버튼 표시/숨김
