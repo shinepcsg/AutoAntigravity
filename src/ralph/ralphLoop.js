@@ -249,6 +249,12 @@ class RalphLoopManager {
         this.progressTracker.initializeProgressFile();
         this.currentIteration = this.progressTracker.getLastIteration();
 
+        // ── Workspace root 설정 (병렬 워크트리에 필수) ──
+        const wsRootForGit = workspaceFolders[0].uri.fsPath;
+        if (!this.gitManager._workspaceRoot) {
+            this.gitManager._workspaceRoot = wsRootForGit;
+        }
+
         // ── Git Session Init (per-task branching) ──
         const autoCommit = vscode.workspace.getConfiguration('autoAntigravity')
             .get('ralphLoop.autoCommit', true);
