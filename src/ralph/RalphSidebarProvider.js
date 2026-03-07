@@ -424,7 +424,7 @@ class RalphSidebarProvider {
                             });
                         } else {
                             // 실행 중 → 큐에 추가
-                            this._taskQueue.push(text);
+                            this._taskQueue.push({ text, mediaPaths: [] });
                             this._log(`[Sidebar] Task enqueued: ${text.substring(0, 50)}...`);
                         }
                     }
@@ -435,7 +435,7 @@ class RalphSidebarProvider {
                     const idx = message.index;
                     if (typeof idx === 'number' && idx >= 0 && idx < this._taskQueue.length) {
                         const removed = this._taskQueue.splice(idx, 1);
-                        this._log(`[Sidebar] Task dequeued: ${removed[0].substring(0, 50)}...`);
+                        this._log(`[Sidebar] Task dequeued: ${removed[0].text.substring(0, 50)}...`);
                     }
                     this.updateState();
                     break;
@@ -1524,8 +1524,12 @@ class RalphSidebarProvider {
         } else {
             let qhtml = '';
             for (let i = 0; i < queueArr.length; i++) {
-                qhtml += '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;background:var(--input-bg);border-radius:3px;margin-bottom:4px;font-size:11px;">'
-                    + '<span style="flex:1;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(queueArr[i]) + '</span>'
+                    const item = queueArr[i];
+                    const itemText = typeof item === 'string' ? item : (item.text || '');
+                    const mediaCount = (item.mediaPaths && item.mediaPaths.length) || 0;
+                    const mediaTag = mediaCount > 0 ? ' <span style="opacity:0.6;" title="첨부 미디어 ' + mediaCount + '개">📎' + mediaCount + '</span>' : '';
+                    qhtml += '<div style="display:flex;align-items:flex-start;gap:6px;padding:5px 6px;background:var(--input-bg);border-radius:3px;margin-bottom:4px;font-size:11px;">'
+                    + '<span style="flex:1;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(itemText) + mediaTag + '</span>'
                     + '<button class="task-queue-delete-btn" data-index="' + i + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;" title="삭제">✕</button>'
                     + '</div>';
             }

@@ -117,7 +117,7 @@ function connectTelegram(context) {
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가
-            sidebarProvider._taskQueue.push(text);
+            sidebarProvider._taskQueue.push({ text, mediaPaths: [] });
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
             log('[Telegram] 작업 큐에 추가: ' + text.substring(0, 80));
@@ -245,7 +245,7 @@ function connectTelegram(context) {
             telegramService.sendMessage('📋 작업 큐가 비어있습니다.');
             return;
         }
-        const items = sidebarProvider._taskQueue.map((t, i) => `${i + 1}. ${t.substring(0, 60)}`);
+        const items = sidebarProvider._taskQueue.map((t, i) => `${i + 1}. ${t.text.substring(0, 60)}${t.mediaPaths.length > 0 ? ` 📎${t.mediaPaths.length}` : ''}`);
         const msg = [`📋 *작업 큐* (${sidebarProvider._taskQueue.length}개)`, ``, ...items].join('\n');
         telegramService.sendMessage(msg);
     };
@@ -269,7 +269,7 @@ function connectTelegram(context) {
         } else {
             // Ralph Loop가 실행 중이면 작업 큐에 추가
             if (sidebarProvider) {
-                sidebarProvider._taskQueue.push(prompt);
+                sidebarProvider._taskQueue.push({ text: prompt, mediaPaths: [] });
                 sidebarProvider.updateState();
                 telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${prompt.substring(0, 80)}`);
                 log(`[Telegram] 작업 큐에 워크플로우 추가: ${prompt.substring(0, 80)}`);
@@ -347,7 +347,7 @@ function connectTelegram(context) {
         } else if (sidebarProvider) {
             // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로)
             const queueText = captionText || '미디어 첨부 작업';
-            sidebarProvider._taskQueue.push(queueText);
+            sidebarProvider._taskQueue.push({ text: queueText, mediaPaths: downloadedPaths });
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 미디어 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개, 파일 ${downloadedPaths.length}개): ${queueText.substring(0, 60)}`);
             log(`[Telegram] 미디어 작업 큐에 추가: ${queueText.substring(0, 80)}`);
@@ -428,8 +428,10 @@ function activate(context) {
 
         // 2) 사이드바 큐에 항목이 있으면 다음 작업을 write-prd 워크플로우로 전송
         if (sidebarProvider && sidebarProvider._taskQueue.length > 0) {
-            const nextTask = sidebarProvider._taskQueue.shift();
-            log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (남은: ${sidebarProvider._taskQueue.length}): ${nextTask.substring(0, 80)}`);
+            const nextItem = sidebarProvider._taskQueue.shift();
+            const nextTask = nextItem.text;
+            const nextMediaPaths = nextItem.mediaPaths || [];
+            log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (남은: ${sidebarProvider._taskQueue.length}${nextMediaPaths.length > 0 ? ', 미디어 ' + nextMediaPaths.length + '개' : ''}): ${nextTask.substring(0, 80)}`);
             sidebarProvider.updateState(); // 큐 UI 갱신
 
             // 큐 작업에 의한 PRD 변경 시 autoStart 무관하게 자동 시작되도록 플래그 설정
