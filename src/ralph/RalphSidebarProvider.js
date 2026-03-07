@@ -867,12 +867,12 @@ class RalphSidebarProvider {
         margin-bottom: 8px;
     }
     .quota-model {
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
-    .quota-model-header {
+    .quota-model-row1 {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 6px;
         font-size: 11px;
         margin-bottom: 3px;
     }
@@ -881,15 +881,19 @@ class RalphSidebarProvider {
         overflow: hidden;
         text-overflow: ellipsis;
         flex: 1;
-        margin-right: 6px;
     }
     .quota-pct {
         font-weight: 600;
         font-size: 11px;
         flex-shrink: 0;
     }
+    .quota-model-row2 {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
     .quota-bar {
-        width: 100%;
+        flex: 1;
         height: 5px;
         background: rgba(128,128,128,0.2);
         border-radius: 3px;
@@ -1668,27 +1672,25 @@ class RalphSidebarProvider {
             return;
         }
 
-        const models = quota.models || [];
-        if (models.length === 0) {
+        const allModels = quota.models || [];
+        // 현재 사용 중인 모델만 필터 (remaining < 1.0 = 쿼타가 소비된 모델)
+        const models = allModels.filter(m => m.remaining < 1.0);
+
+        if (allModels.length === 0) {
             sectionEl.style.display = 'none';
             return;
         }
 
         sectionEl.style.display = '';
-
-        lastQuotaModels = models;
-
-        // Count total individual models (expand groups)
-        let totalCount = 0;
-        for (const m of models) {
-            totalCount += (m.isGroup && m.members) ? m.members.length : 1;
-        }
-        statusEl.textContent = '';
+        lastQuotaModels = allModels;
 
         if (models.length === 0) {
-            listEl.innerHTML = '<div class="quota-empty">모델 정보 없음</div>';
+            statusEl.textContent = '';
+            listEl.innerHTML = '<div class="quota-empty">사용 중인 모델 없음</div>';
             return;
         }
+
+        statusEl.textContent = '';
 
         let html = '';
         for (const m of models) {
@@ -1697,10 +1699,9 @@ class RalphSidebarProvider {
             const colorVar = level === 'ok' ? 'success' : level === 'caution' ? 'warning' : 'danger';
 
             html += '<div class="quota-model">';
-            html += '<div class="quota-model-header">';
-
+            // Row 1: 모델명 + 퍼센트
+            html += '<div class="quota-model-row1">';
             if (m.isGroup && m.members && m.members.length > 0) {
-                // Group label with member count badge
                 const memberTooltip = m.members.map(n => escapeHtml(n)).join('&#10;');
                 html += '<span class="quota-model-name" title="' + memberTooltip + '">'
                     + escapeHtml(m.label)
@@ -1709,12 +1710,12 @@ class RalphSidebarProvider {
             } else {
                 html += '<span class="quota-model-name" title="' + escapeHtml(m.label) + '">' + escapeHtml(m.label) + '</span>';
             }
-
             html += '<span class="quota-pct" style="color:var(--' + colorVar + ')">' + pct + '%</span>';
             html += '</div>';
+            // Row 2: 프로그레스바
+            html += '<div class="quota-model-row2">';
             html += '<div class="quota-bar"><div class="quota-bar-fill level-' + level + '" style="width:' + pct + '%"></div></div>';
-
-
+            html += '</div>';
 
             if (m.resetTime) {
                 html += '<div class="quota-reset" data-reset="' + escapeHtml(m.resetTime) + '">⏱ 리셋: 계산 중...</div>';
