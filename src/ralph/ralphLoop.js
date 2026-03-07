@@ -440,8 +440,15 @@ class RalphLoopManager {
             this._addLog('[Ralph] 🔓 _forceNextAutoStart 플래그 활성 — autoStart 설정 무시하고 시작');
         }
 
-        // 이미 실행 중이면 큐에 추가
+        // 이미 실행 중이면 큐에 추가 (단, 현재 작업 파일과 동일한 파일은 무시)
         if (this.state === LoopState.RUNNING) {
+            // 현재 작업 중인 파일과 동일한 파일의 변경은 무시
+            // (markTaskComplete 등 자체 수정에 의한 변경 재감지 방지)
+            const currentTaskFile = this.taskManager.getTaskFile();
+            if (currentTaskFile && path.resolve(filePath) === path.resolve(currentTaskFile)) {
+                this._addLog(`[Ralph] 📄 현재 작업 파일 자체 변경 무시 (실행 중): ${path.basename(filePath)}`);
+                return;
+            }
             this._enqueueTaskRequest(filePath);
             // forced였지만 이미 실행 중이므로 일회성 watcher 정리
             if (forced) {
