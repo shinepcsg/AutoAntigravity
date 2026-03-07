@@ -392,12 +392,12 @@ function connectTelegram(context) {
             return;
         }
 
-        // 프롬프트 구성: caption이 있으면 /write-prd로 감싸고, 미디어 경로 참조 추가
+        // 프롬프트 구성: 미디어 + 캡션 텍스트를 대화 프롬프트로 직접 전달 (/task와 동일)
         const captionText = text || '';
         const mediaRefs = downloadedPaths.map(p => `@${p}`).join(' ');
         const prompt = captionText
-            ? `/write-prd ${captionText}\n\n첨부 미디어:\n${mediaRefs}`
-            : `/write-prd 첨부된 미디어 파일을 분석해주세요.\n\n첨부 미디어:\n${mediaRefs}`;
+            ? `${captionText}\n\n첨부 미디어:\n${mediaRefs}`
+            : `첨부된 미디어 파일을 분석해주세요.\n\n첨부 미디어:\n${mediaRefs}`;
 
         const state = ralphLoop.getState();
 
@@ -405,7 +405,7 @@ function connectTelegram(context) {
             // Git 세션 초기화 (미디어 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(captionText || '미디어-첨부-작업');
 
-            // idle이면 즉시 실행
+            // idle이면 즉시 대화 프롬프트로 전달
             try {
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, downloadedPaths);
@@ -416,9 +416,9 @@ function connectTelegram(context) {
                 telegramService.sendMessage(`❌ 미디어 실행 실패: ${err.message}`);
             }
         } else if (sidebarProvider) {
-            // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로)
+            // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로, type: 'task')
             const queueText = captionText || '미디어 첨부 작업';
-            sidebarProvider._taskQueue.push({ text: queueText, mediaPaths: downloadedPaths });
+            sidebarProvider._taskQueue.push({ text: queueText, mediaPaths: downloadedPaths, type: 'task' });
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 미디어 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개, 파일 ${downloadedPaths.length}개): ${queueText.substring(0, 60)}`);
             log(`[Telegram] 미디어 작업 큐에 추가: ${queueText.substring(0, 80)}`);
