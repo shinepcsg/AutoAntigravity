@@ -267,8 +267,11 @@ class GitManager {
             this._execGit(['checkout', mergeTo]);
 
             try {
+                // Extract task description from branch name for commit message
+                // Branch format: ralph/{sessionName}/task-{iteration}-{description}
+                const taskDesc = workBranch.replace(/^.*\/task-/, '작업 ');
                 this._execGit(['merge', workBranch, '--no-ff', '-m',
-                    `merge ${workBranch}`]);
+                    `merge: ${taskDesc}`]);
                 this.log('[Git] ✅ 머지 완료');
 
                 // Delete work branch after merge (if option enabled)
@@ -315,11 +318,7 @@ class GitManager {
     commitIteration(iteration, taskText) {
         if (!this._workBranch) return false;
 
-        // Truncate task text for commit message
-        const shortTask = taskText.length > 80
-            ? taskText.substring(0, 77) + '...'
-            : taskText;
-        const message = `#${iteration} ${shortTask}`;
+        const message = `#${iteration} ${taskText}`;
         return this.commitAll(message);
     }
 
@@ -411,8 +410,14 @@ class GitManager {
                 this._execGit(['checkout', this._originalBranch]);
 
                 try {
-                    this._execGit(['merge', sessionBranch, '--no-ff', '-m',
-                        `merge ${sessionBranch}`]);
+                    // Extract session label from branch name for commit message
+                    // Branch format: ralph/session-{timestamp}-{label}/session
+                    const sessionDesc = (this._sessionName || sessionBranch)
+                        .replace(/^session-\d{8}-\d{6}-?/, '');
+                    const mergeMsg = sessionDesc
+                        ? `merge session: ${sessionDesc}`
+                        : `merge session`;
+                    this._execGit(['merge', sessionBranch, '--no-ff', '-m', mergeMsg]);
                     this.log(`[Git] ✅ 세션 브랜치 → 원본 브랜치 머지 완료`);
 
                     this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
