@@ -26,6 +26,7 @@ class TelegramService {
         this.onWorkflowRequest = null;
         this.onMediaReceived = null;
         this.onTaskRequest = null;
+        this.onPrdRequest = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -229,8 +230,16 @@ class TelegramService {
             if (this.onConfigRequest) this.onConfigRequest();
         } else if (text === '/queue') {
             if (this.onQueueRequest) this.onQueueRequest();
+        } else if (text.startsWith('/prd')) {
+            // /prd 명령: 뒤의 텍스트를 onPrdRequest 콜백으로 전달 (write-prd 워크플로우)
+            const prdText = text.replace(/^\/prd\s*/, '').trim();
+            if (!prdText) {
+                this.sendMessage('사용법: `/prd [작업 내용]`\n예: `/prd 로그인 페이지에 소셜 로그인 추가`');
+            } else if (this.onPrdRequest) {
+                this.onPrdRequest(prdText);
+            }
         } else if (text.startsWith('/task')) {
-            // /task 명령: 뒤의 텍스트를 onTaskRequest 콜백으로 전달
+            // /task 명령: 뒤의 텍스트를 onTaskRequest 콜백으로 직접 전달 (대화 형식)
             const taskText = text.replace(/^\/task\s*/, '').trim();
             if (!taskText) {
                 this.sendMessage('사용법: `/task [작업 내용]`\n예: `/task 로그인 페이지 버그 수정`');
@@ -245,7 +254,7 @@ class TelegramService {
             }
         } else {
             // 일반 텍스트 메시지 → /task 사용 안내
-            this.sendMessage('작업을 요청하려면 `/task [작업 내용]`을 사용하세요.');
+            this.sendMessage('명령어를 사용하세요:\n• `/task [내용]` — 💬 대화로 직접 작업 요청\n• `/prd [내용]` — 📋 PRD 작성 요청');
         }
     }
 
