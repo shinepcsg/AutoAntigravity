@@ -208,6 +208,9 @@ class ParallelTaskRunner {
             await this._loop._waitForAgentCompletion();
             this._log(`[Parallel] ✅ 에이전트 완료: ${info.task.text}`);
 
+            // ── 에이전트 응답에서 도구 쿼터 에러 감지 (generate_image 429 등) ──
+            await this._loop._checkResponseForToolQuota();
+
             // Commit changes in the worktree
             const gitManager = this._loop.gitManager;
             const shortTask = info.task.text.length > 60
@@ -217,6 +220,11 @@ class ParallelTaskRunner {
 
             return { success: true };
         } catch (e) {
+            // QUOTA_REACHED/QUOTA_PAUSE_CANCELLED는 상위로 전파 (병렬 그룹 전체 재시도)
+            if (e.message === 'QUOTA_REACHED' || e.message === 'QUOTA_PAUSE_CANCELLED') {
+                this._log(`[Parallel] ⏸ 쿼터 초과로 병렬 작업 중단: ${info.task.text}`, 'warn');
+                throw e;
+            }
             this._log(`[Parallel] ❌ 에이전트 실패: ${info.task.text} — ${e.message}`, 'error');
             return { success: false, error: e.message };
         }

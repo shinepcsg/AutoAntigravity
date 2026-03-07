@@ -1126,6 +1126,11 @@ class RalphLoopManager {
                     this.currentIteration--;
                     this.lastError = null;
                     this.consecutiveErrors = 0;
+                } else if (e.message === 'QUOTA_PAUSE_CANCELLED') {
+                    // Quota 대기 중 stop() 호출됨
+                    this._addLog('[Ralph] ⚠ 병렬 그룹: Quota 대기 중 루프 정지됨');
+                    this.lastError = null;
+                    this.consecutiveErrors = 0;
                 } else {
                     this.consecutiveErrors++;
                     this.lastError = e.message;
@@ -1177,6 +1182,9 @@ class RalphLoopManager {
                 await this._waitForAgentCompletion();
                 this._addLog('[Ralph] ✅ 에이전트 작업 완료 감지');
 
+                // ── 에이전트 응답에서 도구 쿼터 에러 감지 (generate_image 429 등) ──
+                await this._checkResponseForToolQuota();
+
                 // Mark task as complete and record progress
                 this.taskManager.markTaskComplete(task.line);
                 this.progressTracker.appendProgress(
@@ -1223,6 +1231,11 @@ class RalphLoopManager {
                     // Quota 제한으로 인해 대기한 경우
                     this._addLog(`[Ralph] 🔄 동일한 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다 (${task.text})`);
                     this.currentIteration--;
+                    this.lastError = null;
+                    this.consecutiveErrors = 0;
+                } else if (e.message === 'QUOTA_PAUSE_CANCELLED') {
+                    // Quota 대기 중 stop() 호출됨
+                    this._addLog('[Ralph] ⚠ Quota 대기 중 루프 정지됨');
                     this.lastError = null;
                     this.consecutiveErrors = 0;
                 } else {
@@ -1591,7 +1604,7 @@ class RalphLoopManager {
             }
 
             if (status.busy) {
-                // Quota reached 처리
+                // Quota reached 처리 (채팅 모델 쿼터 — DOM 배너)
                 if (status.reason === 'quota' && status.refreshTime) {
                     const parsedDate = new Date(status.refreshTime);
                     const now = new Date();
@@ -1601,75 +1614,13 @@ class RalphLoopManager {
                         this._addLog(`[Ralph] ⚠ 할당량(Quota) 시간 파싱 실패: ${status.refreshTime} - 기본 5분 대기합니다.`, 'warn');
                         waitMs = 5 * 60 * 1000;
                     } else if (waitMs < 0) {
-                        waitMs = 60 * 1000; // 이미 시간이 지났다면 1분 뒤 재시도
+                        waitMs = 60 * 1000;
                     } else {
-                        // 실제 갱신이 반영될 수 있도록 10초(10000ms) 여유를 추가
                         waitMs += 10000;
                     }
 
-                    const waitMinutes = (waitMs / 60000).toFixed(1);
-                    const resumeTimeStr = new Date(Date.now() + waitMs).toLocaleTimeString();
-                    this._addLog(`[Ralph] ⏸ 모델 할당량 초과(Model quota reached). 루프를 일시정지하고 ${resumeTimeStr} (약 ${waitMinutes}분 후)에 자동 재개합니다.`, 'warn');
-                    vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 후 자동 재개됩니다.`);
-
-                    // 텔레그램 알림 콜백 호출
-                    if (this.onQuotaExhaustedCallback) {
-                        try {
-                            this.onQuotaExhaustedCallback({
-                                refreshTime: status.refreshTime,
-                                waitMinutes: parseFloat(waitMinutes),
-                                resumeTime: resumeTimeStr
-                            });
-                        } catch (cbErr) {
-                            this._addLog(`[Ralph] ⚠ onQuotaExhaustedCallback 에러: ${cbErr.message}`, 'warn');
-                        }
-                    }
-
-                    // 루프를 QUOTA_PAUSED 상태로 전환
-                    this.state = LoopState.QUOTA_PAUSED;
-                    this._notifyStateChange();
-
-                    // 지정된 시간 후 자동 재개 타이머 설정
-                    await new Promise((resolve) => {
-                        this._quotaResumeTimer = setTimeout(() => {
-                            this._quotaResumeTimer = null;
-                            resolve();
-                        }, waitMs);
-                    });
-
-                    // 타이머 완료 후 — stop()으로 중지되었으면 중단
-                    if (this.state !== LoopState.QUOTA_PAUSED) {
-                        this._addLog('[Ralph] ⚠ Quota 대기 중 루프 상태 변경 — 재개 취소');
-                        return;
-                    }
-
-                    // 다시 RUNNING 상태로 복구
-                    this.state = LoopState.RUNNING;
-                    this._notifyStateChange();
-
-                    this._addLog(`[Ralph] ▶ 할당량 갱신 대기 완료. 대화창을 초기화하고 작업을 재시도합니다.`);
-
-                    // 텔레그램 재개 알림
-                    if (this.onQuotaExhaustedCallback) {
-                        try {
-                            this.onQuotaExhaustedCallback({ resumed: true });
-                        } catch (cbErr) { /* ignore */ }
-                    }
-
-                    // Dismiss 버튼 클릭 시도 (UI 정리)
-                    try {
-                        await this._cdpEvaluateOnTarget(targetWsUrl, `
-                            var btns = document.querySelectorAll('button');
-                            for (var i=0; i<btns.length; i++) {
-                                if (btns[i].textContent.includes('Dismiss')) {
-                                    btns[i].click();
-                                }
-                            }
-                        `);
-                    } catch (e) { }
-
-                    // 에러를 던져서 _runNextIteration에서 재시도하도록 함
-                    throw new Error('QUOTA_REACHED');
+                    // 공통 쿼터 일시정지 로직 호출 (항상 QUOTA_REACHED throw)
+                    await this._enterQuotaPause(waitMs, status.refreshTime, targetWsUrl);
                 }
 
                 // 에이전트 활동 감지 (Stop 버튼, Thinking 등)
@@ -1704,6 +1655,183 @@ class RalphLoopManager {
         }
 
         this._addLog('[Ralph] ⚠ 최대 대기 시간 초과 (' + (MAX_WAIT_MS / 1000) + '초) — 다음 반복으로 이동', 'warn');
+    }
+
+    /**
+     * 공통 쿼터 일시정지 로직 — 루프를 QUOTA_PAUSED로 전환, 텔레그램 알림, 타이머 대기, RUNNING 복구.
+     * 항상 QUOTA_REACHED 또는 QUOTA_PAUSE_CANCELLED 에러를 throw합니다.
+     * @param {number} waitMs - 대기 시간 (밀리초)
+     * @param {string} refreshTimeLabel - 사람이 읽을 수 있는 리셋 시간 라벨
+     * @param {string} [targetWsUrl] - Dismiss 버튼 정리용 CDP 타겟 (선택)
+     */
+    async _enterQuotaPause(waitMs, refreshTimeLabel, targetWsUrl) {
+        // 이미 다른 감지에 의해 QUOTA_PAUSED 상태이면 기존 타이머 대기
+        if (this.state === LoopState.QUOTA_PAUSED) {
+            this._addLog('[Ralph] ⏸ 이미 할당량 대기 중 — 기존 타이머 대기');
+            while (this.state === LoopState.QUOTA_PAUSED) {
+                await new Promise(r => setTimeout(r, 3000));
+            }
+            if (this.state === LoopState.RUNNING) {
+                throw new Error('QUOTA_REACHED');
+            }
+            throw new Error('QUOTA_PAUSE_CANCELLED');
+        }
+
+        const waitMinutes = (waitMs / 60000).toFixed(1);
+        const resumeTimeStr = new Date(Date.now() + waitMs).toLocaleTimeString();
+        this._addLog(`[Ralph] ⏸ 할당량 초과 감지. 루프 일시정지 → ${resumeTimeStr} (약 ${waitMinutes}분 후) 자동 재개`, 'warn');
+        vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 후 자동 재개됩니다.`);
+
+        // 텔레그램 알림
+        if (this.onQuotaExhaustedCallback) {
+            try {
+                this.onQuotaExhaustedCallback({
+                    refreshTime: refreshTimeLabel,
+                    waitMinutes: parseFloat(waitMinutes),
+                    resumeTime: resumeTimeStr
+                });
+            } catch (cbErr) {
+                this._addLog(`[Ralph] ⚠ onQuotaExhaustedCallback 에러: ${cbErr.message}`, 'warn');
+            }
+        }
+
+        // QUOTA_PAUSED 전환
+        this.state = LoopState.QUOTA_PAUSED;
+        this._notifyStateChange();
+
+        // 타이머 대기
+        await new Promise((resolve) => {
+            this._quotaResumeTimer = setTimeout(() => {
+                this._quotaResumeTimer = null;
+                resolve();
+            }, waitMs);
+        });
+
+        // stop()으로 중지되었는지 확인
+        if (this.state !== LoopState.QUOTA_PAUSED) {
+            this._addLog('[Ralph] ⚠ Quota 대기 중 루프 상태 변경 — 재개 취소');
+            throw new Error('QUOTA_PAUSE_CANCELLED');
+        }
+
+        // RUNNING 복구
+        this.state = LoopState.RUNNING;
+        this._notifyStateChange();
+        this._addLog(`[Ralph] ▶ 할당량 갱신 대기 완료. 작업을 재시도합니다.`);
+
+        // 텔레그램 재개 알림
+        if (this.onQuotaExhaustedCallback) {
+            try { this.onQuotaExhaustedCallback({ resumed: true }); } catch (cbErr) { /* ignore */ }
+        }
+
+        // Dismiss 버튼 정리
+        if (targetWsUrl) {
+            try {
+                await this._cdpEvaluateOnTarget(targetWsUrl, `
+                    var btns = document.querySelectorAll('button');
+                    for (var i=0; i<btns.length; i++) {
+                        if (btns[i].textContent.includes('Dismiss')) {
+                            btns[i].click();
+                        }
+                    }
+                `);
+            } catch (e) { }
+        }
+
+        throw new Error('QUOTA_REACHED');
+    }
+
+    /**
+     * 에이전트 응답에서 도구 수준 쿼터 에러를 감지합니다.
+     * generate_image 등의 도구가 429 RESOURCE_EXHAUSTED를 반환한 경우,
+     * 에이전트 응답 텍스트에 해당 에러 패턴이 포함되어 있습니다.
+     * 감지 시 _enterQuotaPause를 호출하여 QUOTA_REACHED를 throw합니다.
+     * @param {string} [targetWsUrl] - CDP 타겟 WebSocket URL
+     */
+    async _checkResponseForToolQuota(targetWsUrl) {
+        const wsUrl = targetWsUrl || this._lastAgentTargetWsUrl;
+        if (!wsUrl) return;
+
+        try {
+            const result = await this._cdpEvaluateOnTarget(wsUrl, `
+                (function() {
+                    var text = document.body.innerText || '';
+                    var chunk = text.substring(Math.max(0, text.length - 8000));
+
+                    var patterns = [
+                        'RESOURCE_EXHAUSTED',
+                        'exhausted your capacity',
+                        'quota will reset'
+                    ];
+
+                    var hit = false;
+                    for (var i = 0; i < patterns.length; i++) {
+                        if (chunk.indexOf(patterns[i]) !== -1) {
+                            hit = true;
+                            break;
+                        }
+                    }
+
+                    if (!hit) return JSON.stringify({ quotaHit: false });
+
+                    var tsMatch = chunk.match(/quotaResetTimeStamp[^0-9]*(\\d{4}-\\d{2}-\\d{2}T[\\d:]+Z)/);
+                    var delayMatch = chunk.match(/reset after\\s+([\\dhms.]+)/i);
+
+                    return JSON.stringify({
+                        quotaHit: true,
+                        resetTimestamp: tsMatch ? tsMatch[1] : null,
+                        resetDelay: delayMatch ? delayMatch[1] : null
+                    });
+                })()
+            `, 10000);
+
+            const val = (result && result.result) ? result.result.value : '';
+            let parsed;
+            try { parsed = JSON.parse(val); } catch (e) { return; }
+
+            if (!parsed.quotaHit) return;
+
+            this._addLog(`[Ralph] 🔍 에이전트 응답에서 도구 쿼터 에러 감지 (RESOURCE_EXHAUSTED)`, 'warn');
+
+            // 대기 시간 계산
+            let waitMs = 30 * 60 * 1000; // 기본 30분
+            let refreshLabel = '약 30분 후';
+
+            if (parsed.resetTimestamp) {
+                const resetDate = new Date(parsed.resetTimestamp);
+                const now = new Date();
+                const diff = resetDate.getTime() - now.getTime();
+                if (!isNaN(diff) && diff > 0) {
+                    waitMs = diff + 10000; // 10초 여유
+                    refreshLabel = parsed.resetTimestamp;
+                } else if (!isNaN(diff) && diff <= 0) {
+                    waitMs = 60 * 1000; // 이미 지남 → 1분
+                    refreshLabel = '리셋 시간 경과 (1분 후 재시도)';
+                }
+            } else if (parsed.resetDelay) {
+                // "1h59m34s" 형식 파싱
+                let ms = 0;
+                const h = parsed.resetDelay.match(/(\d+)h/);
+                const m = parsed.resetDelay.match(/(\d+)m/);
+                const s = parsed.resetDelay.match(/([\d.]+)s/);
+                if (h) ms += parseInt(h[1]) * 3600000;
+                if (m) ms += parseInt(m[1]) * 60000;
+                if (s) ms += parseFloat(s[1]) * 1000;
+                if (ms > 0) {
+                    waitMs = ms + 10000;
+                    refreshLabel = parsed.resetDelay;
+                }
+            }
+
+            // 공통 쿼터 일시정지 (QUOTA_REACHED throw)
+            await this._enterQuotaPause(waitMs, refreshLabel, wsUrl);
+        } catch (e) {
+            // _enterQuotaPause에서 던진 에러는 그대로 전파
+            if (e.message === 'QUOTA_REACHED' || e.message === 'QUOTA_PAUSE_CANCELLED') {
+                throw e;
+            }
+            // CDP 에러 등은 무시
+            this._addLog(`[Ralph] ⚠ 도구 쿼터 체크 중 에러 (무시): ${e.message}`, 'warn');
+        }
     }
 
     /**
