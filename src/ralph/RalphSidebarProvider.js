@@ -1742,11 +1742,10 @@ class RalphSidebarProvider {
                 } else {
                     const h = Math.floor(diff / 3600000);
                     const m = Math.floor((diff % 3600000) / 60000);
-                    const s = Math.floor((diff % 60000) / 1000);
-                    el.textContent = '⏱ 리셋까지 ' + h + '시간 ' + m + '분 ' + s + '초';
+                    el.textContent = '⏱ 리셋까지 ' + h + '시간 ' + m + '분';
                 }
             });
-        }, 1000);
+        }, 60000);
     }
 
     // Request initial state
