@@ -186,4 +186,4 @@ Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git wor
 MIT License — [LICENSE](LICENSE)
 
 ## 🙏 크레딧
-박찬선
+박찬선(shinepcs@gmail.com)
