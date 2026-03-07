@@ -549,6 +549,15 @@ function activate(context) {
         })
     );
 
+    // Git Push Now
+    context.subscriptions.push(
+        vscode.commands.registerCommand('autoAntigravity.pushNow', async () => {
+            if (ralphLoop && typeof ralphLoop.pushNow === 'function') {
+                await ralphLoop.pushNow();
+            }
+        })
+    );
+
     // ─── Initial StatusBar Update (immediate, before CDP check) ─────
     updateAutoAcceptStatusBar();
     updateRalphStatusBar();

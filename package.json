@@ -36,6 +36,10 @@
             {
                 "command": "autoAntigravity.checkForUpdates",
                 "title": "AutoAntigravity: Check for Updates"
+            },
+            {
+                "command": "autoAntigravity.pushNow",
+                "title": "AutoAntigravity: Git Push"
             }
         ],
         "viewsContainers": {
