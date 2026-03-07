@@ -1403,7 +1403,22 @@ class RalphLoopManager {
                 } catch (e) {
                     this._addLog(`[Ralph]   ⚠ 미디어 참조 삽입 실패: ${refPath} — ${e.message}`, 'warn');
                 }
-                await delay(500);
+                await delay(1500); // @ 참조 자동완성 팝업 로딩 대기
+
+                // @ 참조로 인해 열린 자동완성 팝업을 Escape로 닫기
+                try {
+                    await sendKey('keyDown', {
+                        key: 'Escape', code: 'Escape',
+                        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+                        modifiers: 0,
+                    });
+                    await sendKey('keyUp', {
+                        key: 'Escape', code: 'Escape',
+                        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+                        modifiers: 0,
+                    });
+                } catch (e) { /* ignore */ }
+                await delay(300);
             }
 
             this._addLog('[Ralph] ✅ 미디어 참조 삽입 완료');
@@ -1505,6 +1520,22 @@ class RalphLoopManager {
         }
 
         await delay(500);
+
+        // ─── Step 3c: Escape to dismiss any autocomplete popup ───
+        // 프롬프트 텍스트에 @참조가 포함될 수 있어 자동완성 팝업이 열릴 수 있음
+        try {
+            await sendKey('keyDown', {
+                key: 'Escape', code: 'Escape',
+                windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+                modifiers: 0,
+            });
+            await sendKey('keyUp', {
+                key: 'Escape', code: 'Escape',
+                windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+                modifiers: 0,
+            });
+        } catch (e) { /* ignore */ }
+        await delay(300);
 
         // ─── Step 4: Submit via Enter ───
         try {

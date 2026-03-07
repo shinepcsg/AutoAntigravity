@@ -400,12 +400,9 @@ function connectTelegram(context) {
             return;
         }
 
-        // 프롬프트 구성: 미디어 + 캡션 텍스트를 대화 프롬프트로 직접 전달 (/task와 동일)
+        // 프롬프트 구성: 캡션 텍스트만 전달 (미디어 @참조는 _sendToAgent의 Step 2.5에서 별도 삽입)
         const captionText = text || '';
-        const mediaRefs = downloadedPaths.map(p => `@${p}`).join(' ');
-        const prompt = captionText
-            ? `${captionText}\n\n첨부 미디어:\n${mediaRefs}`
-            : `첨부된 미디어 파일을 분석해주세요.\n\n첨부 미디어:\n${mediaRefs}`;
+        const prompt = captionText || '첨부된 미디어 파일을 분석해주세요.';
 
         const state = ralphLoop.getState();
 
