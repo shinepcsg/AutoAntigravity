@@ -1403,22 +1403,7 @@ class RalphLoopManager {
                 } catch (e) {
                     this._addLog(`[Ralph]   ⚠ 미디어 참조 삽입 실패: ${refPath} — ${e.message}`, 'warn');
                 }
-                await delay(1500); // @ 참조 자동완성 팝업 로딩 대기
-
-                // @ 참조로 인해 열린 자동완성 팝업을 Escape로 닫기
-                try {
-                    await sendKey('keyDown', {
-                        key: 'Escape', code: 'Escape',
-                        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
-                        modifiers: 0,
-                    });
-                    await sendKey('keyUp', {
-                        key: 'Escape', code: 'Escape',
-                        windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
-                        modifiers: 0,
-                    });
-                } catch (e) { /* ignore */ }
-                await delay(300);
+                await delay(500);
             }
 
             this._addLog('[Ralph] ✅ 미디어 참조 삽입 완료');
@@ -1521,27 +1506,18 @@ class RalphLoopManager {
 
         await delay(500);
 
-        // ─── Step 3c: Escape to dismiss any autocomplete popup ───
-        // 프롬프트 텍스트에 @참조가 포함될 수 있어 자동완성 팝업이 열릴 수 있음
-        try {
-            await sendKey('keyDown', {
-                key: 'Escape', code: 'Escape',
-                windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
-                modifiers: 0,
-            });
-            await sendKey('keyUp', {
-                key: 'Escape', code: 'Escape',
-                windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
-                modifiers: 0,
-            });
-        } catch (e) { /* ignore */ }
-        await delay(300);
-
         // ─── Step 4: Submit via Enter ───
         try {
             await sendKey('keyDown', {
                 key: 'Enter', code: 'Enter',
                 windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                text: '\r', unmodifiedText: '\r',
+                modifiers: 0,
+            });
+            await sendKey('char', {
+                key: 'Enter', code: 'Enter',
+                windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
+                text: '\r', unmodifiedText: '\r',
                 modifiers: 0,
             });
             await sendKey('keyUp', {
@@ -1549,6 +1525,26 @@ class RalphLoopManager {
                 windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13,
                 modifiers: 0,
             });
+
+            // Fallback: Click the send button if it exists
+            await this._cdpEvaluateOnTarget(targetWsUrl, `
+                (function() {
+                    var selectors = [
+                        'button[data-tooltip-id="input-send-button-send-tooltip"]',
+                        '.chat-execute-button',
+                        'button[aria-label="Send"]',
+                        'button[aria-label="보내기"]'
+                    ];
+                    for (var i = 0; i < selectors.length; i++) {
+                        var btn = document.querySelector(selectors[i]);
+                        if (btn && !btn.disabled) {
+                            btn.click();
+                            return;
+                        }
+                    }
+                })();
+            `);
+
             this._addLog('[Ralph] ✅ Enter 전송 완료');
         } catch (e) {
             throw new Error('Enter 전송 실패: ' + e.message);
