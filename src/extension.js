@@ -130,6 +130,9 @@ function connectTelegram(context) {
 
     telegramService = new TelegramService(log);
 
+    // globalState에서 상세 알림 설정 복원
+    telegramService.detailedNotification = context.globalState.get('autoAntigravity.telegramDetailedNotification', false);
+
     // 텔레그램 → 플러그인: /task 명령 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
     telegramService.onTaskRequest = async (text) => {
         const state = ralphLoop.getState();
