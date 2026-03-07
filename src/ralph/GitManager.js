@@ -324,16 +324,31 @@ class GitManager {
     }
 
     /**
+     * Push current HEAD to remote origin.
+     * @returns {{ success: boolean, error?: string }}
+     */
+    pushToRemote() {
+        try {
+            this._execGit(['push', 'origin', 'HEAD']);
+            this.log('[Git] 🚀 Push 성공: origin/HEAD');
+            return { success: true };
+        } catch (e) {
+            this.log(`[Git] ❌ Push 실패: ${e.message}`);
+            return { success: false, error: e.message };
+        }
+    }
+
+    /**
      * End the entire session:
      * 1. End active task branch (merge into session branch)
      * 2. Merge session branch into original branch (main)
      * Called on stop/all-tasks-completed.
      *
-     * @param {{ autoDeleteBranch: boolean }} [options]
+     * @param {{ autoDeleteBranch: boolean, autoPush: boolean }} [options]
      * @returns {{ success: boolean, merged: boolean, sessionMerged: boolean, error?: string }}
      */
     endSession(options = {}) {
-        const { autoDeleteBranch = true } = options;
+        const { autoDeleteBranch = true, autoPush = false } = options;
 
         // 1. If there's an active task branch, end it (merge into session branch)
         if (this._workBranch) {
@@ -387,6 +402,11 @@ class GitManager {
                     this.log(`[Git] ✅ 세션 브랜치 → 원본 브랜치 머지 완료`);
 
                     this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
+
+                    // Auto push if enabled
+                    if (autoPush) {
+                        this.pushToRemote();
+                    }
 
                     this._restoreStash();
                     this._originalBranch = null;
