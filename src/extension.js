@@ -502,11 +502,11 @@ function activate(context) {
     };
 
     // ─── 전체 작업 완료 시: 사이드바 큐 처리 + 텔레그램 알림 ──────────
-    ralphLoop.onAllTasksCompleteCallback = async (totalTasks, totalIterations) => {
+    ralphLoop.onAllTasksCompleteCallback = async (sessionLabel, tasks, totalIterations) => {
         // 1) 텔레그램 알림 (연결 시)
-        if (telegramService && typeof telegramService.sendAllTasksCompleted === 'function') {
+        if (telegramService && typeof telegramService.sendSessionResult === 'function') {
             try {
-                telegramService.sendAllTasksCompleted(totalTasks, totalIterations);
+                telegramService.sendSessionResult(sessionLabel, tasks, totalIterations);
             } catch (e) {
                 log(`[Queue] 텔레그램 완료 알림 실패: ${e.message}`);
             }
