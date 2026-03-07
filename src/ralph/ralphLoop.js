@@ -1084,6 +1084,9 @@ class RalphLoopManager {
 
                 this._sessionLock.acquire(this.currentIteration, `병렬 그룹: ${taskGroup.tasks.length}개`);
 
+                // 병렬 그룹 실행 전 이미지 스냅샷
+                const imagesBefore = this._snapshotImageFiles();
+
                 const result = await this._parallelRunner.runParallelGroup(taskGroup.tasks, this.currentIteration);
 
                 this._sessionLock.release();
@@ -1093,10 +1096,10 @@ class RalphLoopManager {
                     this.lastError = null;
                     this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
 
-                    // 병렬 그룹 완료 콜백 호출 (이미지 감지 포함)
+                    // 병렬 그룹 완료 콜백 호출 (이미지 스냅샷 비교)
                     if (this.onTaskCompleteCallback) {
                         try {
-                            const newImages = this._detectNewImages();
+                            const newImages = this._getNewImagesSinceSnapshot(imagesBefore);
                             this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress, newImages);
                         } catch (cbErr) {
                             this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
@@ -1170,6 +1173,9 @@ class RalphLoopManager {
                 // Build the prompt for the agent
                 const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
+                // 작업 실행 전 이미지 스냅샷
+                const imagesBefore = this._snapshotImageFiles();
+
                 // ── 세션 락 획득 ──
                 this._sessionLock.acquire(this.currentIteration, task.text);
 
@@ -1198,10 +1204,10 @@ class RalphLoopManager {
                 this._sessionLock.release();
                 this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
-                // 개별 작업 완료 콜백 호출 (이미지 감지 포함)
+                // 개별 작업 완료 콜백 호출 (이미지 스냅샷 비교)
                 if (this.onTaskCompleteCallback) {
                     try {
-                        const newImages = this._detectNewImages();
+                        const newImages = this._getNewImagesSinceSnapshot(imagesBefore);
                         this.onTaskCompleteCallback(task.text, this.currentIteration, progress, newImages);
                     } catch (cbErr) {
                         this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
@@ -1919,53 +1925,62 @@ class RalphLoopManager {
     }
 
     /**
-     * Detect newly created/modified image files using git diff.
-     * Checks uncommitted changes and the latest commit for image files.
-     * @returns {string[]} Array of absolute paths to new image files
+     * Snapshot image files in the ResultImages/ directory.
+     * Returns a Set of absolute file paths for comparison.
+     * @param {string} [rootDir] - Root directory to scan (defaults to workspace root)
+     * @returns {Set<string>} Set of absolute paths to image files
      */
-    _detectNewImages() {
+    _snapshotImageFiles(rootDir) {
         try {
-            const wsRoot = this.gitManager._workspaceRoot;
-            if (!wsRoot) return [];
+            const wsRoot = rootDir || this.gitManager._workspaceRoot;
+            if (!wsRoot) return new Set();
 
-            const cp = require('child_process');
             const pathMod = require('path');
             const fsMod = require('fs');
             const imageExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
+            const snapshot = new Set();
 
-            // 1) Check uncommitted changes (staged + unstaged)
-            let files = [];
-            try {
-                const result = cp.spawnSync('git', ['diff', '--name-only', '--diff-filter=ACM', 'HEAD'], {
-                    cwd: wsRoot, encoding: 'utf8', timeout: 10000, windowsHide: true
-                });
-                if (result.status === 0 && result.stdout) {
-                    files.push(...result.stdout.trim().split('\n').filter(Boolean));
-                }
-            } catch (_) { /* ignore */ }
+            const scanDir = (dir) => {
+                if (!fsMod.existsSync(dir)) return;
+                try {
+                    const entries = fsMod.readdirSync(dir, { withFileTypes: true });
+                    for (const entry of entries) {
+                        const fullPath = pathMod.join(dir, entry.name);
+                        if (entry.isDirectory()) {
+                            scanDir(fullPath);
+                        } else if (entry.isFile() && imageExts.has(pathMod.extname(entry.name).toLowerCase())) {
+                            snapshot.add(fullPath);
+                        }
+                    }
+                } catch (_) { /* ignore permission errors etc */ }
+            };
 
-            // 2) Also check latest commit diff
-            try {
-                const result = cp.spawnSync('git', ['diff', '--name-only', '--diff-filter=ACM', 'HEAD~1', 'HEAD'], {
-                    cwd: wsRoot, encoding: 'utf8', timeout: 10000, windowsHide: true
-                });
-                if (result.status === 0 && result.stdout) {
-                    files.push(...result.stdout.trim().split('\n').filter(Boolean));
-                }
-            } catch (_) { /* ignore */ }
+            // Scan ResultImages/ directory
+            scanDir(pathMod.join(wsRoot, 'ResultImages'));
 
-            // Deduplicate and filter for image extensions
-            const uniqueFiles = [...new Set(files)];
-            const imagePaths = uniqueFiles
-                .filter(f => imageExts.has(pathMod.extname(f).toLowerCase()))
-                .map(f => pathMod.resolve(wsRoot, f))
-                .filter(f => fsMod.existsSync(f));
+            return snapshot;
+        } catch (err) {
+            return new Set();
+        }
+    }
 
-            if (imagePaths.length > 0) {
-                this._addLog(`[Ralph] 🖼 생성된 이미지 ${imagePaths.length}개 감지: ${imagePaths.map(p => pathMod.basename(p)).join(', ')}`);
+    /**
+     * Compare current image files against a previous snapshot to find newly created images.
+     * @param {Set<string>} beforeSnapshot - Snapshot taken before task execution
+     * @param {string} [rootDir] - Root directory to scan (defaults to workspace root)
+     * @returns {string[]} Array of absolute paths to newly created image files
+     */
+    _getNewImagesSinceSnapshot(beforeSnapshot, rootDir) {
+        try {
+            const currentSnapshot = this._snapshotImageFiles(rootDir);
+            const newImages = [...currentSnapshot].filter(f => !beforeSnapshot.has(f));
+
+            if (newImages.length > 0) {
+                const pathMod = require('path');
+                this._addLog(`[Ralph] 🖼 생성된 이미지 ${newImages.length}개 감지: ${newImages.map(p => pathMod.basename(p)).join(', ')}`);
             }
 
-            return imagePaths;
+            return newImages;
         } catch (err) {
             this._addLog(`[Ralph] ⚠ 이미지 감지 실패: ${err.message}`, 'warn');
             return [];
