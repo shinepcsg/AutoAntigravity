@@ -2,6 +2,7 @@
 // Sends progress updates and receives commands via Telegram Bot API.
 
 const https = require('https');
+const fs = require('fs');
 const { scanWorkflows } = require('./scanWorkflows');
 
 class TelegramService {
@@ -287,6 +288,67 @@ class TelegramService {
         });
     }
 
+    /**
+     * Download a file from Telegram servers to a local path.
+     * Uses getFile API to obtain file_path, then downloads the binary content.
+     * @param {string} fileId - Telegram file_id
+     * @param {string} destPath - Local destination path to save the file
+     * @returns {Promise<{ success: boolean, path?: string, error?: string }>}
+     */
+    downloadFile(fileId, destPath) {
+        return this._telegramApiCall('getFile', { file_id: fileId })
+            .then((fileInfo) => {
+                const filePath = fileInfo.file_path;
+                const fileUrl = `/file/bot${this._botToken}/${filePath}`;
+
+                return new Promise((resolve, reject) => {
+                    const options = {
+                        hostname: 'api.telegram.org',
+                        port: 443,
+                        path: fileUrl,
+                        method: 'GET',
+                        timeout: 60000 // 60s timeout for file download
+                    };
+
+                    const req = https.request(options, (res) => {
+                        if (res.statusCode !== 200) {
+                            reject(new Error(`HTTP ${res.statusCode} downloading file`));
+                            return;
+                        }
+
+                        const fileStream = fs.createWriteStream(destPath);
+                        res.pipe(fileStream);
+
+                        fileStream.on('finish', () => {
+                            fileStream.close();
+                            resolve({ success: true, path: destPath });
+                        });
+
+                        fileStream.on('error', (err) => {
+                            // Clean up partial file on write error
+                            try { fs.unlinkSync(destPath); } catch (_) { /* ignore */ }
+                            reject(err);
+                        });
+                    });
+
+                    req.on('error', (err) => reject(err));
+                    req.on('timeout', () => {
+                        req.destroy();
+                        reject(new Error('File download timeout'));
+                    });
+
+                    req.end();
+                });
+            })
+            .then((result) => {
+                this._log(`[Telegram] 파일 다운로드 완료: ${destPath}`);
+                return result;
+            })
+            .catch((err) => {
+                this._log(`[Telegram] 파일 다운로드 실패: ${err.message}`);
+                return { success: false, error: err.message };
+            });
+    }
 
 
     /**
