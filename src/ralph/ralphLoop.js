@@ -1030,8 +1030,9 @@ class RalphLoopManager {
             // 전체 작업 완료 콜백 호출
             if (this.onAllTasksCompleteCallback) {
                 try {
-                    const finalProgress = this.taskManager.getProgress();
-                    this.onAllTasksCompleteCallback(finalProgress.total, this.currentIteration);
+                    const sessionLabel = this.taskManager.getSessionLabel();
+                    const tasks = this.taskManager.parseTasks();
+                    this.onAllTasksCompleteCallback(sessionLabel, tasks, this.currentIteration);
                 } catch (cbErr) {
                     this._addLog(`[Ralph] ⚠ onAllTasksCompleteCallback 에러: ${cbErr.message}`, 'warn');
                 }
