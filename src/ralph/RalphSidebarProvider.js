@@ -1213,6 +1213,10 @@ class RalphSidebarProvider {
             <input id="inputTelegramChatId" class="telegram-input" type="text" placeholder="-100xxxxxxxxxx" />
             <button id="btnSaveTelegramCred" class="btn btn-primary">💾 저장</button>
         </div>
+        <label id="labelTelegramDetail" class="toggle-row" style="display:none;">
+            <input id="chkTelegramDetail" type="checkbox" />
+            📬 상세 알림 받기
+        </label>
     </div>
 
     <!-- ═══ Settings Section ═══ -->
