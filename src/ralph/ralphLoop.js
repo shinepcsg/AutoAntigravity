@@ -1635,6 +1635,7 @@ class RalphLoopManager {
 
         const config = vscode.workspace.getConfiguration('autoAntigravity');
         const autoDeleteBranch = config.get('ralphLoop.autoDeleteBranch', true);
+        const autoPush = config.get('ralphLoop.autoPush', false);
 
         if (session.workBranch) {
             this._addLog(`[Git] 🔀 세션 종료 — ${session.workBranch} → ${session.sessionBranch || session.originalBranch} 머지...`);
@@ -1643,7 +1644,7 @@ class RalphLoopManager {
             this._addLog(`[Git] 🔀 세션 브랜치 ${session.sessionBranch} → ${session.originalBranch} 머지 예정...`);
         }
 
-        const result = this.gitManager.endSession({ autoDeleteBranch });
+        const result = this.gitManager.endSession({ autoDeleteBranch, autoPush });
 
         if (result.success && result.sessionMerged) {
             this._addLog(`[Git] ✅ 세션 브랜치가 원본 브랜치(${session.originalBranch})에 머지되었습니다.`);
@@ -1659,6 +1660,37 @@ class RalphLoopManager {
             vscode.window.showWarningMessage(
                 `⚠ Git 머지 문제: ${result.error}\n수동으로 해결이 필요할 수 있습니다.`
             );
+        }
+    }
+
+    /**
+     * Push current branch to remote immediately.
+     * Can be invoked from command palette (autoAntigravity.pushNow).
+     */
+    async pushNow() {
+        // Ensure workspace root is set on the git manager
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            const msg = '❌ 워크스페이스가 열려 있지 않습니다.';
+            this._addLog(`[Git] ${msg}`, 'error');
+            vscode.window.showErrorMessage(msg);
+            return;
+        }
+
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
+        this.gitManager._workspaceRoot = workspaceRoot;
+
+        this._addLog('[Git] 🚀 수동 Push 실행 중...');
+        const result = this.gitManager.pushToRemote();
+
+        if (result.success) {
+            const msg = '🚀 Git Push 성공!';
+            this._addLog(`[Git] ${msg}`);
+            vscode.window.showInformationMessage(msg);
+        } else {
+            const msg = `❌ Git Push 실패: ${result.error}`;
+            this._addLog(`[Git] ${msg}`, 'error');
+            vscode.window.showErrorMessage(msg);
         }
     }
 
