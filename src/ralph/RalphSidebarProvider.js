@@ -132,12 +132,7 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
-                case 'pushNow': {
-                    if (this.ralphLoop && typeof this.ralphLoop.pushNow === 'function') {
-                        await this.ralphLoop.pushNow();
-                    }
-                    break;
-                }
+
                 case 'refreshQuota':
                     if (this.telemetryService) {
                         this.telemetryService.refresh();
@@ -1253,7 +1248,7 @@ class RalphSidebarProvider {
             <input id="chkAutoPush" type="checkbox" />
             🚀 자동 Push (세션 종료 시)
         </label>
-        <button id="btnPushNow" class="btn btn-secondary">🚀 Push</button>
+
         <label id="labelAutoInstall" class="toggle-row">
             <input id="chkAutoInstall" type="checkbox" />
             ⬆ 자동 업데이트 설치
@@ -1329,9 +1324,7 @@ class RalphSidebarProvider {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoPush' });
     });
-    document.getElementById('btnPushNow').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'pushNow' });
-    });
+
     document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoInstall' });
