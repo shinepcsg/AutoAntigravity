@@ -20,6 +20,7 @@ let telegramService = null;
 let statusBarAutoAccept = null;
 let statusBarRalph = null;
 let outputChannel = null;
+let _extensionContext = null;
 
 function log(msg) {
     if (outputChannel) {
@@ -70,6 +71,7 @@ function updateRalphStatusBar() {
 
 // ─── Telegram Connect / Disconnect ────────────────────────────────────
 function connectTelegram(context) {
+    _extensionContext = context;
     // .env 파일에서 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 읽기
     let botToken = '';
     let chatId = '';
@@ -376,6 +378,9 @@ function connectTelegram(context) {
         sidebarProvider.telegramService = telegramService;
         sidebarProvider.updateState();
     }
+
+    // 텔레그램 연결 상태를 globalState에 영속 저장
+    context.globalState.update('autoAntigravity.telegramConnected', true);
 }
 
 function disconnectTelegram() {
@@ -393,6 +398,11 @@ function disconnectTelegram() {
     if (sidebarProvider) {
         sidebarProvider.telegramService = null;
         sidebarProvider.updateState();
+    }
+
+    // 텔레그램 연결 해제 상태를 globalState에 영속 저장
+    if (_extensionContext) {
+        _extensionContext.globalState.update('autoAntigravity.telegramConnected', false);
     }
 }
 
