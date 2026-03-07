@@ -124,6 +124,20 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
+                case 'toggleAutoPush': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    const current = config.get('ralphLoop.autoPush', false);
+                    await config.update('ralphLoop.autoPush', !current, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Auto Push: ${!current ? 'ON' : 'OFF'}`);
+                    this.updateState();
+                    break;
+                }
+                case 'pushNow': {
+                    if (this.ralphLoop && typeof this.ralphLoop.pushNow === 'function') {
+                        await this.ralphLoop.pushNow();
+                    }
+                    break;
+                }
                 case 'refreshQuota':
                     if (this.telemetryService) {
                         this.telemetryService.refresh();
@@ -460,6 +474,7 @@ class RalphSidebarProvider {
             autoStart: config.get('ralphLoop.autoStart', true),
             autoCommit: config.get('ralphLoop.autoCommit', true),
             autoDeleteBranch: config.get('ralphLoop.autoDeleteBranch', true),
+            autoPush: config.get('ralphLoop.autoPush', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()
                 : null,
@@ -1205,6 +1220,11 @@ class RalphSidebarProvider {
             <input id="chkAutoDeleteBranch" type="checkbox" />
             🗑 자동 브랜치 폐기 (머지 후 삭제)
         </label>
+        <label id="labelAutoPush" class="toggle-row">
+            <input id="chkAutoPush" type="checkbox" />
+            🚀 자동 Push (세션 종료 시)
+        </label>
+        <button id="btnPushNow" class="btn btn-secondary">🚀 Push</button>
         <label id="labelAutoInstall" class="toggle-row">
             <input id="chkAutoInstall" type="checkbox" />
             ⬆ 자동 업데이트 설치
@@ -1275,6 +1295,13 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoDeleteBranch').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoDeleteBranch' });
+    });
+    document.getElementById('labelAutoPush').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleAutoPush' });
+    });
+    document.getElementById('btnPushNow').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'pushNow' });
     });
     document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
         e.preventDefault();
@@ -1407,6 +1434,7 @@ class RalphSidebarProvider {
         document.getElementById('chkAutoStart').checked = s.autoStart || false;
         document.getElementById('chkAutoCommit').checked = !!s.autoCommit;
         document.getElementById('chkAutoDeleteBranch').checked = !!s.autoDeleteBranch;
+        document.getElementById('chkAutoPush').checked = !!s.autoPush;
 
         // Version
         if (s.version) {
