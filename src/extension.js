@@ -572,9 +572,12 @@ function activate(context) {
 
     // ─── Initialize Telegram Service ──────────────────────────────────
     sidebarProvider.telegramService = telegramService; // 초기 null 참조
-    const telegramConfig = vscode.workspace.getConfiguration('autoAntigravity');
-    const telegramEnabled = telegramConfig.get('telegram.enabled', false);
-    if (telegramEnabled) {
+    // globalState 기반 텔레그램 자동 연결 (fallback: 기존 telegram.enabled 설정)
+    const telegramGlobalState = context.globalState.get('autoAntigravity.telegramConnected');
+    const shouldConnectTelegram = telegramGlobalState !== undefined
+        ? telegramGlobalState  // globalState에 명시적 값이 있으면 그 값 사용
+        : vscode.workspace.getConfiguration('autoAntigravity').get('telegram.enabled', false); // 한 번도 설정된 적 없으면 config fallback
+    if (shouldConnectTelegram) {
         connectTelegram(context);
     }
 
