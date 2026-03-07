@@ -486,8 +486,16 @@ class GitManager {
             return { success: false, error: 'Workspace root not set' };
         }
 
-        // Use session branch as base; fall back to original branch
-        const baseBranch = this._sessionBranch || this._originalBranch;
+        // Use session branch as base; fall back to original branch; then current HEAD
+        let baseBranch = this._sessionBranch || this._originalBranch;
+        if (!baseBranch) {
+            try {
+                baseBranch = this.getCurrentBranch();
+                this.log(`[Git] ℹ 세션/원본 브랜치 미설정 — 현재 브랜치 사용: ${baseBranch}`);
+            } catch (e) {
+                return { success: false, error: 'Cannot determine base branch: ' + e.message };
+            }
+        }
 
         const sanitized = this._sanitizeBranchName(taskText);
         const prefix = this._sessionName ? `ralph/${this._sessionName}` : 'ralph';
@@ -598,10 +606,15 @@ class GitManager {
      * @returns {{ success: boolean, merged: boolean, conflictsResolved: number, error?: string }}
      */
     mergeWorktreeBranch(branchName, autoResolve = true) {
-        // Use session branch as merge target; fall back to original branch
-        const mergeTo = this._sessionBranch || this._originalBranch;
+        // Use session branch as merge target; fall back to original branch; then current HEAD
+        let mergeTo = this._sessionBranch || this._originalBranch;
         if (!mergeTo) {
-            return { success: false, merged: false, conflictsResolved: 0, error: 'No session/original branch' };
+            try {
+                mergeTo = this.getCurrentBranch();
+                this.log(`[Git] ℹ 세션/원본 브랜치 미설정 — 현재 브랜치로 머지: ${mergeTo}`);
+            } catch (e) {
+                return { success: false, merged: false, conflictsResolved: 0, error: 'Cannot determine merge target: ' + e.message };
+            }
         }
 
         try {
