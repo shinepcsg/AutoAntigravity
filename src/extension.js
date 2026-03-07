@@ -108,7 +108,7 @@ function connectTelegram(context) {
             // Ralph Loop가 idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${prompt.substring(0, 80)}`);
-                await ralphLoop._sendToAgent(prompt);
+                await ralphLoop._sendToAgent(prompt, []);
                 telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
             } catch (err) {
@@ -259,7 +259,7 @@ function connectTelegram(context) {
             // Ralph Loop가 idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 워크플로우 프롬프트 전송: ${prompt.substring(0, 80)}`);
-                await ralphLoop._sendToAgent(prompt);
+                await ralphLoop._sendToAgent(prompt, []);
                 telegramService.sendMessage(`🚀 워크플로우 실행 중: /${workflowName}`);
                 log(`[Telegram] ✅ 워크플로우 프롬프트 전송 완료`);
             } catch (err) {
@@ -337,7 +337,7 @@ function connectTelegram(context) {
             // idle이면 즉시 실행
             try {
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
-                await ralphLoop._sendToAgent(prompt);
+                await ralphLoop._sendToAgent(prompt, downloadedPaths);
                 telegramService.sendMessage(`🚀 미디어 포함 즉시 실행 중 (파일 ${downloadedPaths.length}개): ${captionText.substring(0, 60) || '(캡션 없음)'}`);
                 log(`[Telegram] ✅ 미디어 포함 즉시 실행 완료`);
             } catch (err) {
@@ -440,7 +440,7 @@ function activate(context) {
             const prompt = `/write-prd ${nextTask}`;
             try {
                 log(`[Queue] 📤 write-prd 워크플로우 프롬프트 전송 중...`);
-                await ralphLoop._sendToAgent(prompt);
+                await ralphLoop._sendToAgent(prompt, nextMediaPaths);
                 log(`[Queue] ✅ write-prd 워크플로우 프롬프트 전송 완료`);
 
                 // autoStart 설정이 false이면 일회성 watcher 설정
