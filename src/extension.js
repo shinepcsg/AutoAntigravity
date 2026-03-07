@@ -132,17 +132,16 @@ function connectTelegram(context) {
 
     // 텔레그램 → 플러그인: /task 명령 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
     telegramService.onTaskRequest = async (text) => {
-        const prompt = `/write-prd ${text}`;
         const state = ralphLoop.getState();
 
         if (state === LoopState.IDLE) {
-            // Git 세션 초기화 (PRD 작성도 세션 브랜치에서 진행)
+            // Git 세션 초기화
             _initGitSessionIfIdle(text);
 
-            // Ralph Loop가 idle이면 즉시 실행
+            // Ralph Loop가 idle이면 즉시 대화 프롬프트로 전달
             try {
-                log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${prompt.substring(0, 80)}`);
-                await ralphLoop._sendToAgent(prompt, []);
+                log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(text, []);
                 telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
             } catch (err) {
@@ -150,8 +149,8 @@ function connectTelegram(context) {
                 telegramService.sendMessage(`❌ 즉시 실행 실패: ${err.message}`);
             }
         } else if (sidebarProvider) {
-            // Ralph Loop가 실행 중이면 작업 큐에 추가
-            sidebarProvider._taskQueue.push({ text, mediaPaths: [] });
+            // Ralph Loop가 실행 중이면 작업 큐에 추가 (text 그대로 저장)
+            sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'task' });
             sidebarProvider.updateState();
             telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
             log('[Telegram] 작업 큐에 추가: ' + text.substring(0, 80));
