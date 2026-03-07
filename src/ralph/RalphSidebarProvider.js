@@ -148,6 +148,11 @@ class RalphSidebarProvider {
                         this.autoUpdater.installSpecificVersion(message.version);
                     }
                     break;
+                case 'checkForUpdates':
+                    if (this.autoUpdater) {
+                        this.autoUpdater.checkForUpdates();
+                    }
+                    break;
                 case 'toggleAutoInstall': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('updater.autoInstall', false);
@@ -1269,10 +1274,13 @@ class RalphSidebarProvider {
             🚀 자동 Push (세션 종료 시)
         </label>
 
-        <label id="labelAutoInstall" class="toggle-row">
-            <input id="chkAutoInstall" type="checkbox" />
-            ⬆ 자동 업데이트 설치
-        </label>
+        <div id="autoInstallRow" style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+            <label id="labelAutoInstall" class="toggle-row" style="flex:1; margin-bottom:0;">
+                <input id="chkAutoInstall" type="checkbox" />
+                ⬆ 자동 업데이트 설치
+            </label>
+            <button id="btnCheckForUpdates" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px; font-size:11px;">🔍 업데이트 확인</button>
+        </div>
         <div id="versionButtons" class="version-buttons"></div>
         <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">⚠ Git 권한 없음 — 자동 업데이트가 비활성화되어 있습니다.</div>
         <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">📋 write-prd (워크스페이스)</button>
@@ -1348,6 +1356,9 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoInstall' });
+    });
+    document.getElementById('btnCheckForUpdates').addEventListener('click', () => {
+        vscodeApi.postMessage({ command: 'checkForUpdates' });
     });
     document.getElementById('btnToggleTelegram').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'toggleTelegram' });
@@ -1502,19 +1513,19 @@ class RalphSidebarProvider {
         // Updater Active — hide update UI if no Git credentials
         const updateBanner = document.getElementById('updateBanner');
         const updateVersionText = document.getElementById('updateVersionText');
-        const labelAutoInstall = document.getElementById('labelAutoInstall');
         const versionBtnContainer = document.getElementById('versionButtons');
         const noGitCredMsg = document.getElementById('noGitCredMsg');
+        const autoInstallRow = document.getElementById('autoInstallRow');
 
         if (!s.updaterActive) {
             // Git 권한 없음: 업데이트 관련 UI 숨기기
             updateBanner.classList.remove('visible');
-            labelAutoInstall.style.display = 'none';
+            autoInstallRow.style.display = 'none';
             versionBtnContainer.style.display = 'none';
             noGitCredMsg.style.display = '';
         } else {
             // 업데이트 활성: UI 표시
-            labelAutoInstall.style.display = '';
+            autoInstallRow.style.display = '';
             versionBtnContainer.style.display = '';
             noGitCredMsg.style.display = 'none';
 
