@@ -159,6 +159,36 @@ function connectTelegram(context) {
         }
     };
 
+    // 텔레그램 → 플러그인: /prd 명령 수신 시 idle이면 즉시 /write-prd 워크플로우 실행, 아니면 큐에 추가
+    telegramService.onPrdRequest = async (text) => {
+        const state = ralphLoop.getState();
+        const prompt = '/write-prd ' + text;
+
+        if (state === LoopState.IDLE) {
+            // Git 세션 초기화
+            _initGitSessionIfIdle(text);
+
+            // Ralph Loop가 idle이면 즉시 /write-prd 워크플로우로 실행
+            try {
+                log(`[Telegram] 📤 PRD 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(prompt, []);
+                telegramService.sendMessage(`🚀 PRD 작성 즉시 실행 중: ${text.substring(0, 80)}`);
+                log(`[Telegram] ✅ PRD 즉시 실행 프롬프트 전송 완료`);
+            } catch (err) {
+                log(`[Telegram] ❌ PRD 즉시 실행 프롬프트 전송 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ PRD 즉시 실행 실패: ${err.message}`);
+            }
+        } else if (sidebarProvider) {
+            // Ralph Loop가 실행 중이면 작업 큐에 추가 (type: 'prd'로 저장)
+            sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'prd' });
+            sidebarProvider.updateState();
+            telegramService.sendMessage(`📥 PRD 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            log('[Telegram] PRD 작업 큐에 추가: ' + text.substring(0, 80));
+        } else {
+            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+        }
+    };
+
     // 텔레그램 → 플러그인: 도움말
     telegramService.onHelpRequest = () => {
         const lines = [
