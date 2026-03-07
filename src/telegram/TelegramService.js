@@ -24,6 +24,7 @@ class TelegramService {
         this.onConfigRequest = null;
         this.onQueueRequest = null;
         this.onWorkflowRequest = null;
+        this.onMediaReceived = null;
     }
 
     /** @returns {string|null} Current bot token */
