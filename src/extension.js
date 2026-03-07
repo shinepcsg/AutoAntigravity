@@ -59,6 +59,11 @@ function updateRalphStatusBar() {
             statusBarRalph.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
             statusBarRalph.tooltip = 'Ralph Loop is stopping...';
             break;
+        case LoopState.QUOTA_PAUSED:
+            statusBarRalph.text = '$(watch) Ralph: Quota Paused';
+            statusBarRalph.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+            statusBarRalph.tooltip = 'Ralph Loop paused — waiting for model quota reset';
+            break;
         default:
             statusBarRalph.text = '$(debug-start) Ralph: IDLE';
             statusBarRalph.backgroundColor = undefined;
@@ -442,6 +447,21 @@ function connectTelegram(context) {
         }
     };
 
+    // 플러그인 → 텔레그램: 쿼터 초과 알림
+    ralphLoop.onQuotaExhaustedCallback = (info) => {
+        if (info.resumed) {
+            telegramService.sendMessage(`▶️ 모델 할당량 갱신 완료 — Ralph Loop 재개됩니다.`);
+        } else {
+            telegramService.sendMessage(
+                `⏸️ *모델 할당량 초과 (Quota Exhausted)*\n\n` +
+                `Ralph Loop가 일시정지되었습니다.\n` +
+                `할당량 리셋: ${info.refreshTime}\n` +
+                `예상 재개: ${info.resumeTime} (약 ${info.waitMinutes}분 후)\n\n` +
+                `ℹ️ 리셋 시간이 지나면 자동으로 재개됩니다.`
+            );
+        }
+    };
+
     // NOTE: onAllTasksCompleteCallback은 activate()에서 통합 설정 (사이드바 큐 처리 + 텔레그램 알림)
 
     const wsRoot = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : undefined;
@@ -469,6 +489,7 @@ function disconnectTelegram() {
     if (ralphLoop) {
         ralphLoop.onLogCallback = null;
         ralphLoop.onTaskCompleteCallback = null;
+        ralphLoop.onQuotaExhaustedCallback = null;
     }
     // sidebar에 참조 동기화
     if (sidebarProvider) {

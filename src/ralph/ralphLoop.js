@@ -18,7 +18,8 @@ const LoopState = {
     IDLE: 'idle',
     RUNNING: 'running',
     PAUSED: 'paused',
-    STOPPING: 'stopping'
+    STOPPING: 'stopping',
+    QUOTA_PAUSED: 'quota_paused'
 };
 
 class RalphLoopManager {
@@ -40,6 +41,7 @@ class RalphLoopManager {
         this.onLogCallback = null; // callback for log forwarding (e.g. Telegram)
         this.onTaskCompleteCallback = null; // callback for individual task completion (e.g. Telegram)
         this.onAllTasksCompleteCallback = null; // callback for all tasks completion (e.g. Telegram)
+        this.onQuotaExhaustedCallback = null; // callback for quota exhaustion notification (e.g. Telegram)
 
         // 로그 버퍼 — 사이드바에 표시
         this._logBuffer = [];
@@ -69,6 +71,9 @@ class RalphLoopManager {
 
         // 큐 작업에 의한 강제 autoStart 플래그
         this._forceNextAutoStart = false;
+
+        // Quota 일시정지 자동 재개 타이머
+        this._quotaResumeTimer = null;
     }
 
     /**
@@ -182,7 +187,7 @@ class RalphLoopManager {
      * Start the Ralph Loop
      */
     async start() {
-        if (this.state === LoopState.RUNNING) {
+        if (this.state === LoopState.RUNNING || this.state === LoopState.QUOTA_PAUSED) {
             vscode.window.showWarningMessage('Ralph Loop is already running.');
             return;
         }
@@ -338,6 +343,12 @@ class RalphLoopManager {
         if (this.loopTimer) {
             clearTimeout(this.loopTimer);
             this.loopTimer = null;
+        }
+
+        // ── Quota 재개 타이머 정리 ──
+        if (this._quotaResumeTimer) {
+            clearTimeout(this._quotaResumeTimer);
+            this._quotaResumeTimer = null;
         }
 
         // ── 대기 큐 클리어 ──
@@ -1109,10 +1120,18 @@ class RalphLoopManager {
                 }
             } catch (e) {
                 this._sessionLock.release();
-                this.consecutiveErrors++;
-                this.lastError = e.message;
-                this._addLog(`[Ralph] ❌ 병렬 그룹 에러: ${e.message}`, 'error');
-                vscode.window.showErrorMessage(`Ralph Loop 병렬 에러: ${e.message}`);
+                if (e.message === 'QUOTA_REACHED') {
+                    // Quota 제한으로 인해 대기한 경우 — 반복 되돌리고 재시도
+                    this._addLog(`[Ralph] 🔄 병렬 그룹 작업을 다시 시도하기 위해 반복 횟수를 되돌립니다`);
+                    this.currentIteration--;
+                    this.lastError = null;
+                    this.consecutiveErrors = 0;
+                } else {
+                    this.consecutiveErrors++;
+                    this.lastError = e.message;
+                    this._addLog(`[Ralph] ❌ 병렬 그룹 에러: ${e.message}`, 'error');
+                    vscode.window.showErrorMessage(`Ralph Loop 병렬 에러: ${e.message}`);
+                }
             }
         } else {
             // ── Sequential single-task execution (existing logic) ──
@@ -1589,13 +1608,53 @@ class RalphLoopManager {
                     }
 
                     const waitMinutes = (waitMs / 60000).toFixed(1);
-                    this._addLog(`[Ralph] ⏳ 모델 할당량 초과(Model quota reached). ${status.refreshTime} 까지 약 ${waitMinutes}분 대기합니다...`, 'warn');
-                    vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 대기합니다.`);
+                    const resumeTimeStr = new Date(Date.now() + waitMs).toLocaleTimeString();
+                    this._addLog(`[Ralph] ⏸ 모델 할당량 초과(Model quota reached). 루프를 일시정지하고 ${resumeTimeStr} (약 ${waitMinutes}분 후)에 자동 재개합니다.`, 'warn');
+                    vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 후 자동 재개됩니다.`);
 
-                    // 해당 시간만큼 대기
-                    await delay(waitMs);
+                    // 텔레그램 알림 콜백 호출
+                    if (this.onQuotaExhaustedCallback) {
+                        try {
+                            this.onQuotaExhaustedCallback({
+                                refreshTime: status.refreshTime,
+                                waitMinutes: parseFloat(waitMinutes),
+                                resumeTime: resumeTimeStr
+                            });
+                        } catch (cbErr) {
+                            this._addLog(`[Ralph] ⚠ onQuotaExhaustedCallback 에러: ${cbErr.message}`, 'warn');
+                        }
+                    }
 
-                    this._addLog(`[Ralph] 🔄 할당량 갱신 대기 완료. 대화창을 초기화하고 작업을 재시도합니다.`);
+                    // 루프를 QUOTA_PAUSED 상태로 전환
+                    this.state = LoopState.QUOTA_PAUSED;
+                    this._notifyStateChange();
+
+                    // 지정된 시간 후 자동 재개 타이머 설정
+                    await new Promise((resolve) => {
+                        this._quotaResumeTimer = setTimeout(() => {
+                            this._quotaResumeTimer = null;
+                            resolve();
+                        }, waitMs);
+                    });
+
+                    // 타이머 완료 후 — stop()으로 중지되었으면 중단
+                    if (this.state !== LoopState.QUOTA_PAUSED) {
+                        this._addLog('[Ralph] ⚠ Quota 대기 중 루프 상태 변경 — 재개 취소');
+                        return;
+                    }
+
+                    // 다시 RUNNING 상태로 복구
+                    this.state = LoopState.RUNNING;
+                    this._notifyStateChange();
+
+                    this._addLog(`[Ralph] ▶ 할당량 갱신 대기 완료. 대화창을 초기화하고 작업을 재시도합니다.`);
+
+                    // 텔레그램 재개 알림
+                    if (this.onQuotaExhaustedCallback) {
+                        try {
+                            this.onQuotaExhaustedCallback({ resumed: true });
+                        } catch (cbErr) { /* ignore */ }
+                    }
 
                     // Dismiss 버튼 클릭 시도 (UI 정리)
                     try {

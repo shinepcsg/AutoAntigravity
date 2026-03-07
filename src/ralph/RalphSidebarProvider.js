@@ -678,6 +678,7 @@ class RalphSidebarProvider {
     .status-pill.idle   .dot { background: #888; }
     .status-pill.running .dot { background: var(--success); animation: pulse 1.2s infinite; }
     .status-pill.stopping .dot { background: var(--danger); animation: pulse 0.6s infinite; }
+    .status-pill.quota_paused .dot { background: var(--warning); animation: pulse 1.8s infinite; }
 
     @keyframes pulse {
         0%, 100% { opacity: 1; }
@@ -1420,10 +1421,18 @@ class RalphSidebarProvider {
         const btnStart = document.getElementById('btnStartRalph');
         const btnStop = document.getElementById('btnStopRalph');
 
-        switch (s.ralphState) {
+         switch (s.ralphState) {
             case 'running':
                 pill.style.display = '';
                 statusText.textContent = 'RUNNING';
+                iterArea.style.display = 'block';
+                progressArea.style.display = 'block';
+                btnStart.style.display = 'none';
+                btnStop.style.display = '';
+                break;
+            case 'quota_paused':
+                pill.style.display = '';
+                statusText.textContent = 'QUOTA PAUSED';
                 iterArea.style.display = 'block';
                 progressArea.style.display = 'block';
                 btnStart.style.display = 'none';
