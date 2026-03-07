@@ -233,7 +233,7 @@ class GitManager {
         try {
             // Commit any remaining uncommitted changes on the work branch
             if (this.hasUncommittedChanges()) {
-                this.commitAll(`[Ralph] 작업 완료 — 최종 커밋`);
+                this.commitAll(`final`);
             }
 
             // Check if there are any commits on the work branch vs merge target
@@ -268,7 +268,7 @@ class GitManager {
 
             try {
                 this._execGit(['merge', workBranch, '--no-ff', '-m',
-                    `[Ralph] 작업 완료: ${workBranch} → ${mergeTo}`]);
+                    `merge ${workBranch}`]);
                 this.log('[Git] ✅ 머지 완료');
 
                 // Delete work branch after merge (if option enabled)
@@ -319,8 +319,23 @@ class GitManager {
         const shortTask = taskText.length > 80
             ? taskText.substring(0, 77) + '...'
             : taskText;
-        const message = `[Ralph #${iteration}] ${shortTask}`;
+        const message = `#${iteration} ${shortTask}`;
         return this.commitAll(message);
+    }
+
+    /**
+     * Push current HEAD to remote origin.
+     * @returns {{ success: boolean, error?: string }}
+     */
+    pushToRemote() {
+        try {
+            this._execGit(['push', 'origin', 'HEAD']);
+            this.log('[Git] 🚀 Push 성공: origin/HEAD');
+            return { success: true };
+        } catch (e) {
+            this.log(`[Git] ❌ Push 실패: ${e.message}`);
+            return { success: false, error: e.message };
+        }
     }
 
     /**
@@ -329,11 +344,11 @@ class GitManager {
      * 2. Merge session branch into original branch (main)
      * Called on stop/all-tasks-completed.
      *
-     * @param {{ autoDeleteBranch: boolean }} [options]
+     * @param {{ autoDeleteBranch: boolean, autoPush: boolean }} [options]
      * @returns {{ success: boolean, merged: boolean, sessionMerged: boolean, error?: string }}
      */
     endSession(options = {}) {
-        const { autoDeleteBranch = true } = options;
+        const { autoDeleteBranch = true, autoPush = false } = options;
 
         // 1. If there's an active task branch, end it (merge into session branch)
         if (this._workBranch) {
@@ -351,7 +366,7 @@ class GitManager {
                     this._execGit(['checkout', sessionBranch]);
                 }
                 if (this.hasUncommittedChanges()) {
-                    this.commitAll('[Ralph] 세션 종료 — 최종 커밋');
+                    this.commitAll('session final');
                 }
 
                 // Check if session branch has commits ahead of original
@@ -383,10 +398,15 @@ class GitManager {
 
                 try {
                     this._execGit(['merge', sessionBranch, '--no-ff', '-m',
-                        `[Ralph] 세션 완료: ${sessionBranch} → ${this._originalBranch}`]);
+                        `merge ${sessionBranch}`]);
                     this.log(`[Git] ✅ 세션 브랜치 → 원본 브랜치 머지 완료`);
 
                     this.log(`[Git] 📌 세션 브랜치 유지: ${sessionBranch}`);
+
+                    // Auto push if enabled
+                    if (autoPush) {
+                        this.pushToRemote();
+                    }
 
                     this._restoreStash();
                     this._originalBranch = null;
@@ -586,7 +606,7 @@ class GitManager {
             // Try normal merge first
             try {
                 this._execGit(['merge', branchName, '--no-ff', '-m',
-                    `[Ralph] 병렬 작업 완료: ${branchName} → ${mergeTo}`]);
+                    `merge ${branchName}`]);
                 this.log(`[Git] ✅ ${branchName} 머지 완료 (충돌 없음)`);
                 return { success: true, merged: true, conflictsResolved: 0 };
             } catch (mergeErr) {
