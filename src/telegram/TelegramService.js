@@ -378,7 +378,8 @@ class TelegramService {
                 { command: 'stop', description: '⏹ Ralph Loop 정지' },
                 { command: 'autoaccept', description: '⚡ AutoAccept ON/OFF 토글' },
                 { command: 'config', description: '⚙️ 현재 설정값 조회' },
-                { command: 'queue', description: '📋 작업 큐 목록 조회' }
+                { command: 'queue', description: '📋 작업 큐 목록 조회' },
+                { command: 'task', description: '📝 작업 요청 (write-prd 워크플로우로 실행)' }
             ];
 
             // 2) 동적 워크플로우 명령어 스캔 (공유 헬퍼 사용)
