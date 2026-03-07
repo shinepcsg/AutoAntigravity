@@ -1252,10 +1252,13 @@ class RalphLoopManager {
      * Send prompt to Antigravity agent — FULLY CDP-BASED
      * 1. Get CDP target matching CURRENT workspace name
      * 2. CDP Ctrl+L → new chat session
+     * 2.5. (optional) Insert @<media file path> references for each mediaPaths entry
      * 3. Runtime.evaluate → find chat textarea + focus + insert text (all in one call)
      * 4. CDP Enter → submit
+     * @param {string} prompt - The prompt text to send
+     * @param {string[]} [mediaPaths=[]] - Optional array of absolute media file paths to attach via @reference
      */
-    async _sendToAgent(prompt) {
+    async _sendToAgent(prompt, mediaPaths = []) {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
         // ─── Step 1: Get CDP target matching CURRENT workspace ───
@@ -1312,6 +1315,41 @@ class RalphLoopManager {
 
 
         await delay(2000);
+
+        // ─── Step 2.5: Insert @media references if mediaPaths provided ───
+        if (mediaPaths && mediaPaths.length > 0) {
+            this._addLog(`[Ralph] 📎 미디어 파일 ${mediaPaths.length}개 첨부 중...`);
+
+            // Compute workspace-relative paths
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const workspaceRoot = (workspaceFolders && workspaceFolders.length > 0)
+                ? workspaceFolders[0].uri.fsPath
+                : null;
+
+            for (const mediaPath of mediaPaths) {
+                let refPath = mediaPath;
+                if (workspaceRoot && mediaPath.startsWith(workspaceRoot)) {
+                    // Convert to workspace-relative path
+                    refPath = mediaPath.substring(workspaceRoot.length);
+                    // Normalize separators and remove leading separator
+                    refPath = refPath.replace(/\\/g, '/');
+                    if (refPath.startsWith('/')) refPath = refPath.substring(1);
+                }
+
+                const atRef = `@${refPath} `;
+                try {
+                    await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
+                        text: atRef
+                    }, 5000);
+                    this._addLog(`[Ralph]   📎 미디어 참조 삽입: ${atRef.trim()}`);
+                } catch (e) {
+                    this._addLog(`[Ralph]   ⚠ 미디어 참조 삽입 실패: ${refPath} — ${e.message}`, 'warn');
+                }
+                await delay(500);
+            }
+
+            this._addLog('[Ralph] ✅ 미디어 참조 삽입 완료');
+        }
 
         // ─── Step 3: Find chat input → focus → insert text with line breaks ───
         // Strategy: CDP Input.insertText for text + Shift+Enter for line breaks
