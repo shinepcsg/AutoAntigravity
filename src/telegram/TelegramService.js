@@ -173,9 +173,42 @@ class TelegramService {
 
     /**
      * Handle an incoming message — dispatch commands or forward text.
+     * Also handles media messages (photo / document) via onMediaReceived callback.
      */
     _handleMessage(message) {
-        if (!message || !message.text) return;
+        if (!message) return;
+
+        // --- Media handling (photo / document) ---
+        const mediaFiles = [];
+
+        if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
+            // Telegram sends multiple sizes; last element = highest resolution
+            const bestPhoto = message.photo[message.photo.length - 1];
+            mediaFiles.push({
+                fileId: bestPhoto.file_id,
+                fileName: 'photo.jpg',
+                type: 'photo'
+            });
+        }
+
+        if (message.document) {
+            mediaFiles.push({
+                fileId: message.document.file_id,
+                fileName: message.document.file_name || 'document',
+                type: 'document'
+            });
+        }
+
+        if (mediaFiles.length > 0) {
+            const captionText = (message.caption || '').trim();
+            if (this.onMediaReceived) {
+                this.onMediaReceived(captionText, mediaFiles);
+            }
+            return; // Media message handled — skip text-only flow
+        }
+
+        // --- Text-only handling (existing flow) ---
+        if (!message.text) return;
 
         const text = message.text.trim();
 
