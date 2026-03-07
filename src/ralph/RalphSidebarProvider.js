@@ -1428,6 +1428,7 @@ class RalphSidebarProvider {
             case 'stopping':
                 pill.style.display = '';
                 statusText.textContent = 'STOPPING...';
+                progressArea.style.display = 'none';
                 btnStart.style.display = 'none';
                 btnStop.style.display = 'none';
                 break;
@@ -1435,7 +1436,7 @@ class RalphSidebarProvider {
                 pill.style.display = 'none';
                 statusText.textContent = 'IDLE';
                 iterArea.style.display = 'none';
-                progressArea.style.display = s.progress && s.progress.total > 0 ? 'block' : 'none';
+                progressArea.style.display = 'none';
                 btnStart.style.display = '';
                 btnStop.style.display = 'none';
         }
