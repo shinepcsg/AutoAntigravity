@@ -103,6 +103,31 @@ function _initGitSessionIfIdle(label) {
     }
 }
 
+// ─── Telegram Immediate Execution: Wait & Send Images Helper ──────────
+/**
+ * 즉시 실행 후 에이전트 작업 완료를 기다리고, 새로 생성된 이미지를 텔레그램으로 전송.
+ * @param {Set<string>} imagesBefore - 실행 전 이미지 스냅샷
+ */
+async function _waitAndSendImages(imagesBefore) {
+    try {
+        log('[Telegram] ⏳ 에이전트 작업 완료 대기 중...');
+        await ralphLoop._waitForAgentCompletion();
+        log('[Telegram] ✅ 에이전트 작업 완료 감지');
+
+        // 새로 생성된 이미지 감지
+        const newImages = ralphLoop._getNewImagesSinceSnapshot(imagesBefore);
+        if (newImages.length > 0 && telegramService) {
+            const path = require('path');
+            for (const imgPath of newImages) {
+                await telegramService.sendPhoto(imgPath, `🖼 ${path.basename(imgPath)}`);
+            }
+            log(`[Telegram] 🖼 생성된 이미지 ${newImages.length}개 텔레그램 전송 완료`);
+        }
+    } catch (err) {
+        log(`[Telegram] ⚠ 이미지 감지/전송 실패: ${err.message}`);
+    }
+}
+
 // ─── Telegram Connect / Disconnect ────────────────────────────────────
 function connectTelegram(context) {
     _extensionContext = context;
@@ -146,12 +171,18 @@ function connectTelegram(context) {
             // Git 세션 초기화
             _initGitSessionIfIdle(text);
 
+            // 이미지 스냅샷 (실행 전)
+            const imagesBefore = ralphLoop._snapshotImageFiles();
+
             // Ralph Loop가 idle이면 즉시 대화 프롬프트로 전달
             try {
                 log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(text, []);
                 telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
+
+                // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
+                _waitAndSendImages(imagesBefore);
             } catch (err) {
                 log(`[Telegram] ❌ 즉시 실행 프롬프트 전송 실패: ${err.message}`);
                 telegramService.sendMessage(`❌ 즉시 실행 실패: ${err.message}`);
@@ -413,12 +444,18 @@ function connectTelegram(context) {
             // Git 세션 초기화 (미디어 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(captionText || '미디어-첨부-작업');
 
+            // 이미지 스냅샷 (실행 전)
+            const imagesBefore = ralphLoop._snapshotImageFiles();
+
             // idle이면 즉시 대화 프롬프트로 전달
             try {
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, downloadedPaths);
                 telegramService.sendMessage(`🚀 미디어 포함 즉시 실행 중 (파일 ${downloadedPaths.length}개): ${captionText.substring(0, 60) || '(캡션 없음)'}`);
                 log(`[Telegram] ✅ 미디어 포함 즉시 실행 완료`);
+
+                // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
+                _waitAndSendImages(imagesBefore);
             } catch (err) {
                 log(`[Telegram] ❌ 미디어 포함 즉시 실행 실패: ${err.message}`);
                 telegramService.sendMessage(`❌ 미디어 실행 실패: ${err.message}`);
