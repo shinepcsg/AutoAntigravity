@@ -216,7 +216,9 @@ function connectTelegram(context) {
         }
 
         lines.push(``);
-        lines.push(`💡 작업을 요청하려면 \`/task [작업 내용]\`을 사용하세요.`);
+        lines.push(`💡 *작업 요청*`);
+        lines.push(`/task [내용] — 💬 작업 요청 (대화로 직접 전달)`);
+        lines.push(`/prd [내용] — 📋 PRD 작성 요청 (write-prd 워크플로우)`);
 
         telegramService.sendMessage(lines.join('\n'));
     };
