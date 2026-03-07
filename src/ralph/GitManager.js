@@ -325,6 +325,7 @@ class GitManager {
 
     /**
      * Push current HEAD to remote origin.
+     * If push is rejected (remote has new commits), pull --rebase then retry.
      * @returns {{ success: boolean, error?: string }}
      */
     pushToRemote() {
@@ -333,6 +334,19 @@ class GitManager {
             this.log('[Git] 🚀 Push 성공: origin/HEAD');
             return { success: true };
         } catch (e) {
+            // push rejected — pull first, then retry
+            if (e.message.includes('rejected') || e.message.includes('fetch first')) {
+                this.log('[Git] ⬇ 리모트에 새 커밋 감지 — pull --rebase 실행 중...');
+                try {
+                    this._execGit(['pull', '--rebase', 'origin', 'HEAD']);
+                    this._execGit(['push', 'origin', 'HEAD']);
+                    this.log('[Git] 🚀 Pull 후 Push 성공: origin/HEAD');
+                    return { success: true };
+                } catch (retryErr) {
+                    this.log(`[Git] ❌ Pull 후 Push 실패: ${retryErr.message}`);
+                    return { success: false, error: retryErr.message };
+                }
+            }
             this.log(`[Git] ❌ Push 실패: ${e.message}`);
             return { success: false, error: e.message };
         }
