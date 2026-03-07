@@ -27,6 +27,9 @@ class TelegramService {
         this.onMediaReceived = null;
         this.onTaskRequest = null;
         this.onPrdRequest = null;
+
+        // Notification detail level
+        this.detailedNotification = false;
     }
 
     /** @returns {string|null} Current bot token */
@@ -417,7 +420,11 @@ class TelegramService {
         if (!logEntry) return;
 
         const { msg, level } = logEntry;
-        const importantMarkers = ['═══', '✅ 작업 완료', '✅ 모든 작업', '❌', '🚀', '⏹', '🎉'];
+        // detailedNotification=true: 기존 모든 마커 유지
+        // detailedNotification=false(기본): 시작/완료/에러만 전달
+        const importantMarkers = this.detailedNotification
+            ? ['═══', '✅ 작업 완료', '✅ 모든 작업', '❌', '🚀', '⏹', '🎉']
+            : ['🚀', '🎉', '❌'];
 
         const isImportant = level === 'error' || importantMarkers.some(marker => msg && msg.includes(marker));
 
