@@ -238,6 +238,16 @@ class RalphSidebarProvider {
                     }
                     break;
                 }
+                case 'toggleTelegramDetail': {
+                    if (this.telegramService) {
+                        const newVal = !this.telegramService.detailedNotification;
+                        this.telegramService.detailedNotification = newVal;
+                        await this._context.globalState.update('autoAntigravity.telegramDetailedNotification', newVal);
+                        this._log(`[Sidebar] Telegram detailed notification: ${newVal ? 'ON' : 'OFF'}`);
+                    }
+                    this.updateState();
+                    break;
+                }
                 case 'toggleTelegram': {
                     // If no credentials, show the credential form
                     // Check telegramService first, then fall back to .env file
@@ -498,6 +508,7 @@ class RalphSidebarProvider {
             updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null),
             // 텔레그램 상태
             telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
+            telegramDetailedNotification: !!(this.telegramService && this.telegramService.detailedNotification),
             telegramHasCred: !!(this.telegramService && this.telegramService.botToken && this.telegramService.chatId)
                 || (() => { const c = this._getEnvTelegramCreds(); return !!(c.botToken && c.chatId); })(),
             showTelegramCredForm: this._showTelegramCredForm || false,
@@ -1335,6 +1346,10 @@ class RalphSidebarProvider {
     });
     document.getElementById('btnToggleTelegram').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'toggleTelegram' });
+    });
+    document.getElementById('labelTelegramDetail').addEventListener('click', (e) => {
+        e.preventDefault();
+        vscodeApi.postMessage({ command: 'toggleTelegramDetail' });
     });
     document.getElementById('btnSaveTelegramCred').addEventListener('click', () => {
         const botToken = document.getElementById('inputTelegramToken').value.trim();
