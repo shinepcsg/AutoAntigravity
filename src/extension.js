@@ -279,6 +279,83 @@ function connectTelegram(context) {
         }
     };
 
+    // 텔레그램 → 플러그인: 미디어 수신 시 파일 다운로드 후 처리
+    telegramService.onMediaReceived = async (text, mediaFiles) => {
+        const fs = require('fs');
+        const path = require('path');
+
+        // 워크스페이스 루트 확인
+        const wsRoot = workspaceFolders && workspaceFolders.length > 0
+            ? workspaceFolders[0].uri.fsPath : null;
+        if (!wsRoot) {
+            telegramService.sendMessage('❌ 워크스페이스가 열려있지 않습니다.');
+            return;
+        }
+
+        // .antigravity/media/ 디렉토리 생성
+        const mediaDir = path.join(wsRoot, '.antigravity', 'media');
+        fs.mkdirSync(mediaDir, { recursive: true });
+
+        // 각 미디어 파일 다운로드
+        const timestamp = Date.now();
+        const downloadedPaths = [];
+
+        for (const mf of mediaFiles) {
+            const fileName = mf.type === 'photo' && (!mf.fileName || mf.fileName === 'photo.jpg')
+                ? `${timestamp}_photo.jpg`
+                : `${timestamp}_${mf.fileName}`;
+            const destPath = path.join(mediaDir, fileName);
+
+            try {
+                const result = await telegramService.downloadFile(mf.fileId, destPath);
+                if (result.success) {
+                    downloadedPaths.push(result.path);
+                    log(`[Telegram] 📥 미디어 다운로드 성공: ${fileName}`);
+                } else {
+                    log(`[Telegram] ⚠️ 미디어 다운로드 실패: ${result.error}`);
+                }
+            } catch (err) {
+                log(`[Telegram] ❌ 미디어 다운로드 오류: ${err.message}`);
+            }
+        }
+
+        if (downloadedPaths.length === 0) {
+            telegramService.sendMessage('❌ 미디어 파일 다운로드에 모두 실패했습니다.');
+            return;
+        }
+
+        // 프롬프트 구성: caption이 있으면 /write-prd로 감싸고, 미디어 경로 참조 추가
+        const captionText = text || '';
+        const mediaRefs = downloadedPaths.map(p => `@${p}`).join(' ');
+        const prompt = captionText
+            ? `/write-prd ${captionText}\n\n첨부 미디어:\n${mediaRefs}`
+            : `/write-prd 첨부된 미디어 파일을 분석해주세요.\n\n첨부 미디어:\n${mediaRefs}`;
+
+        const state = ralphLoop.getState();
+
+        if (state === LoopState.IDLE) {
+            // idle이면 즉시 실행
+            try {
+                log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(prompt);
+                telegramService.sendMessage(`🚀 미디어 포함 즉시 실행 중 (파일 ${downloadedPaths.length}개): ${captionText.substring(0, 60) || '(캡션 없음)'}`);
+                log(`[Telegram] ✅ 미디어 포함 즉시 실행 완료`);
+            } catch (err) {
+                log(`[Telegram] ❌ 미디어 포함 즉시 실행 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ 미디어 실행 실패: ${err.message}`);
+            }
+        } else if (sidebarProvider) {
+            // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로)
+            const queueText = captionText || '미디어 첨부 작업';
+            sidebarProvider._taskQueue.push(queueText);
+            sidebarProvider.updateState();
+            telegramService.sendMessage(`📥 미디어 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개, 파일 ${downloadedPaths.length}개): ${queueText.substring(0, 60)}`);
+            log(`[Telegram] 미디어 작업 큐에 추가: ${queueText.substring(0, 80)}`);
+        } else {
+            telegramService.sendMessage('❌ 사이드바가 초기화되지 않았습니다.');
+        }
+    };
+
     // 플러그인 → 텔레그램: Ralph Loop 로그 전달
     ralphLoop.onLogCallback = (logEntry) => {
         telegramService.onRalphLog(logEntry);
