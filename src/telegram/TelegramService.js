@@ -2,6 +2,7 @@
 // Sends progress updates and receives commands via Telegram Bot API.
 
 const https = require('https');
+const fs = require('fs');
 const { scanWorkflows } = require('./scanWorkflows');
 
 class TelegramService {
@@ -23,6 +24,7 @@ class TelegramService {
         this.onConfigRequest = null;
         this.onQueueRequest = null;
         this.onWorkflowRequest = null;
+        this.onMediaReceived = null;
     }
 
     /** @returns {string|null} Current bot token */
@@ -173,9 +175,42 @@ class TelegramService {
 
     /**
      * Handle an incoming message — dispatch commands or forward text.
+     * Also handles media messages (photo / document) via onMediaReceived callback.
      */
     _handleMessage(message) {
-        if (!message || !message.text) return;
+        if (!message) return;
+
+        // --- Media handling (photo / document) ---
+        const mediaFiles = [];
+
+        if (message.photo && Array.isArray(message.photo) && message.photo.length > 0) {
+            // Telegram sends multiple sizes; last element = highest resolution
+            const bestPhoto = message.photo[message.photo.length - 1];
+            mediaFiles.push({
+                fileId: bestPhoto.file_id,
+                fileName: 'photo.jpg',
+                type: 'photo'
+            });
+        }
+
+        if (message.document) {
+            mediaFiles.push({
+                fileId: message.document.file_id,
+                fileName: message.document.file_name || 'document',
+                type: 'document'
+            });
+        }
+
+        if (mediaFiles.length > 0) {
+            const captionText = (message.caption || '').trim();
+            if (this.onMediaReceived) {
+                this.onMediaReceived(captionText, mediaFiles);
+            }
+            return; // Media message handled — skip text-only flow
+        }
+
+        // --- Text-only handling (existing flow) ---
+        if (!message.text) return;
 
         const text = message.text.trim();
 
@@ -254,6 +289,67 @@ class TelegramService {
         });
     }
 
+    /**
+     * Download a file from Telegram servers to a local path.
+     * Uses getFile API to obtain file_path, then downloads the binary content.
+     * @param {string} fileId - Telegram file_id
+     * @param {string} destPath - Local destination path to save the file
+     * @returns {Promise<{ success: boolean, path?: string, error?: string }>}
+     */
+    downloadFile(fileId, destPath) {
+        return this._telegramApiCall('getFile', { file_id: fileId })
+            .then((fileInfo) => {
+                const filePath = fileInfo.file_path;
+                const fileUrl = `/file/bot${this._botToken}/${filePath}`;
+
+                return new Promise((resolve, reject) => {
+                    const options = {
+                        hostname: 'api.telegram.org',
+                        port: 443,
+                        path: fileUrl,
+                        method: 'GET',
+                        timeout: 60000 // 60s timeout for file download
+                    };
+
+                    const req = https.request(options, (res) => {
+                        if (res.statusCode !== 200) {
+                            reject(new Error(`HTTP ${res.statusCode} downloading file`));
+                            return;
+                        }
+
+                        const fileStream = fs.createWriteStream(destPath);
+                        res.pipe(fileStream);
+
+                        fileStream.on('finish', () => {
+                            fileStream.close();
+                            resolve({ success: true, path: destPath });
+                        });
+
+                        fileStream.on('error', (err) => {
+                            // Clean up partial file on write error
+                            try { fs.unlinkSync(destPath); } catch (_) { /* ignore */ }
+                            reject(err);
+                        });
+                    });
+
+                    req.on('error', (err) => reject(err));
+                    req.on('timeout', () => {
+                        req.destroy();
+                        reject(new Error('File download timeout'));
+                    });
+
+                    req.end();
+                });
+            })
+            .then((result) => {
+                this._log(`[Telegram] 파일 다운로드 완료: ${destPath}`);
+                return result;
+            })
+            .catch((err) => {
+                this._log(`[Telegram] 파일 다운로드 실패: ${err.message}`);
+                return { success: false, error: err.message };
+            });
+    }
 
 
     /**
