@@ -355,17 +355,29 @@ function activate(context) {
             log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (남은: ${sidebarProvider._taskQueue.length}): ${nextTask.substring(0, 80)}`);
             sidebarProvider.updateState(); // 큐 UI 갱신
 
+            // 큐 작업에 의한 PRD 변경 시 autoStart 무관하게 자동 시작되도록 플래그 설정
+            ralphLoop._forceNextAutoStart = true;
+
             const prompt = `/write-prd ${nextTask}`;
             try {
                 log(`[Queue] 📤 write-prd 워크플로우 프롬프트 전송 중...`);
                 await ralphLoop._sendToAgent(prompt);
                 log(`[Queue] ✅ write-prd 워크플로우 프롬프트 전송 완료`);
 
+                // autoStart 설정이 false이면 일회성 watcher 설정
+                const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
+                    .get('ralphLoop.autoStart', false);
+                if (!autoStartEnabled) {
+                    ralphLoop.enableAutoStartOnce();
+                    log(`[Queue] 👁 autoStart 비활성 상태 — 일회성 watcher 활성화`);
+                }
+
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
                     telegramService.sendMessage(`📬 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
                 }
             } catch (err) {
                 log(`[Queue] ❌ write-prd 프롬프트 전송 실패: ${err.message}`);
+                ralphLoop._forceNextAutoStart = false; // 전송 실패 시 플래그 리셋
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
                     telegramService.sendMessage(`❌ 큐 작업 전송 실패: ${err.message}`);
                 }

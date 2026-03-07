@@ -66,6 +66,9 @@ class RalphLoopManager {
 
         // 작업 큐 — 실행 중 새 작업 요청을 순차 대기
         this._pendingTaskQueue = [];
+
+        // 큐 작업에 의한 강제 autoStart 플래그
+        this._forceNextAutoStart = false;
     }
 
     /**
@@ -386,6 +389,22 @@ class RalphLoopManager {
     }
 
     /**
+     * Enable auto-start once: identical to enableAutoStart but sets _forceNextAutoStart flag.
+     * After the forced start, if autoStart config is false, the watcher is automatically disabled.
+     */
+    enableAutoStartOnce() {
+        this._forceNextAutoStart = true;
+        // watcher가 이미 있으면 재설정 불필요
+        if (this._autoStartWatcher) {
+            this._addLog('[Ralph] 👁 enableAutoStartOnce: 기존 watcher 활용, _forceNextAutoStart 설정');
+            return;
+        }
+        // watcher가 없으면 새로 생성
+        this.enableAutoStart();
+        this._addLog('[Ralph] 👁 enableAutoStartOnce: 일회성 watcher 생성 완료');
+    }
+
+    /**
      * Disable auto-start: stop watching for file changes
      */
     disableAutoStart() {
@@ -408,9 +427,24 @@ class RalphLoopManager {
         const filePath = uri.fsPath;
         this._addLog(`[Ralph] 📄 작업 파일 변경 감지: ${path.basename(filePath)}`);
 
+        // _forceNextAutoStart 플래그 확인 및 소비
+        const forced = this._forceNextAutoStart;
+        if (forced) {
+            this._forceNextAutoStart = false;
+            this._addLog('[Ralph] 🔓 _forceNextAutoStart 플래그 활성 — autoStart 설정 무시하고 시작');
+        }
+
         // 이미 실행 중이면 큐에 추가
         if (this.state === LoopState.RUNNING) {
             this._enqueueTaskRequest(filePath);
+            // forced였지만 이미 실행 중이므로 일회성 watcher 정리
+            if (forced) {
+                const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
+                    .get('ralphLoop.autoStart', false);
+                if (!autoStartEnabled) {
+                    this.disableAutoStart();
+                }
+            }
             return;
         }
 
@@ -425,6 +459,14 @@ class RalphLoopManager {
         // 미완료 작업이 있는지 확인
         if (this.taskManager.allTasksCompleted()) {
             this._addLog('[Ralph] ✅ 모든 작업이 이미 완료 — autoStart 건너뜀');
+            // forced였으면 일회성 watcher 정리
+            if (forced) {
+                const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
+                    .get('ralphLoop.autoStart', false);
+                if (!autoStartEnabled) {
+                    this.disableAutoStart();
+                }
+            }
             return;
         }
 
@@ -433,6 +475,15 @@ class RalphLoopManager {
         vscode.window.showInformationMessage(
             `🚀 AutoAntigravity: PRD 변경 감지 — ${progress.remaining}개 작업으로 Ralph Loop 자동 시작`
         );
+
+        // forced + autoStart 설정 false이면 일회성 watcher 정리 (start() 전에 정리하여 원복)
+        if (forced) {
+            const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
+                .get('ralphLoop.autoStart', false);
+            if (!autoStartEnabled) {
+                this.disableAutoStart();
+            }
+        }
 
         // Ralph Loop 시작
         await this.start();
