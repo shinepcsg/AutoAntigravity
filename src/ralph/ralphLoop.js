@@ -1093,10 +1093,11 @@ class RalphLoopManager {
                     this.lastError = null;
                     this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
 
-                    // 병렬 그룹 완료 콜백 호출
+                    // 병렬 그룹 완료 콜백 호출 (이미지 감지 포함)
                     if (this.onTaskCompleteCallback) {
                         try {
-                            this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress);
+                            const newImages = this._detectNewImages();
+                            this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress, newImages);
                         } catch (cbErr) {
                             this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                         }
@@ -1197,10 +1198,11 @@ class RalphLoopManager {
                 this._sessionLock.release();
                 this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
-                // 개별 작업 완료 콜백 호출
+                // 개별 작업 완료 콜백 호출 (이미지 감지 포함)
                 if (this.onTaskCompleteCallback) {
                     try {
-                        this.onTaskCompleteCallback(task.text, this.currentIteration, progress);
+                        const newImages = this._detectNewImages();
+                        this.onTaskCompleteCallback(task.text, this.currentIteration, progress, newImages);
                     } catch (cbErr) {
                         this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                     }
@@ -1914,6 +1916,60 @@ class RalphLoopManager {
      */
     getPrdChanges() {
         return this._prdChanges.slice(-20);
+    }
+
+    /**
+     * Detect newly created/modified image files using git diff.
+     * Checks uncommitted changes and the latest commit for image files.
+     * @returns {string[]} Array of absolute paths to new image files
+     */
+    _detectNewImages() {
+        try {
+            const wsRoot = this.gitManager._workspaceRoot;
+            if (!wsRoot) return [];
+
+            const cp = require('child_process');
+            const pathMod = require('path');
+            const fsMod = require('fs');
+            const imageExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
+
+            // 1) Check uncommitted changes (staged + unstaged)
+            let files = [];
+            try {
+                const result = cp.spawnSync('git', ['diff', '--name-only', '--diff-filter=ACM', 'HEAD'], {
+                    cwd: wsRoot, encoding: 'utf8', timeout: 10000, windowsHide: true
+                });
+                if (result.status === 0 && result.stdout) {
+                    files.push(...result.stdout.trim().split('\n').filter(Boolean));
+                }
+            } catch (_) { /* ignore */ }
+
+            // 2) Also check latest commit diff
+            try {
+                const result = cp.spawnSync('git', ['diff', '--name-only', '--diff-filter=ACM', 'HEAD~1', 'HEAD'], {
+                    cwd: wsRoot, encoding: 'utf8', timeout: 10000, windowsHide: true
+                });
+                if (result.status === 0 && result.stdout) {
+                    files.push(...result.stdout.trim().split('\n').filter(Boolean));
+                }
+            } catch (_) { /* ignore */ }
+
+            // Deduplicate and filter for image extensions
+            const uniqueFiles = [...new Set(files)];
+            const imagePaths = uniqueFiles
+                .filter(f => imageExts.has(pathMod.extname(f).toLowerCase()))
+                .map(f => pathMod.resolve(wsRoot, f))
+                .filter(f => fsMod.existsSync(f));
+
+            if (imagePaths.length > 0) {
+                this._addLog(`[Ralph] 🖼 생성된 이미지 ${imagePaths.length}개 감지: ${imagePaths.map(p => pathMod.basename(p)).join(', ')}`);
+            }
+
+            return imagePaths;
+        } catch (err) {
+            this._addLog(`[Ralph] ⚠ 이미지 감지 실패: ${err.message}`, 'warn');
+            return [];
+        }
     }
 
     /**

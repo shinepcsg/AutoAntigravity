@@ -441,9 +441,16 @@ function connectTelegram(context) {
     };
 
     // 플러그인 → 텔레그램: 개별 작업 완료 결과 전달 (detailedNotification 플래그에 따라 조건부)
-    ralphLoop.onTaskCompleteCallback = (taskText, iteration, progress) => {
+    // imagePaths: 작업 중 생성된 이미지 파일 경로 배열 (git diff 기반 감지)
+    ralphLoop.onTaskCompleteCallback = (taskText, iteration, progress, imagePaths) => {
         if (telegramService.detailedNotification) {
-            telegramService.sendTaskResult(taskText, iteration, progress);
+            telegramService.sendTaskResult(taskText, iteration, progress, imagePaths);
+        } else if (imagePaths && imagePaths.length > 0) {
+            // 상세 알림이 꺼져 있어도 이미지가 있으면 이미지만 전송
+            for (const imgPath of imagePaths) {
+                const path = require('path');
+                telegramService.sendPhoto(imgPath, `🖼 ${path.basename(imgPath)}`);
+            }
         }
     };
 

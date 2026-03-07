@@ -107,12 +107,109 @@ class TelegramService {
     }
 
     /**
+     * Send a photo file to the configured chat via Telegram sendPhoto API.
+     * Uses multipart/form-data to upload the local file.
+     * Never throws — errors are logged silently.
+     * @param {string} photoPath - Absolute path to the image file
+     * @param {string} [caption] - Optional caption for the photo
+     */
+    async sendPhoto(photoPath, caption) {
+        try {
+            if (!this._botToken || !this._chatId) return;
+            if (!fs.existsSync(photoPath)) {
+                this._log(`[Telegram] sendPhoto 파일 없음: ${photoPath}`);
+                return;
+            }
+
+            const path = require('path');
+            const boundary = '----TelegramBotBoundary' + Date.now();
+            const fileName = path.basename(photoPath);
+            const fileData = fs.readFileSync(photoPath);
+
+            // Build multipart/form-data body
+            const parts = [];
+
+            // chat_id field
+            parts.push(Buffer.from(
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="chat_id"\r\n\r\n` +
+                `${this._chatId}\r\n`
+            ));
+
+            // caption field (optional)
+            if (caption) {
+                parts.push(Buffer.from(
+                    `--${boundary}\r\n` +
+                    `Content-Disposition: form-data; name="caption"\r\n\r\n` +
+                    `${caption}\r\n`
+                ));
+            }
+
+            // photo file field
+            parts.push(Buffer.from(
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="photo"; filename="${fileName}"\r\n` +
+                `Content-Type: application/octet-stream\r\n\r\n`
+            ));
+            parts.push(fileData);
+            parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+
+            const body = Buffer.concat(parts);
+
+            await new Promise((resolve, reject) => {
+                const options = {
+                    hostname: 'api.telegram.org',
+                    port: 443,
+                    path: `/bot${this._botToken}/sendPhoto`,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                        'Content-Length': body.length
+                    },
+                    timeout: 60000
+                };
+
+                const req = https.request(options, (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => {
+                        try {
+                            const parsed = JSON.parse(data);
+                            if (parsed.ok) {
+                                resolve(parsed.result);
+                            } else {
+                                reject(new Error(`Telegram sendPhoto error: ${parsed.description || 'Unknown'}`));
+                            }
+                        } catch (e) {
+                            reject(new Error(`JSON parse error: ${e.message}`));
+                        }
+                    });
+                });
+
+                req.on('error', (err) => reject(err));
+                req.on('timeout', () => {
+                    req.destroy();
+                    reject(new Error('sendPhoto timeout'));
+                });
+
+                req.write(body);
+                req.end();
+            });
+
+            this._log(`[Telegram] 📷 사진 전송 완료: ${fileName}`);
+        } catch (err) {
+            this._log(`[Telegram] sendPhoto 오류: ${err.message}`);
+        }
+    }
+
+    /**
      * 개별 작업 완료 결과를 텔레그램으로 전송.
      * @param {string} taskText - 완료된 작업명
      * @param {number} iteration - 현재 반복 횟수
      * @param {{ completed: number, total: number }} progress - 진행률 (완료/전체)
+     * @param {string[]} [imagePaths] - 작업 중 생성된 이미지 파일 경로 배열
      */
-    async sendTaskResult(taskText, iteration, progress) {
+    async sendTaskResult(taskText, iteration, progress, imagePaths) {
         const { completed, total } = progress;
         const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
         const bar = '█'.repeat(Math.round(percent / 10)) + '░'.repeat(10 - Math.round(percent / 10));
@@ -127,6 +224,14 @@ class TelegramService {
         ].join('\n');
 
         await this.sendMessage(message);
+
+        // 이미지가 있으면 전송
+        if (imagePaths && imagePaths.length > 0) {
+            for (const imgPath of imagePaths) {
+                const path = require('path');
+                await this.sendPhoto(imgPath, `🖼 ${path.basename(imgPath)}`);
+            }
+        }
     }
 
     /**
