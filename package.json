@@ -114,6 +114,11 @@
                     "default": true,
                     "description": "Automatically delete task branch after merge (자동 브랜치 폐기)"
                 },
+                "autoAntigravity.ralphLoop.autoPush": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "세션 종료 후 자동으로 git push 실행 (Auto push after session ends)"
+                },
                 "autoAntigravity.ralphLoop.iterationDelayMs": {
                     "type": "number",
                     "default": 3000,
