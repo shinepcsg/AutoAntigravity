@@ -130,18 +130,25 @@ class TelegramService {
     }
 
     /**
-     * 전체 작업 완료 결과를 텔레그램으로 전송.
-     * @param {number} totalTasks - 완료된 총 작업 수
+     * 세션 완료 결과를 텔레그램으로 전송.
+     * detailedNotification 플래그와 무관하게 항상 호출됨.
+     * @param {string} sessionLabel - 세션 제목
+     * @param {Array<{text: string, completed: boolean}>} tasks - 작업 목록
      * @param {number} totalIterations - 총 반복 횟수
      */
-    async sendAllTasksCompleted(totalTasks, totalIterations) {
+    async sendSessionResult(sessionLabel, tasks, totalIterations) {
+        const taskLines = (tasks || []).map(t => {
+            const icon = t.completed ? '✅' : '❌';
+            return `${icon} ${t.text}`;
+        });
+
         const message = [
-            `🎉 *전체 작업 완료!*`,
+            `🎉 *세션 완료:* ${sessionLabel || '알 수 없음'}`,
             ``,
-            `📋 *총 작업 수:* ${totalTasks}개`,
-            `🔄 *총 반복 횟수:* ${totalIterations}회`,
+            `📋 *작업 결과:*`,
+            ...taskLines,
             ``,
-            `✅ 모든 작업이 성공적으로 완료되었습니다.`,
+            `🔄 *총 반복:* ${totalIterations}회`,
         ].join('\n');
 
         await this.sendMessage(message);
