@@ -505,12 +505,13 @@ function activate(context) {
             }
         }
 
-        // 2) 사이드바 큐에 항목이 있으면 다음 작업을 write-prd 워크플로우로 전송
+        // 2) 사이드바 큐에 항목이 있으면 다음 작업 전송 (type에 따라 분기)
         if (sidebarProvider && sidebarProvider._taskQueue.length > 0) {
             const nextItem = sidebarProvider._taskQueue.shift();
             const nextTask = nextItem.text;
             const nextMediaPaths = nextItem.mediaPaths || [];
-            log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (남은: ${sidebarProvider._taskQueue.length}${nextMediaPaths.length > 0 ? ', 미디어 ' + nextMediaPaths.length + '개' : ''}): ${nextTask.substring(0, 80)}`);
+            const itemType = nextItem.type || 'prd'; // 기본값 'prd' (하위 호환)
+            log(`[Queue] 📬 큐에서 다음 작업 꺼냄 (type: ${itemType}, 남은: ${sidebarProvider._taskQueue.length}${nextMediaPaths.length > 0 ? ', 미디어 ' + nextMediaPaths.length + '개' : ''}): ${nextTask.substring(0, 80)}`);
             sidebarProvider.updateState(); // 큐 UI 갱신
 
             // 큐 작업에 의한 PRD 변경 시 autoStart 무관하게 자동 시작되도록 플래그 설정
@@ -519,25 +520,30 @@ function activate(context) {
             // Git 세션 초기화 (큐 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(nextTask);
 
-            const prompt = `/write-prd ${nextTask}`;
+            // type에 따라 프롬프트 구성: 'prd' → /write-prd 래핑, 'task' → 텍스트 직접 전달
+            const prompt = itemType === 'task' ? nextTask : `/write-prd ${nextTask}`;
+            const promptLabel = itemType === 'task' ? '대화 프롬프트' : 'write-prd 워크플로우 프롬프트';
             try {
-                log(`[Queue] 📤 write-prd 워크플로우 프롬프트 전송 중...`);
+                log(`[Queue] 📤 ${promptLabel} 전송 중...`);
                 await ralphLoop._sendToAgent(prompt, nextMediaPaths);
-                log(`[Queue] ✅ write-prd 워크플로우 프롬프트 전송 완료`);
+                log(`[Queue] ✅ ${promptLabel} 전송 완료`);
 
-                // autoStart 설정이 false이면 일회성 watcher 설정
-                const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
-                    .get('ralphLoop.autoStart', false);
-                if (!autoStartEnabled) {
-                    ralphLoop.enableAutoStartOnce();
-                    log(`[Queue] 👁 autoStart 비활성 상태 — 일회성 watcher 활성화`);
+                // autoStart 설정이 false이면 일회성 watcher 설정 (prd 타입만 — task는 대화 직접 전달이므로 watcher 불필요)
+                if (itemType !== 'task') {
+                    const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
+                        .get('ralphLoop.autoStart', false);
+                    if (!autoStartEnabled) {
+                        ralphLoop.enableAutoStartOnce();
+                        log(`[Queue] 👁 autoStart 비활성 상태 — 일회성 watcher 활성화`);
+                    }
                 }
 
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
-                    telegramService.sendMessage(`📬 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
+                    const emoji = itemType === 'task' ? '💬' : '📬';
+                    telegramService.sendMessage(`${emoji} 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
                 }
             } catch (err) {
-                log(`[Queue] ❌ write-prd 프롬프트 전송 실패: ${err.message}`);
+                log(`[Queue] ❌ ${promptLabel} 전송 실패: ${err.message}`);
                 ralphLoop._forceNextAutoStart = false; // 전송 실패 시 플래그 리셋
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
                     telegramService.sendMessage(`❌ 큐 작업 전송 실패: ${err.message}`);
