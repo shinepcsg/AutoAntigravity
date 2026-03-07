@@ -1084,9 +1084,6 @@ class RalphLoopManager {
 
                 this._sessionLock.acquire(this.currentIteration, `병렬 그룹: ${taskGroup.tasks.length}개`);
 
-                // 병렬 그룹 실행 전 이미지 스냅샷
-                const imagesBefore = this._snapshotImageFiles();
-
                 const result = await this._parallelRunner.runParallelGroup(taskGroup.tasks, this.currentIteration);
 
                 this._sessionLock.release();
@@ -1095,16 +1092,6 @@ class RalphLoopManager {
                     this.consecutiveErrors = 0;
                     this.lastError = null;
                     this._addLog(`[Ralph] ✅ 병렬 그룹 완료: ${result.completed}개 작업`);
-
-                    // 병렬 그룹 완료 콜백 호출 (이미지 스냅샷 비교)
-                    if (this.onTaskCompleteCallback) {
-                        try {
-                            const newImages = this._getNewImagesSinceSnapshot(imagesBefore);
-                            this.onTaskCompleteCallback('병렬 그룹', this.currentIteration, progress, newImages);
-                        } catch (cbErr) {
-                            this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
-                        }
-                    }
 
                     this.progressTracker.appendProgress(
                         this.currentIteration,
@@ -1173,8 +1160,7 @@ class RalphLoopManager {
                 // Build the prompt for the agent
                 const prompt = this._buildAgentPrompt(task, this.currentIteration, progress);
 
-                // 작업 실행 전 이미지 스냅샷
-                const imagesBefore = this._snapshotImageFiles();
+
 
                 // ── 세션 락 획득 ──
                 this._sessionLock.acquire(this.currentIteration, task.text);
@@ -1204,10 +1190,10 @@ class RalphLoopManager {
                 this._sessionLock.release();
                 this._addLog(`[Ralph] ✅ 작업 완료: ${task.text}`);
 
-                // 개별 작업 완료 콜백 호출 (이미지 스냅샷 비교)
+                // 개별 작업 완료 콜백 호출 (ImageName 파싱 기반 이미지 감지)
                 if (this.onTaskCompleteCallback) {
                     try {
-                        const newImages = this._getNewImagesSinceSnapshot(imagesBefore);
+                        const newImages = this._findImageByName(task.text);
                         this.onTaskCompleteCallback(task.text, this.currentIteration, progress, newImages);
                     } catch (cbErr) {
                         this._addLog(`[Ralph] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
@@ -2010,6 +1996,47 @@ class RalphLoopManager {
             return newImages;
         } catch (err) {
             this._addLog(`[Ralph] ⚠ 이미지 감지 실패: ${err.message}`, 'warn');
+            return [];
+        }
+    }
+
+    /**
+     * Parse ImageName from task text and find the corresponding image file in ResultImages/.
+     * Task text format: ImageName: `이미지명`
+     * @param {string} taskText - Task text containing ImageName
+     * @returns {string[]} Array of absolute paths to matching image files
+     */
+    _findImageByName(taskText) {
+        try {
+            const match = taskText.match(/ImageName:\s*`([^`]+)`/);
+            if (!match) return [];
+
+            const imageName = match[1];
+            const wsRoot = this.gitManager._workspaceRoot;
+            if (!wsRoot) return [];
+
+            const pathMod = require('path');
+            const fsMod = require('fs');
+            const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+            const resultDir = pathMod.join(wsRoot, 'ResultImages');
+
+            if (!fsMod.existsSync(resultDir)) return [];
+
+            const found = [];
+            for (const ext of imageExts) {
+                const filePath = pathMod.join(resultDir, imageName + ext);
+                if (fsMod.existsSync(filePath)) {
+                    found.push(filePath);
+                }
+            }
+
+            if (found.length > 0) {
+                this._addLog(`[Ralph] 🖼 ImageName '${imageName}' 이미지 ${found.length}개 감지: ${found.map(p => pathMod.basename(p)).join(', ')}`);
+            }
+
+            return found;
+        } catch (err) {
+            this._addLog(`[Ralph] ⚠ ImageName 기반 이미지 감지 실패: ${err.message}`, 'warn');
             return [];
         }
     }

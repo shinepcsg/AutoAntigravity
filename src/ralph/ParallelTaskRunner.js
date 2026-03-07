@@ -218,6 +218,17 @@ class ParallelTaskRunner {
                 : info.task.text;
             gitManager.commitWorktree(info.worktreePath, `[Ralph #${iteration}] (parallel) ${shortTask}`);
 
+            // ── 개별 작업 완료 즉시: ImageName 기반 이미지 감지 → 텔레그램 전송 ──
+            if (this._loop.onTaskCompleteCallback) {
+                try {
+                    const newImages = this._loop._findImageByName(info.task.text);
+                    const progress = this._loop.taskManager.getProgress();
+                    this._loop.onTaskCompleteCallback(info.task.text, iteration, progress, newImages);
+                } catch (cbErr) {
+                    this._log(`[Parallel] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                }
+            }
+
             return { success: true };
         } catch (e) {
             // QUOTA_REACHED/QUOTA_PAUSE_CANCELLED는 상위로 전파 (병렬 그룹 전체 재시도)
