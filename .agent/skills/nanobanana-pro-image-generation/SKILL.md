@@ -29,15 +29,7 @@ description: 사용자가 이미지를 첨부하여 이미지 생성을 요청�
 - 프롬프트는 **영어**로 작성한다.
 - 사용자가 한글로 설명하더라도 AI가 영어로 번역하여 프롬프트를 구성한다.
 - 구체적인 장면, 스타일, 분위기, 색감 등을 상세하게 기술한다.
-- 예시: `"nanobanana pro, chibi character as a cute pastry chef in a dreamy bakery, surrounded by colorful macarons, cupcakes and donuts, pastel pink interior, warm oven glow"`
-
-## 이미지 요청 개수별 처리 방법
-
-### 🔹 1장만 요청한 경우
-- 즉시 `generate_image` 도구를 호출하여 이미지를 생성한다.
-- PRD 작성 없이 바로 실행한다.
-
-**실행 예시:**
+- 예시: 
 ```
 사용자: "이 캐릭터를 우주비행사로 만들어줘" (이미지 첨부)
 
@@ -47,35 +39,27 @@ description: 사용자가 이미지를 첨부하여 이미지 생성을 요청�
   - ImageName: "astronaut_character"
 ```
 
+## 이미지 요청 개수별 처리 방법
+
+### 🔹 1장만 요청한 경우
+- 즉시 `generate_image` 도구를 호출하여 이미지를 생성한다.
+- PRD 작성 없이 바로 실행한다.
+
 ### 🔹 2장 이상 요청한 경우
 - **`/write-prd` 워크플로우를 사용**하여 PRD를 작성한다.
-- 워크플로우 파일 위치: `d:\GIT\AutoAntigravity\.agent\workflows\write-prd.md`
+- 워크플로우 파일 위치: `write-prd.md`
 - PRD를 먼저 읽고(`view_file`), 워크플로우의 규칙에 따라 PRD를 작성한다.
 
 **PRD 작성 시 추가 규칙:**
 1. 모든 이미지 생성 작업에 `[병렬진행]` 태그를 붙인다 (이미지 생성은 서로 독립적).
-2. 5장 단위로 Step을 구분한다 (Step 1: 1~5장, Step 2: 6~10장, ...).
-3. 각 Step 끝에 검증 항목을 포함한다 (생성된 파일 존재 확인).
-4. 각 작업 항목에 `generate_image` 도구의 파라미터(`ImageName`, 프롬프트, `ImagePaths`)를 명시한다.
-5. PRD 상단에 목적, 원본 이미지 경로, 공통 규칙을 기재한다.
+2. 각 Step 끝에 검증 항목을 포함한다 (생성된 파일 존재 확인).
+3. 각 작업 항목에 `generate_image` 도구의 파라미터(`ImageName`, 프롬프트, `ImagePaths`)를 명시한다.
+4. PRD 상단에 목적, 원본 이미지 경로, 공통 규칙을 기재한다.
 
 **PRD 작업 항목 형식:**
 ```markdown
 - [ ] [병렬진행] 작업 X-Y: `generate_image` 도구를 사용하여 이미지 생성. ImageName: `이미지명`. 프롬프트: "nanobanana pro, (상세 영문 프롬프트)". ImagePaths: `원본이미지경로`
 ```
-
-## 예외 처리
-
-### 쿼타 소진 (429 RESOURCE_EXHAUSTED)
-- `generate_image` 도구가 쿼타 소진 에러를 반환하면:
-  1. 에러 메시지에서 쿼타 리셋 시각을 확인한다.
-  2. PRD에 리셋 시각 정보와 "해당 시각 이후 실행" 주의사항을 기록한다.
-  3. 리셋 시각 이전에는 해당 Step을 실행하지 않도록 명시한다.
-
-### 이미지 경로 미제공
-- 사용자가 이미지 파일을 첨부하지 않고 이미지 생성을 요청한 경우:
-  - 사용자에게 원본 이미지 경로를 요청한다.
-  - 또는 `ImagePaths` 없이 텍스트 프롬프트만으로 생성 가능한지 확인한다.
 
 ## 이미지 저장 위치
 
