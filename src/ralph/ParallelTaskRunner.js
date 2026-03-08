@@ -1,9 +1,13 @@
 // AutoAntigravity — Parallel Task Runner
 // Orchestrates parallel execution of [병렬진행] task groups
-// Uses git worktrees for file isolation and CDP for agent communication
+// Uses git worktrees for file isolation, file-based completion markers for status tracking
 
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
+
+/** Marker file name placed in each worktree root on completion */
+const COMPLETION_MARKER = 'COMPLETED.marker';
 
 class ParallelTaskRunner {
     /**
@@ -20,10 +24,10 @@ class ParallelTaskRunner {
      * Flow:
      * 1. Create worktrees for each task
      * 2. Sequentially send prompts to the agent (one new conversation per task)
-     * 3. Wait for all agents to complete (Promise.all polling)
-     * 4. Commit each worktree
+     * 3. Wait for ALL completion marker files (file-based polling)
+     * 4. Commit each worktree & send task-complete callbacks
      * 5. Sequentially merge into original branch (with auto conflict resolution)
-     * 6. Clean up worktrees
+     * 6. Clean up worktrees (markers included)
      * 7. Mark all tasks complete
      *
      * @param {Array<{line: number, text: string, parallel: boolean}>} tasks
@@ -48,7 +52,7 @@ class ParallelTaskRunner {
             this._log(`[Parallel]   ${i + 1}. ${activeTasks[i].text}`);
         }
 
-        const worktreeInfos = []; // { task, worktreePath, branchName, conversationWsUrl }
+        const worktreeInfos = []; // { task, worktreePath, branchName, index, markerPath }
         const errors = [];
         let completed = 0;
 
@@ -58,11 +62,13 @@ class ParallelTaskRunner {
             const task = activeTasks[i];
             const result = gitManager.createWorktree(task.text, i, iteration);
             if (result.success) {
+                const markerPath = path.join(result.worktreePath, COMPLETION_MARKER);
                 worktreeInfos.push({
                     task,
                     worktreePath: result.worktreePath,
                     branchName: result.branchName,
-                    index: i
+                    index: i,
+                    markerPath
                 });
             } else {
                 errors.push(`워크트리 생성 실패 (${task.text}): ${result.error}`);
@@ -75,9 +81,12 @@ class ParallelTaskRunner {
             return { success: false, completed: 0, errors };
         }
 
+        // ── 기존 마커 파일 정리 (이전 실행 잔여물) ──
+        this._cleanupMarkers(worktreeInfos);
+
         // ── Phase 2: Send prompts sequentially (one new conversation each) ──
         this._log('[Parallel] 📤 Phase 2: 에이전트에 프롬프트 전송...');
-        const agentPromises = [];
+        let sentCount = 0;
 
         for (const info of worktreeInfos) {
             try {
@@ -88,14 +97,10 @@ class ParallelTaskRunner {
                 this._log(`[Parallel] 📤 전송 중: ${info.task.text}`);
                 await this._loop._sendToAgent(prompt);
                 this._log(`[Parallel] ✅ 전송 완료: ${info.task.text}`);
+                sentCount++;
 
                 // Small delay between conversation creation to avoid CDP race
                 await new Promise(r => setTimeout(r, 2000));
-
-                // Start completion monitoring for this task
-                agentPromises.push(
-                    this._waitForAgentAndCommit(info, iteration)
-                );
 
             } catch (e) {
                 errors.push(`프롬프트 전송 실패 (${info.task.text}): ${e.message}`);
@@ -103,24 +108,59 @@ class ParallelTaskRunner {
             }
         }
 
-        if (agentPromises.length === 0) {
+        if (sentCount === 0) {
             this._log('[Parallel] ❌ 모든 프롬프트 전송 실패 — 병렬 실행 중단', 'error');
+            this._cleanupMarkers(worktreeInfos);
             this._cleanupWorktrees(worktreeInfos, autoDeleteBranch);
             return { success: false, completed: 0, errors };
         }
 
-        // ── Phase 3: Wait for all agents to complete ──
-        this._log(`[Parallel] ⏳ Phase 3: ${agentPromises.length}개 에이전트 완료 대기...`);
-        const results = await Promise.allSettled(agentPromises);
+        // ── Phase 3: Wait for ALL completion markers (file-based polling) ──
+        this._log(`[Parallel] ⏳ Phase 3: ${worktreeInfos.length}개 완료 마커 대기 (파일 기반 폴링)...`);
+        try {
+            const markerResults = await this._waitForAllCompletionMarkers(worktreeInfos);
 
-        for (const result of results) {
-            if (result.status === 'fulfilled' && result.value.success) {
-                completed++;
-            } else {
-                const reason = result.status === 'rejected'
-                    ? result.reason?.message || String(result.reason)
-                    : result.value?.error || '알 수 없는 에러';
-                errors.push(reason);
+            // 각 Worker 결과 처리
+            for (const mr of markerResults) {
+                if (mr.success) {
+                    completed++;
+                    this._log(`[Parallel] ✅ 완료 감지: Worker ${mr.index + 1} — ${mr.task.text}`);
+                } else {
+                    errors.push(`마커 타임아웃 (${mr.task.text})`);
+                    this._log(`[Parallel] ⚠ 마커 미감지: Worker ${mr.index + 1} — ${mr.task.text}`, 'warn');
+                }
+            }
+        } catch (e) {
+            // QUOTA 에러 등은 상위로 전파
+            if (e.message === 'QUOTA_REACHED' || e.message === 'QUOTA_PAUSE_CANCELLED') {
+                this._cleanupMarkers(worktreeInfos);
+                throw e;
+            }
+            errors.push(`마커 대기 에러: ${e.message}`);
+            this._log(`[Parallel] ❌ 마커 대기 실패: ${e.message}`, 'error');
+        }
+
+        // ── Phase 3.5: Commit all worktrees & fire callbacks ──
+        this._log('[Parallel] 💾 Phase 3.5: 워크트리 커밋...');
+        for (const info of worktreeInfos) {
+            try {
+                const shortTask = info.task.text.length > 60
+                    ? info.task.text.substring(0, 57) + '...'
+                    : info.task.text;
+                gitManager.commitWorktree(info.worktreePath, `[Ralph #${iteration}] (parallel) ${shortTask}`);
+
+                // ── 개별 작업 완료: ImageName 기반 이미지 감지 → 텔레그램 전송 ──
+                if (this._loop.onTaskCompleteCallback) {
+                    try {
+                        const newImages = this._loop._findImageByName(info.task.text);
+                        const progress = this._loop.taskManager.getProgress();
+                        this._loop.onTaskCompleteCallback(info.task.text, iteration, progress, newImages);
+                    } catch (cbErr) {
+                        this._log(`[Parallel] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                    }
+                }
+            } catch (commitErr) {
+                this._log(`[Parallel] ⚠ 커밋 에러 (${info.task.text}): ${commitErr.message}`, 'warn');
             }
         }
 
@@ -143,7 +183,7 @@ class ParallelTaskRunner {
             }
         }
 
-        // ── Phase 5: Mark tasks complete and clean up ──
+        // ── Phase 5: Mark tasks complete, clean up markers & worktrees ──
         this._log('[Parallel] 🧹 Phase 5: 정리...');
 
         // Mark all successfully executed tasks as complete
@@ -151,7 +191,8 @@ class ParallelTaskRunner {
             taskManager.markTaskComplete(info.task.line);
         }
 
-        // Clean up worktrees
+        // Clean up markers first, then worktrees
+        this._cleanupMarkers(worktreeInfos);
         this._cleanupWorktrees(worktreeInfos, autoDeleteBranch);
 
         // Summary
@@ -167,77 +208,121 @@ class ParallelTaskRunner {
 
     /**
      * Build a prompt for a parallel task that instructs the agent to
-     * work in the worktree directory.
+     * work in the worktree directory and create a completion marker file.
      *
-     * @param {{ task: object, worktreePath: string, branchName: string, index: number }} info
+     * @param {{ task: object, worktreePath: string, branchName: string, index: number, markerPath: string }} info
      * @param {number} iteration
      * @returns {string}
      */
     _buildParallelPrompt(info, iteration) {
         const taskFilePath = this._loop.taskManager.getTaskFile();
-        const progressFilePath = this._loop.progressTracker.getProgressFilePath();
 
-        let prompt = `# Ralph Loop — Parallel Task (Iteration ${iteration}, Worker ${info.index + 1})\n\n`;
-        prompt += `## Current Task\n${info.task.text}\n\n`;
-        prompt += `## IMPORTANT: Working Directory\n`;
-        prompt += `이 작업은 병렬 실행 중입니다. **반드시 아래 워크트리 디렉토리에서 작업하세요**:\n`;
-        prompt += `\`${info.worktreePath}\`\n\n`;
-        prompt += `⚠ 메인 워크스페이스 디렉토리가 아닌 위 경로에서만 파일을 생성/수정하세요.\n\n`;
-        prompt += `## Instructions\n`;
-        prompt += `1. Read the task file at \`${taskFilePath}\` for full context\n`;
-        prompt += `2. Work ONLY within the worktree directory: \`${info.worktreePath}\`\n`;
-        prompt += `3. Complete EXACTLY ONE task: "${info.task.text}"\n`;
-        prompt += `4. Do NOT modify the progress file — it is managed automatically\n`;
-        prompt += `5. When done, verify your changes work correctly\n`;
+        var prompt = '# Ralph Loop \u2014 Parallel Task (Iteration ' + iteration + ', Worker ' + (info.index + 1) + ')\n\n';
+        prompt += '## Current Task\n' + info.task.text + '\n\n';
+        prompt += '## IMPORTANT: Working Directory\n';
+        prompt += '\uc774 \uc791\uc5c5\uc740 \ubcd1\ub82c \uc2e4\ud589 \uc911\uc785\ub2c8\ub2e4. **\ubc18\ub4dc\uc2dc \uc544\ub798 \uc6cc\ud06c\ud2b8\ub9ac \ub514\ub809\ud1a0\ub9ac\uc5d0\uc11c \uc791\uc5c5\ud558\uc138\uc694**:\n';
+        prompt += '`' + info.worktreePath + '`\n\n';
+        prompt += '\u26a0 \uba54\uc778 \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4 \ub514\ub809\ud1a0\ub9ac\uac00 \uc544\ub2cc \uc704 \uacbd\ub85c\uc5d0\uc11c\ub9cc \ud30c\uc77c\uc744 \uc0dd\uc131/\uc218\uc815\ud558\uc138\uc694.\n\n';
+        prompt += '## Instructions\n';
+        prompt += '1. Read the task file at `' + taskFilePath + '` for full context\n';
+        prompt += '2. Work ONLY within the worktree directory: `' + info.worktreePath + '`\n';
+        prompt += '3. Complete EXACTLY ONE task: "' + info.task.text + '"\n';
+        prompt += '4. Do NOT modify the progress file \u2014 it is managed automatically\n';
+        prompt += '5. When done, verify your changes work correctly\n';
+        prompt += '6. **[\ud544\uc218] \ubaa8\ub4e0 \uc791\uc5c5\uc774 \uc644\ub8cc\ub41c \ud6c4 \ubc18\ub4dc\uc2dc \uc544\ub798 \ud30c\uc77c\uc744 \uc0dd\uc131\ud558\uc138\uc694** (\uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130\uac00 \uc644\ub8cc \uc5ec\ubd80\ub97c \uc774 \ud30c\uc77c\ub85c \ud310\ub2e8\ud569\ub2c8\ub2e4):\n';
+        prompt += '   `' + info.markerPath + '`\n';
+        prompt += '   \ud30c\uc77c \ub0b4\uc6a9\uc740 `DONE` \ud55c \uc904\uc774\uba74 \ub429\ub2c8\ub2e4. write_to_file \ub3c4\uad6c\ub97c \uc0ac\uc6a9\ud558\uc138\uc694.\n';
 
-        // Convert literal \\n to newlines
-        prompt = prompt.replace(/\\n/g, '\n');
         return prompt;
     }
 
     /**
-     * Wait for the current agent to complete, then commit changes in the worktree.
+     * Wait for ALL completion marker files to appear in worktree directories.
+     * Polls every POLL_INTERVAL_MS until all markers are found or timeout.
      *
-     * @param {{ task: object, worktreePath: string, branchName: string }} info
-     * @param {number} iteration
-     * @returns {Promise<{success: boolean, error?: string}>}
+     * @param {Array<{task: object, worktreePath: string, index: number, markerPath: string}>} worktreeInfos
+     * @returns {Promise<Array<{task: object, index: number, success: boolean}>>}
      */
-    async _waitForAgentAndCommit(info, iteration) {
-        try {
-            // Wait for agent completion using the shared mechanism
-            await this._loop._waitForAgentCompletion();
-            this._log(`[Parallel] ✅ 에이전트 완료: ${info.task.text}`);
+    async _waitForAllCompletionMarkers(worktreeInfos) {
+        const MAX_WAIT_MS = 3600000;     // 1시간 최대
+        const POLL_INTERVAL_MS = 3000;   // 3초마다 폴링
+        const INITIAL_WAIT_MS = 5000;    // 에이전트 시작 대기 5초
 
-            // ── 에이전트 응답에서 도구 쿼터 에러 감지 (generate_image 429 등) ──
-            await this._loop._checkResponseForToolQuota();
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-            // Commit changes in the worktree
-            const gitManager = this._loop.gitManager;
-            const shortTask = info.task.text.length > 60
-                ? info.task.text.substring(0, 57) + '...'
-                : info.task.text;
-            gitManager.commitWorktree(info.worktreePath, `[Ralph #${iteration}] (parallel) ${shortTask}`);
+        // 초기 대기
+        this._log(`[Parallel] ⏳ 에이전트 시작 대기 (${INITIAL_WAIT_MS / 1000}초)...`);
+        await delay(INITIAL_WAIT_MS);
 
-            // ── 개별 작업 완료 즉시: ImageName 기반 이미지 감지 → 텔레그램 전송 ──
-            if (this._loop.onTaskCompleteCallback) {
+        // 각 Worker의 완료 상태 추적
+        const pending = new Set(worktreeInfos.map((_, i) => i));
+        const results = worktreeInfos.map(info => ({
+            task: info.task,
+            index: info.index,
+            success: false
+        }));
+
+        let elapsed = INITIAL_WAIT_MS;
+        let lastLogTime = 0;
+
+        while (elapsed < MAX_WAIT_MS && pending.size > 0) {
+            // 루프 상태 확인 (중단 시 즉시 반환)
+            if (this._loop.state !== 'running') {
+                this._log('[Parallel] ⚠ 루프 상태 변경 — 마커 대기 취소');
+                return results;
+            }
+
+            // 각 미완료 Worker의 마커 파일 존재 확인
+            for (const i of [...pending]) {
+                const info = worktreeInfos[i];
                 try {
-                    const newImages = this._loop._findImageByName(info.task.text);
-                    const progress = this._loop.taskManager.getProgress();
-                    this._loop.onTaskCompleteCallback(info.task.text, iteration, progress, newImages);
-                } catch (cbErr) {
-                    this._log(`[Parallel] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
+                    if (fs.existsSync(info.markerPath)) {
+                        results[i].success = true;
+                        pending.delete(i);
+                        this._log(`[Parallel] 📄 마커 감지: Worker ${i + 1} (${info.task.text.substring(0, 40)}...) — ${Math.round(elapsed / 1000)}초 경과`);
+                    }
+                } catch (e) {
+                    // fs 에러는 무시하고 다음 폴링에서 재시도
                 }
             }
 
-            return { success: true };
-        } catch (e) {
-            // QUOTA_REACHED/QUOTA_PAUSE_CANCELLED는 상위로 전파 (병렬 그룹 전체 재시도)
-            if (e.message === 'QUOTA_REACHED' || e.message === 'QUOTA_PAUSE_CANCELLED') {
-                this._log(`[Parallel] ⏸ 쿼터 초과로 병렬 작업 중단: ${info.task.text}`, 'warn');
-                throw e;
+            if (pending.size === 0) break;
+
+            // 30초마다 진행 상황 로그
+            if (elapsed - lastLogTime >= 30000) {
+                const doneCount = worktreeInfos.length - pending.size;
+                this._log(`[Parallel] ⏳ 마커 대기 중: ${doneCount}/${worktreeInfos.length} 완료, ${Math.round(elapsed / 1000)}초 경과`);
+                lastLogTime = elapsed;
             }
-            this._log(`[Parallel] ❌ 에이전트 실패: ${info.task.text} — ${e.message}`, 'error');
-            return { success: false, error: e.message };
+
+            await delay(POLL_INTERVAL_MS);
+            elapsed += POLL_INTERVAL_MS;
+        }
+
+        if (pending.size > 0) {
+            this._log(`[Parallel] ⚠ 마커 대기 타임아웃: ${pending.size}개 미완료 (${Math.round(elapsed / 1000)}초 경과)`, 'warn');
+        } else {
+            this._log(`[Parallel] ✅ 모든 마커 감지 완료 (${Math.round(elapsed / 1000)}초 경과)`);
+        }
+
+        return results;
+    }
+
+    /**
+     * Clean up completion marker files from all worktrees.
+     * Called on: normal completion, error, loop interruption.
+     *
+     * @param {Array<{markerPath: string}>} worktreeInfos
+     */
+    _cleanupMarkers(worktreeInfos) {
+        for (const info of worktreeInfos) {
+            try {
+                if (fs.existsSync(info.markerPath)) {
+                    fs.unlinkSync(info.markerPath);
+                }
+            } catch (e) {
+                // 정리 실패는 무시 (워크트리 삭제 시 함께 제거됨)
+            }
         }
     }
 
