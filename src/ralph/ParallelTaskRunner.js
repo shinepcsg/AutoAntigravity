@@ -115,10 +115,30 @@ class ParallelTaskRunner {
             return { success: false, completed: 0, errors };
         }
 
+        // ── 이미 전송된 태스크 추적 (Phase 3 ↔ Phase 3.5 간 중복 전송 방지) ──
+        const notifiedTasks = new Set();
+
         // ── Phase 3: Wait for ALL completion markers (file-based polling) ──
         this._log(`[Parallel] ⏳ Phase 3: ${worktreeInfos.length}개 완료 마커 대기 (파일 기반 폴링)...`);
         try {
-            const markerResults = await this._waitForAllCompletionMarkers(worktreeInfos);
+            const markerResults = await this._waitForAllCompletionMarkers(worktreeInfos, (info, imageFiles) => {
+                // ── onMarkerDetected: 마커 감지 즉시 텔레그램 전송 ──
+                if (!this._loop.onTaskCompleteCallback) return;
+
+                try {
+                    // ImageName 기반으로 메인 워크스페이스의 ResultImages/에서도 검색
+                    const mainImages = this._loop._findImageByName(info.task.text);
+                    // 워크트리 이미지 + 메인 이미지 병합 (중복 제거)
+                    const allImages = [...new Set([...imageFiles, ...mainImages])];
+
+                    const progress = this._loop.taskManager.getProgress();
+                    this._loop.onTaskCompleteCallback(info.task.text, iteration, progress, allImages);
+                    notifiedTasks.add(info.task.line);
+                    this._log(`[Parallel] 📨 즉시 전송 완료: Worker ${info.index + 1} (이미지 ${allImages.length}개)`);
+                } catch (cbErr) {
+                    this._log(`[Parallel] ⚠ 즉시 전송 콜백 에러: ${cbErr.message}`, 'warn');
+                }
+            });
 
             // 각 Worker 결과 처리
             for (const mr of markerResults) {
@@ -150,14 +170,18 @@ class ParallelTaskRunner {
                 gitManager.commitWorktree(info.worktreePath, `[Ralph #${iteration}] (parallel) ${shortTask}`);
 
                 // ── 개별 작업 완료: ImageName 기반 이미지 감지 → 텔레그램 전송 ──
-                if (this._loop.onTaskCompleteCallback) {
+                // notifiedTasks에 이미 있는 태스크는 Phase 3에서 즉시 전송 완료 → 스킵
+                if (this._loop.onTaskCompleteCallback && !notifiedTasks.has(info.task.line)) {
                     try {
                         const newImages = this._loop._findImageByName(info.task.text);
                         const progress = this._loop.taskManager.getProgress();
                         this._loop.onTaskCompleteCallback(info.task.text, iteration, progress, newImages);
+                        this._log(`[Parallel] 📨 Phase 3.5 전송: ${info.task.text.substring(0, 40)}...`);
                     } catch (cbErr) {
                         this._log(`[Parallel] ⚠ onTaskCompleteCallback 에러: ${cbErr.message}`, 'warn');
                     }
+                } else if (notifiedTasks.has(info.task.line)) {
+                    this._log(`[Parallel] ⏭ Phase 3.5 스킵 (이미 전송됨): ${info.task.text.substring(0, 40)}...`);
                 }
             } catch (commitErr) {
                 this._log(`[Parallel] ⚠ 커밋 에러 (${info.task.text}): ${commitErr.message}`, 'warn');
