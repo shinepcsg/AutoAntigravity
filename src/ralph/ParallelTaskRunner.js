@@ -241,12 +241,16 @@ class ParallelTaskRunner {
      * Polls every POLL_INTERVAL_MS until all markers are found or timeout.
      *
      * @param {Array<{task: object, worktreePath: string, index: number, markerPath: string}>} worktreeInfos
+     * @param {Function} [onMarkerDetected] - Optional callback invoked when a marker is detected.
+     *   Called with (worktreeInfo, imageFiles) where imageFiles is an array of image file paths
+     *   found in the worktree's ResultImages/ directory.
      * @returns {Promise<Array<{task: object, index: number, success: boolean}>>}
      */
-    async _waitForAllCompletionMarkers(worktreeInfos) {
+    async _waitForAllCompletionMarkers(worktreeInfos, onMarkerDetected) {
         const MAX_WAIT_MS = 3600000;     // 1시간 최대
         const POLL_INTERVAL_MS = 3000;   // 3초마다 폴링
         const INITIAL_WAIT_MS = 5000;    // 에이전트 시작 대기 5초
+        const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -280,6 +284,29 @@ class ParallelTaskRunner {
                         results[i].success = true;
                         pending.delete(i);
                         this._log(`[Parallel] 📄 마커 감지: Worker ${i + 1} (${info.task.text.substring(0, 40)}...) — ${Math.round(elapsed / 1000)}초 경과`);
+
+                        // 마커 감지 즉시: worktree의 ResultImages/에서 이미지 검색 및 콜백 호출
+                        if (typeof onMarkerDetected === 'function') {
+                            try {
+                                const resultImagesDir = path.join(info.worktreePath, 'ResultImages');
+                                const imageFiles = [];
+
+                                if (fs.existsSync(resultImagesDir)) {
+                                    const files = fs.readdirSync(resultImagesDir);
+                                    for (const file of files) {
+                                        const ext = path.extname(file).toLowerCase();
+                                        if (IMAGE_EXTS.includes(ext)) {
+                                            imageFiles.push(path.join(resultImagesDir, file));
+                                        }
+                                    }
+                                }
+
+                                this._log(`[Parallel] 🖼 Worker ${i + 1} ResultImages/ 이미지 ${imageFiles.length}개 감지`);
+                                onMarkerDetected(info, imageFiles);
+                            } catch (cbErr) {
+                                this._log(`[Parallel] ⚠ onMarkerDetected 콜백 에러: ${cbErr.message}`, 'warn');
+                            }
+                        }
                     }
                 } catch (e) {
                     // fs 에러는 무시하고 다음 폴링에서 재시도
