@@ -228,6 +228,48 @@ function connectTelegram(context) {
         }
     };
 
+    // 텔레그램 → 플러그인: 일반 대화 메시지 수신 시 AI에 전달 후 응답 회신
+    telegramService.onChatRequest = async (text) => {
+        const state = ralphLoop.getState();
+
+        if (state === LoopState.IDLE) {
+            // Git 세션 초기화
+            _initGitSessionIfIdle(text);
+
+            try {
+                log(`[Telegram] 💬 일반 대화 프롬프트 전송: ${text.substring(0, 80)}`);
+                await ralphLoop._sendToAgent(text, []);
+                telegramService.sendMessage(`💬 대화 처리 중...`);
+                log(`[Telegram] ✅ 일반 대화 프롬프트 전송 완료`);
+
+                // 에이전트 완료 대기 후 응답 추출
+                await ralphLoop._waitForAgentCompletion();
+                log(`[Telegram] ✅ 에이전트 대화 응답 완료`);
+
+                // CDP로 마지막 에이전트 응답 추출
+                const response = await ralphLoop._getLastAgentResponse();
+                if (response) {
+                    telegramService.sendMessage(`🤖 ${response}`);
+                    log(`[Telegram] 📤 대화 응답 텔레그램 전송 완료 (${response.length}자)`);
+                } else {
+                    telegramService.sendMessage(`✅ 대화 처리 완료 (응답 추출 실패 — VS Code에서 확인하세요)`);
+                    log(`[Telegram] ⚠ 대화 응답 추출 실패`);
+                }
+            } catch (err) {
+                log(`[Telegram] ❌ 일반 대화 처리 실패: ${err.message}`);
+                telegramService.sendMessage(`❌ 대화 처리 실패: ${err.message}`);
+            }
+        } else if (sidebarProvider) {
+            // Ralph Loop가 실행 중이면 작업 큐에 추가 (type: 'chat')
+            sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'chat' });
+            sidebarProvider.updateState();
+            telegramService.sendMessage(`📥 대화 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            log('[Telegram] 대화 큐에 추가: ' + text.substring(0, 80));
+        } else {
+            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+        }
+    };
+
     // 텔레그램 → 플러그인: 도움말
     telegramService.onHelpRequest = () => {
         const lines = [
@@ -258,6 +300,8 @@ function connectTelegram(context) {
         lines.push(`💡 *작업 요청*`);
         lines.push(`/task [내용] — 💬 작업 요청 (대화로 직접 전달)`);
         lines.push(`/prd [내용] — 📋 PRD 작성 요청 (write-prd 워크플로우)`);
+        lines.push(``);
+        lines.push(`💡 명령어 없이 메시지를 보내면 일반 AI 대화로 처리됩니다.`);
 
         telegramService.sendMessage(lines.join('\n'));
     };
@@ -592,16 +636,16 @@ function activate(context) {
             // Git 세션 초기화 (큐 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(nextTask);
 
-            // type에 따라 프롬프트 구성: 'prd' → /write-prd 래핑, 'task' → 텍스트 직접 전달
-            const prompt = itemType === 'task' ? nextTask : `/write-prd ${nextTask}`;
-            const promptLabel = itemType === 'task' ? '대화 프롬프트' : 'write-prd 워크플로우 프롬프트';
+            // type에 따라 프롬프트 구성: 'prd' → /write-prd 래핑, 'task'/'chat' → 텍스트 직접 전달
+            const prompt = (itemType === 'task' || itemType === 'chat') ? nextTask : `/write-prd ${nextTask}`;
+            const promptLabel = (itemType === 'task' || itemType === 'chat') ? '대화 프롬프트' : 'write-prd 워크플로우 프롬프트';
             try {
                 log(`[Queue] 📤 ${promptLabel} 전송 중...`);
                 await ralphLoop._sendToAgent(prompt, nextMediaPaths);
                 log(`[Queue] ✅ ${promptLabel} 전송 완료`);
 
-                // autoStart 설정이 false이면 일회성 watcher 설정 (prd 타입만 — task는 대화 직접 전달이므로 watcher 불필요)
-                if (itemType !== 'task') {
+                // autoStart 설정이 false이면 일회성 watcher 설정 (prd 타입만 — task/chat는 대화 직접 전달이므로 watcher 불필요)
+                if (itemType !== 'task' && itemType !== 'chat') {
                     const autoStartEnabled = vscode.workspace.getConfiguration('autoAntigravity')
                         .get('ralphLoop.autoStart', false);
                     if (!autoStartEnabled) {
@@ -611,8 +655,24 @@ function activate(context) {
                 }
 
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
-                    const emoji = itemType === 'task' ? '💬' : '📬';
+                    const emoji = itemType === 'chat' ? '💬' : itemType === 'task' ? '💬' : '📬';
                     telegramService.sendMessage(`${emoji} 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
+                }
+
+                // chat 타입: 에이전트 완료 대기 후 응답 추출 → 텔레그램 전송
+                if (itemType === 'chat') {
+                    try {
+                        await ralphLoop._waitForAgentCompletion();
+                        const response = await ralphLoop._getLastAgentResponse();
+                        if (response && telegramService) {
+                            telegramService.sendMessage(`🤖 ${response}`);
+                            log(`[Queue] 📤 대화 응답 텔레그램 전송 완료`);
+                        } else if (telegramService) {
+                            telegramService.sendMessage(`✅ 대화 처리 완료 (응답 추출 실패 — VS Code에서 확인하세요)`);
+                        }
+                    } catch (chatErr) {
+                        log(`[Queue] ⚠ 대화 응답 추출 실패: ${chatErr.message}`);
+                    }
                 }
             } catch (err) {
                 log(`[Queue] ❌ ${promptLabel} 전송 실패: ${err.message}`);

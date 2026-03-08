@@ -1537,6 +1537,67 @@ class RalphLoopManager {
         }
     }
 
+    /**
+     * CDP를 사용하여 채팅 UI에서 마지막 에이전트(assistant) 응답 텍스트를 추출합니다.
+     * 텔레그램 일반 대화 기능에서 AI 응답을 가져와 전송하는 데 사용됩니다.
+     * @returns {Promise<string|null>} 마지막 에이전트 응답 텍스트, 없으면 null
+     */
+    async _getLastAgentResponse() {
+        const wsUrl = this._lastAgentTargetWsUrl;
+        if (!wsUrl) return null;
+
+        try {
+            const result = await this._cdpEvaluateOnTarget(wsUrl, `
+                (function() {
+                    // Antigravity 채팅 UI에서 에이전트 응답 버블을 찾는 셀렉터들
+                    var selectors = [
+                        '.chat-response-content',
+                        '.response-markdown',
+                        '.agent-response',
+                        '.assistant-message .message-content',
+                        '.chat-message-content',
+                        '[data-role="assistant"]',
+                    ];
+
+                    // 1) 특정 셀렉터로 마지막 응답 버블 찾기
+                    for (var i = 0; i < selectors.length; i++) {
+                        var els = document.querySelectorAll(selectors[i]);
+                        if (els.length > 0) {
+                            var last = els[els.length - 1];
+                            var text = (last.innerText || last.textContent || '').trim();
+                            if (text.length > 0) {
+                                // 최대 4000자 (텔레그램 제한 고려)
+                                return text.length > 4000 ? text.substring(0, 4000) + '...' : text;
+                            }
+                        }
+                    }
+
+                    // 2) 폴백: 모든 채팅 턴에서 마지막 assistant 턴 찾기
+                    var turns = document.querySelectorAll('.chat-turn, .conversation-turn, .message-group');
+                    if (turns.length > 0) {
+                        // 역순으로 탐색하여 마지막 assistant 턴 찾기
+                        for (var j = turns.length - 1; j >= 0; j--) {
+                            var turn = turns[j];
+                            var role = turn.getAttribute('data-role') || turn.className || '';
+                            if (role.indexOf('user') !== -1 || role.indexOf('human') !== -1) continue;
+                            var text = (turn.innerText || turn.textContent || '').trim();
+                            if (text.length > 20) {
+                                return text.length > 4000 ? text.substring(0, 4000) + '...' : text;
+                            }
+                        }
+                    }
+
+                    return null;
+                })()
+            `, 10000);
+
+            const val = (result && result.result) ? result.result.value : null;
+            return val || null;
+        } catch (e) {
+            this._addLog(`[Ralph] ⚠ _getLastAgentResponse 에러: ${e.message}`, 'warn');
+            return null;
+        }
+    }
 
     /**
      * Wait for the agent to finish working

@@ -27,6 +27,7 @@ class TelegramService {
         this.onMediaReceived = null;
         this.onTaskRequest = null;
         this.onPrdRequest = null;
+        this.onChatRequest = null;
 
         // Notification detail level
         this.detailedNotification = false;
@@ -368,8 +369,10 @@ class TelegramService {
                 this.onWorkflowRequest(match[1], match[2].trim());
             }
         } else {
-            // 일반 텍스트 메시지 → /task 사용 안내
-            this.sendMessage('명령어를 사용하세요:\n• `/task [내용]` — 💬 대화로 직접 작업 요청\n• `/prd [내용]` — 📋 PRD 작성 요청');
+            // 일반 텍스트 메시지 → AI 대화로 전달
+            if (this.onChatRequest) {
+                this.onChatRequest(text);
+            }
         }
     }
 
