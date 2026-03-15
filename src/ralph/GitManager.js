@@ -536,25 +536,31 @@ class GitManager {
                 fs.mkdirSync(parentDir, { recursive: true });
             }
 
-            // ── Sparse Worktree: --no-checkout → sparse-checkout ──
-            // Step 1: Create worktree WITHOUT checking out any files (instant, no matter repo size)
-            this._execGit(['worktree', 'add', '--no-checkout', '-b', branchName, worktreeDir, baseBranch]);
-            this.log(`[Git] 🌿 워크트리 생성 (no-checkout): ${branchName} → ${worktreeDir}`);
-
-            // Step 2: Configure sparse-checkout in the worktree
+            // ── Worktree 생성 ──
             const vscode = require('vscode');
             const config = vscode.workspace.getConfiguration('autoAntigravity');
-            const sparsePaths = config.get('ralphLoop.sparseCheckoutPaths', [
-                'Assets/Script',
-                'ProjectSettings'
-            ]);
+            const sparsePaths = config.get('ralphLoop.sparseCheckoutPaths', []);
 
-            this._execGitAt(worktreeDir, ['sparse-checkout', 'init', '--cone']);
-            this.log(`[Git] 📂 sparse-checkout 초기화 (cone 모드)`);
+            if (sparsePaths.length > 0) {
+                // ── Sparse Worktree: --no-checkout → sparse-checkout ──
+                // Step 1: Create worktree WITHOUT checking out any files (instant, no matter repo size)
+                this._execGit(['worktree', 'add', '--no-checkout', '-b', branchName, worktreeDir, baseBranch]);
+                this.log(`[Git] 🌿 워크트리 생성 (no-checkout): ${branchName} → ${worktreeDir}`);
 
-            // Step 3: Set sparse-checkout paths (only source code & config)
-            this._execGitAt(worktreeDir, ['sparse-checkout', 'set', ...sparsePaths]);
-            this.log(`[Git] 📂 sparse-checkout 경로: ${sparsePaths.join(', ')}`);
+                // Step 2: Configure sparse-checkout in the worktree
+                this._execGitAt(worktreeDir, ['sparse-checkout', 'init', '--cone']);
+                this.log(`[Git] 📂 sparse-checkout 초기화 (cone 모드)`);
+
+                // Step 3: PRD.md(taskFile)를 항상 포함 — 병렬 작업에서 PRD 참조 필수
+                const taskFile = config.get('ralphLoop.taskFile', 'PRD.md');
+                const allPaths = [...new Set([...sparsePaths, taskFile])];
+                this._execGitAt(worktreeDir, ['sparse-checkout', 'set', ...allPaths]);
+                this.log(`[Git] 📂 sparse-checkout 경로: ${allPaths.join(', ')}`);
+            } else {
+                // ── Full Worktree: sparse-checkout 미사용 ──
+                this._execGit(['worktree', 'add', '-b', branchName, worktreeDir, baseBranch]);
+                this.log(`[Git] 🌿 워크트리 생성 (full checkout): ${branchName} → ${worktreeDir}`);
+            }
 
             return { success: true, worktreePath: worktreeDir, branchName };
         } catch (e) {
@@ -610,16 +616,33 @@ class GitManager {
      */
     commitWorktree(worktreePath, message) {
         try {
-            const result = cp.spawnSync('git', ['add', '-A'], {
-                cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
-            });
-            if (result.status !== 0) return false;
-
+            // ── 안전한 stage 방식: sparse-checkout 외 파일 삭제 방지 ──
+            // `git add -A`는 sparse-checkout에 포함되지 않은 파일을 "삭제"로 stage하는
+            // 치명적 문제가 있으므로, 변경/추가/삭제된 파일만 개별적으로 stage한다.
             const status = cp.spawnSync('git', ['status', '--porcelain'], {
                 cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
             });
             if (!status.stdout || !status.stdout.trim()) {
                 this.log('[Git] 워크트리에 커밋할 변경사항이 없습니다.');
+                return false;
+            }
+
+            // 변경된 파일만 개별 stage (새 파일, 수정 파일, 삭제 파일 모두 포함)
+            const changedFiles = status.stdout.trim().split('\n')
+                .map(line => line.substring(3).trim())  // status code 제거
+                .filter(f => f.length > 0);
+
+            if (changedFiles.length === 0) {
+                this.log('[Git] 워크트리에 커밋할 변경사항이 없습니다.');
+                return false;
+            }
+
+            // 각 파일을 개별 add (--force로 .gitignore 무시하지 않음)
+            const addResult = cp.spawnSync('git', ['add', '--', ...changedFiles], {
+                cwd: worktreePath, encoding: 'utf8', timeout: 30000, windowsHide: true
+            });
+            if (addResult.status !== 0) {
+                this.log(`[Git] ⚠ 워크트리 파일 stage 실패: ${(addResult.stderr || '').trim()}`);
                 return false;
             }
 
