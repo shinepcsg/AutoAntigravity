@@ -5,6 +5,13 @@
 const cp = require('child_process');
 const path = require('path');
 
+// Unity 프로젝트에서 sparse-checkout 시 기본으로 포함할 경로
+const UNITY_DEFAULT_SPARSE_PATHS = [
+    'Assets/Script',
+    'Assets/Scripts',
+    'ProjectSettings',
+];
+
 class GitManager {
     /**
      * @param {Function} log - Logging function
@@ -16,6 +23,7 @@ class GitManager {
         this._sessionBranch = null;    // Session branch (ralph/{sessionName}/session)
         this._workBranch = null;       // Work branch for the current task
         this._workspaceRoot = null;    // Workspace root path for git commands
+        this._isUnityCache = null;     // Cached result of Unity project detection
     }
 
     /**
@@ -49,6 +57,29 @@ class GitManager {
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Detect whether the current workspace is a Unity project.
+     * A workspace is considered a Unity project if both 'Assets/' and
+     * 'ProjectSettings/' directories exist at the workspace root.
+     * The result is cached per session.
+     *
+     * @returns {boolean}
+     */
+    _isUnityProject() {
+        if (this._isUnityCache !== null) return this._isUnityCache;
+        if (!this._workspaceRoot) return false;
+
+        const fs = require('fs');
+        const assetsDir = path.join(this._workspaceRoot, 'Assets');
+        const projSettingsDir = path.join(this._workspaceRoot, 'ProjectSettings');
+        this._isUnityCache = fs.existsSync(assetsDir) && fs.existsSync(projSettingsDir);
+
+        if (this._isUnityCache) {
+            this.log('[Git] 🎮 Unity 프로젝트 감지됨 — sparse-checkout에 기본 경로를 자동 포함합니다.');
+        }
+        return this._isUnityCache;
     }
 
     /**
@@ -539,7 +570,20 @@ class GitManager {
             // ── Worktree 생성 ──
             const vscode = require('vscode');
             const config = vscode.workspace.getConfiguration('autoAntigravity');
-            const sparsePaths = config.get('ralphLoop.sparseCheckoutPaths', []);
+            let sparsePaths = [...config.get('ralphLoop.sparseCheckoutPaths', [])];
+
+            // ── Unity 프로젝트 자동 감지: 기본 경로 병합 ──
+            if (this._isUnityProject()) {
+                const before = sparsePaths.length;
+                for (const up of UNITY_DEFAULT_SPARSE_PATHS) {
+                    if (!sparsePaths.includes(up)) {
+                        sparsePaths.push(up);
+                    }
+                }
+                if (sparsePaths.length > before) {
+                    this.log(`[Git] 🎮 Unity 기본 경로 추가됨: ${UNITY_DEFAULT_SPARSE_PATHS.join(', ')}`);
+                }
+            }
 
             if (sparsePaths.length > 0) {
                 // ── Sparse Worktree: --no-checkout → sparse-checkout ──

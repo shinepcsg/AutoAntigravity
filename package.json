@@ -157,7 +157,7 @@
                     "items": {
                         "type": "string"
                     },
-                    "description": "병렬 워크트리 sparse-checkout 경로 목록 — 프로젝트별로 설정 필요. 비어있으면 전체 체크아웃 (Sparse-checkout paths for parallel worktrees — per-project setting, empty = full checkout)"
+                    "description": "병렬 워크트리 sparse-checkout 경로 목록 — 프로젝트별로 설정 필요. 비어있으면 전체 체크아웃. Unity 프로젝트(Assets/ + ProjectSettings/ 존재)는 Assets/Script, Assets/Scripts, ProjectSettings 경로가 자동 포함됩니다."
                 },
                 "autoAntigravity.updater.autoInstall": {
                     "type": "boolean",
