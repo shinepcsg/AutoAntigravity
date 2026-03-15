@@ -224,6 +224,7 @@ class ConnectionManager {
         this.isConnecting = false;
         this.reconnectTimer = null;
         this.heartbeatTimer = null;
+        this.activeScanTimer = null;
     }
 
     // ─── Public API ───────────────────────────────────────────────────
@@ -241,6 +242,8 @@ class ConnectionManager {
         this.reconnectTimer = null;
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        clearInterval(this.activeScanTimer);
+        this.activeScanTimer = null;
         this._closeWebSocket();
         this.sessions.clear();
         this.ignoredTargets.clear();
@@ -301,6 +304,9 @@ class ConnectionManager {
                 try {
                     await this._initializeTargetDiscovery();
                     this.heartbeatTimer = setInterval(() => this._heartbeat(), 30000);
+                    // Active scan: force scanAndClick() on all sessions every 3s
+                    // This bypasses inactive tab setTimeout throttling
+                    this.activeScanTimer = setInterval(() => this._activeScanAll(), 3000);
                     resolve();
                 } catch (e) {
                     this.log(`[CDP] Initialization error: ${e.message}`);
@@ -357,6 +363,8 @@ class ConnectionManager {
         this._clearPending();
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        clearInterval(this.activeScanTimer);
+        this.activeScanTimer = null;
 
         if (this.isRunning) {
             this._scheduleReconnect();
@@ -470,6 +478,25 @@ class ConnectionManager {
                 this.log(`[CDP] ✓ Re-injected [${shortId}] → ${result}`);
             }
         } catch (e) { }
+    }
+
+    /**
+     * Active scan: force scanAndClick() on all attached sessions via CDP.
+     * This is the key fix for inactive tab throttling — instead of relying
+     * on the injected script's own timers (which get throttled), we actively
+     * push a scan command from the extension host (Node.js, never throttled).
+     */
+    async _activeScanAll() {
+        if (!this.ws || this.ws.readyState !== MiniWebSocket.OPEN) return;
+        if (this.sessions.size === 0) return;
+
+        for (const [targetId, sessionId] of this.sessions) {
+            try {
+                this._send('Runtime.evaluate', {
+                    expression: 'typeof window.__AA_FORCE_SCAN === "function" ? window.__AA_FORCE_SCAN() : null'
+                }, sessionId).catch(() => {});
+            } catch (e) { /* silent */ }
+        }
     }
 
     // ─── CDP Protocol Transport ───────────────────────────────────────

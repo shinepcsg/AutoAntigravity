@@ -149,21 +149,34 @@ function buildDOMObserverScript(customTexts) {
         return null;
     }
 
+    // Expose for CDP-driven active polling (bypass inactive tab throttling)
+    window.__AA_FORCE_SCAN = scanAndClick;
+
     scanAndClick();
 
-    var debounceTimer = null;
+    // Use microtask-based debounce instead of setTimeout to avoid
+    // inactive tab throttling (setTimeout is clamped to >=1s in background tabs)
+    var debounceScheduled = false;
     var observer = new MutationObserver(function() {
-        if (debounceTimer) return;
-        debounceTimer = setTimeout(function() {
-            debounceTimer = null;
+        if (debounceScheduled) return;
+        debounceScheduled = true;
+        Promise.resolve().then(function() {
+            debounceScheduled = false;
             scanAndClick();
-        }, 100);
+        });
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
+
+    // Fallback: periodic scan every 2s using setInterval as a safety net.
+    // Even if setInterval is throttled in background tabs, it still fires
+    // (at reduced rate ~1/sec) unlike setTimeout chains which can stall.
+    setInterval(function() {
+        scanAndClick();
+    }, 2000);
 
     return 'observer-installed';
 })()
