@@ -330,13 +330,63 @@ class RalphLoopManager {
     }
 
     /**
+     * Cancel all active conversations by clicking Cancel buttons via CDP.
+     * Iterates through all CDP targets, checks for the Cancel button, and clicks it.
+     * @returns {Promise<{cancelled: number, total: number}>}
+     */
+    async _cancelAllActiveConversations() {
+        const cdpPort = this._getCdpPort();
+        let targets;
+        try {
+            targets = await this._getTargets(cdpPort);
+        } catch (e) {
+            this._addLog(`[Ralph] ⚠ 대화 정지: 타겟 목록 조회 실패 — ${e.message}`, 'warn');
+            return { cancelled: 0, total: 0 };
+        }
+
+        const wsTargets = targets.filter(t => t.webSocketDebuggerUrl);
+        const total = wsTargets.length;
+        let cancelled = 0;
+
+        this._addLog(`[Ralph] 🔍 대화 정지: ${total}개 타겟 검색 중...`);
+
+        for (const target of wsTargets) {
+            try {
+                const result = await this._cdpEvaluateOnTarget(
+                    target.webSocketDebuggerUrl,
+                    `(() => {
+                        const btn = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
+                        if (btn) { btn.click(); return 'cancelled'; }
+                        return 'no-button';
+                    })()`,
+                    5000
+                );
+
+                const value = result && result.result && result.result.value;
+                if (value === 'cancelled') {
+                    cancelled++;
+                    this._addLog(`[Ralph] ✅ 대화 취소 성공: ${target.title || target.url || 'unknown'}`);
+                } else {
+                    this._addLog(`[Ralph] ⏭ Cancel 버튼 없음: ${target.title || target.url || 'unknown'}`);
+                }
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ 타겟 처리 에러 (무시): ${target.title || target.url || 'unknown'} — ${e.message}`, 'warn');
+            }
+        }
+
+        this._addLog(`[Ralph] 🏁 대화 정지 완료: ${cancelled}/${total}개 취소됨`);
+        return { cancelled, total };
+    }
+
+    /**
      * Stop the Ralph Loop gracefully
      */
-    stop() {
+    async stop() {
         if (this.state === LoopState.IDLE) return;
 
         this._sessionLock.release();
         this.state = LoopState.STOPPING;
+        await this._cancelAllActiveConversations();
         this._addLog('[Ralph] ⏹ 루프 정지 요청 — 현재 반복 마무리 중...');
         this._notifyStateChange();
 
@@ -369,7 +419,7 @@ class RalphLoopManager {
      */
     dispose() {
         this.disableAutoStart();
-        this.stop();
+        this.stop().catch(() => {});
     }
 
     // ─── Auto Start (FileSystemWatcher) ───────────────────────────────
@@ -890,6 +940,64 @@ class RalphLoopManager {
         }
 
         return filtered;
+    }
+
+    /**
+     * Cancel all active conversations by clicking the Cancel button via CDP.
+     * Iterates over all CDP targets, checks for the Cancel button, and clicks it.
+     * Individual target errors are caught and logged without interrupting the process.
+     * @returns {Promise<{cancelled: number, total: number}>}
+     */
+    async _cancelAllActiveConversations() {
+        const cdpPort = this._getCdpPort();
+        let targets;
+        try {
+            targets = await this._getTargets(cdpPort);
+        } catch (e) {
+            this._addLog(`[Ralph] ❌ _cancelAllActiveConversations: CDP 타겟 조회 실패 — ${e.message}`, 'error');
+            return { cancelled: 0, total: 0 };
+        }
+
+        // webSocketDebuggerUrl이 있는 page 타겟만 필터링
+        const pageTargets = targets.filter(t => t.type === 'page' && t.webSocketDebuggerUrl);
+        const total = pageTargets.length;
+        let cancelled = 0;
+
+        this._addLog(`[Ralph] 🔍 _cancelAllActiveConversations: ${total}개 page 타겟 검사 시작`);
+
+        const cancelExpression = [
+            '(function() {',
+            '  var btn = document.querySelector("[data-tooltip-id=input-send-button-cancel-tooltip]");',
+            '  if (btn) {',
+            '    btn.click();',
+            '    return JSON.stringify({ clicked: true });',
+            '  }',
+            '  return JSON.stringify({ clicked: false });',
+            '})()',
+        ].join('\n');
+
+        for (const target of pageTargets) {
+            const targetLabel = (target.title || target.url || 'unknown').substring(0, 60);
+            try {
+                const result = await this._cdpEvaluateOnTarget(target.webSocketDebuggerUrl, cancelExpression, 5000);
+                if (result && result.result && result.result.value) {
+                    const parsed = JSON.parse(result.result.value);
+                    if (parsed.clicked) {
+                        cancelled++;
+                        this._addLog(`[Ralph] ✅ Cancel 클릭 성공: ${targetLabel}`);
+                    } else {
+                        this._addLog(`[Ralph] ⏭ Cancel 버튼 없음 (유휴 상태): ${targetLabel}`);
+                    }
+                } else {
+                    this._addLog(`[Ralph] ⏭ 평가 결과 없음: ${targetLabel}`);
+                }
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ 타겟 처리 에러 무시: ${targetLabel} — ${e.message}`, 'warn');
+            }
+        }
+
+        this._addLog(`[Ralph] 📊 _cancelAllActiveConversations 완료: ${cancelled}/${total}개 대화 취소됨`);
+        return { cancelled, total };
     }
 
     /**

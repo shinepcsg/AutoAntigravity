@@ -356,8 +356,8 @@ function connectTelegram(context) {
     };
 
     // 텔레그램 → 플러그인: 정지
-    telegramService.onStopRequest = () => {
-        ralphLoop.stop();
+    telegramService.onStopRequest = async () => {
+        await ralphLoop.stop();
         updateRalphStatusBar();
         telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
     };
@@ -822,7 +822,7 @@ function activate(context) {
         vscode.commands.registerCommand('autoAntigravity.startRalphLoop', async () => {
             if (ralphLoop.getState() === LoopState.RUNNING) {
                 // If already running, toggle to stop
-                ralphLoop.stop();
+                await ralphLoop.stop();
             } else {
                 await ralphLoop.start();
             }
@@ -832,8 +832,8 @@ function activate(context) {
 
     // Ralph Loop stop
     context.subscriptions.push(
-        vscode.commands.registerCommand('autoAntigravity.stopRalphLoop', () => {
-            ralphLoop.stop();
+        vscode.commands.registerCommand('autoAntigravity.stopRalphLoop', async () => {
+            await ralphLoop.stop();
             updateRalphStatusBar();
         })
     );

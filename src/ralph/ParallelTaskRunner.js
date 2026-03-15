@@ -89,6 +89,10 @@ class ParallelTaskRunner {
         let sentCount = 0;
 
         for (const info of worktreeInfos) {
+            if (this._loop.state !== 'running') {
+                this._log('[Parallel] ⚠ 정지 요청 감지 — 추가 프롬프트 전송 중단');
+                break;
+            }
             try {
                 // Build prompt that instructs agent to work in the worktree directory
                 const prompt = this._buildParallelPrompt(info, iteration);
@@ -113,6 +117,8 @@ class ParallelTaskRunner {
             this._cleanupMarkers(worktreeInfos);
             this._cleanupWorktrees(worktreeInfos, autoDeleteBranch);
             return { success: false, completed: 0, errors };
+        } else if (sentCount < worktreeInfos.length) {
+            this._log(`[Parallel] ⚠ 정지로 인해 ${sentCount}/${worktreeInfos.length}개만 전송됨`);
         }
 
         // ── 이미 전송된 태스크 추적 (Phase 3 ↔ Phase 3.5 간 중복 전송 방지) ──
