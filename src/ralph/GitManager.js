@@ -470,11 +470,33 @@ class GitManager {
         return { success: true, merged: false, sessionMerged: false };
     }
 
+    /**
+     * Execute a git command in a specific directory (for worktree operations).
+     * @param {string} cwd - Working directory
+     * @param {string[]} args - Git command arguments
+     * @returns {string} stdout output trimmed
+     * @throws {Error} if git command fails
+     */
+    _execGitAt(cwd, args) {
+        const result = cp.spawnSync('git', args, {
+            cwd,
+            encoding: 'utf8',
+            timeout: 30000,
+            windowsHide: true,
+        });
+        if (result.status !== 0) {
+            const stderr = (result.stderr || '').trim();
+            throw new Error(`git ${args.join(' ')} failed: ${stderr}`);
+        }
+        return (result.stdout || '').trim();
+    }
+
     // ─── Worktree 기반 병렬 작업 지원 ──────────────────────────────
 
     /**
      * Create a git worktree for parallel task execution.
-     * Creates a new branch and checks it out in a separate directory.
+     * Uses --no-checkout + sparse-checkout for fast creation on large repos.
+     * Only checks out source code directories (configurable via settings).
      *
      * @param {string} taskText - Task description (used for branch name)
      * @param {number} taskIndex - Task index within the parallel group
@@ -514,13 +536,36 @@ class GitManager {
                 fs.mkdirSync(parentDir, { recursive: true });
             }
 
-            // Create worktree with a new branch based on session branch
-            this._execGit(['worktree', 'add', '-b', branchName, worktreeDir, baseBranch]);
-            this.log(`[Git] 🌿 워크트리 생성: ${branchName} → ${worktreeDir} (from ${baseBranch})`);
+            // ── Sparse Worktree: --no-checkout → sparse-checkout ──
+            // Step 1: Create worktree WITHOUT checking out any files (instant, no matter repo size)
+            this._execGit(['worktree', 'add', '--no-checkout', '-b', branchName, worktreeDir, baseBranch]);
+            this.log(`[Git] 🌿 워크트리 생성 (no-checkout): ${branchName} → ${worktreeDir}`);
+
+            // Step 2: Configure sparse-checkout in the worktree
+            const vscode = require('vscode');
+            const config = vscode.workspace.getConfiguration('autoAntigravity');
+            const sparsePaths = config.get('ralphLoop.sparseCheckoutPaths', [
+                'Assets/Script',
+                'ProjectSettings'
+            ]);
+
+            this._execGitAt(worktreeDir, ['sparse-checkout', 'init', '--cone']);
+            this.log(`[Git] 📂 sparse-checkout 초기화 (cone 모드)`);
+
+            // Step 3: Set sparse-checkout paths (only source code & config)
+            this._execGitAt(worktreeDir, ['sparse-checkout', 'set', ...sparsePaths]);
+            this.log(`[Git] 📂 sparse-checkout 경로: ${sparsePaths.join(', ')}`);
 
             return { success: true, worktreePath: worktreeDir, branchName };
         } catch (e) {
             this.log(`[Git] ❌ 워크트리 생성 실패: ${e.message}`);
+            // Clean up partial worktree on failure
+            try {
+                this._execGit(['worktree', 'remove', worktreeDir, '--force']);
+            } catch { /* ignore */ }
+            try {
+                this._execGit(['branch', '-D', branchName]);
+            } catch { /* ignore */ }
             return { success: false, error: e.message };
         }
     }
