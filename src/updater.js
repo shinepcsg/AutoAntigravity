@@ -32,6 +32,25 @@ class AutoUpdater {
         this.latestAssetName = null;
         this.availableVersions = []; // [{ version, assetName, tagName }]
         this.onUpdateStateChange = null; // callback: () => void
+        this._ralphLoop = null; // RalphLoopManager 참조 (실행 중 auto-install 방지)
+    }
+
+    /**
+     * Set Ralph Loop manager reference for blocking auto-install during loop execution.
+     * @param {Object} ralphLoop - RalphLoopManager instance
+     */
+    setRalphLoop(ralphLoop) {
+        this._ralphLoop = ralphLoop;
+    }
+
+    /**
+     * Check if Ralph Loop is currently active (running or quota_paused).
+     * @returns {boolean}
+     */
+    _isRalphLoopBusy() {
+        if (!this._ralphLoop) return false;
+        const state = this._ralphLoop.getState();
+        return state === 'running' || state === 'quota_paused' || state === 'stopping';
     }
 
     /**
@@ -299,6 +318,11 @@ class AutoUpdater {
             const autoInstall = config.get('updater.autoInstall', false);
 
             if (autoInstall) {
+                // Ralph Loop 실행 중이면 자동 설치 보류 (다음 체크 주기에 재시도)
+                if (this._isRalphLoopBusy()) {
+                    this.log(`[Updater] ⏸ Ralph Loop 실행 중 — 자동 설치 보류 (v${latestVersion}). 다음 체크 시 재시도.`);
+                    return;
+                }
                 this.log(`[Updater] Auto-install enabled — installing v${latestVersion}...`);
                 await this._performUpdate(vsixAsset, latestVersion, authHeader, true);
                 return;
