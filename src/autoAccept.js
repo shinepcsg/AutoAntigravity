@@ -97,7 +97,7 @@ class AutoAcceptManager {
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
-                const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+                const timeoutPromise = new Promise(resolve => setTimeout(resolve, 500));
                 const commandsPromise = Promise.allSettled(
                     ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
                 );
