@@ -20,14 +20,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
 
       - name: Install Dependencies
         run: npm install # npm ci 대신 npm install 사용 (package-lock.json 상황 불확실성 대비)
 
       - name: Build Extension Package (.vsix)
-        run: npx vsce package -o auto-antigravity.vsix
+        run: npx @vscode/vsce package -o auto-antigravity.vsix
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
