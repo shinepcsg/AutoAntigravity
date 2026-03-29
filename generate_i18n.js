@@ -1,0 +1,418 @@
+const fs = require('fs');
+const path = require('path');
+
+const i18n = {
+  "en": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Toggle Auto Accept",
+    "cmd.startRalphLoop": "AutoAntigravity: Start Ralph Loop",
+    "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",
+    "cmd.selectTaskFile": "AutoAntigravity: Select Task File",
+    "cmd.checkForUpdates": "AutoAntigravity: Check for Updates",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Loop",
+    "cfg.pollInterval": "Auto Accept polling interval in milliseconds",
+    "cfg.customButtonTexts": "Extra button texts to auto-click (for i18n or custom UI)",
+    "cfg.cdpPort": "CDP remote-debugging-port (default 9559 avoids browser control conflict)",
+    "cfg.maxIterations": "Maximum Ralph Loop iterations before auto-stop",
+    "cfg.taskFile": "Task file name (relative to workspace root)",
+    "cfg.progressFile": "Progress file name (relative to workspace root)",
+    "cfg.autoCommit": "Automatically git commit after each iteration",
+    "cfg.autoDeleteBranch": "Automatically delete task branch after merge",
+    "cfg.autoPush": "Auto push after session ends",
+    "cfg.iterationDelayMs": "Delay between iterations in milliseconds",
+    "cfg.allowPrdModification": "Allow agent to add/modify tasks in PRD file during Ralph Loop iterations",
+    "cfg.autoStart": "Auto-start Ralph Loop when task file changes",
+    "cfg.enableParallel": "Enable parallel execution for tasks tagged with [병렬진행]",
+    "cfg.maxParallelTasks": "Maximum concurrent parallel tasks",
+    "cfg.sparseCheckoutPaths": "Sparse-checkout paths list. Empty means full checkout.",
+    "cfg.autoInstall": "Auto-install updates without confirmation",
+    "cfg.telemetryPoll": "Telemetry polling interval in seconds",
+    "cfg.telegramEnabled": "Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in workspace .env",
+    "cfg.enableCodeReview": "Enable code review by Gemini Flash after task completion"
+  },
+  "ko": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Auto Accept + Ralph Loop — 자동 버튼 수락 및 영구 메모리 기반의 반복 AI 루프 실행.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Auto Accept 켜기/끄기",
+    "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop 시작",
+    "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",
+    "cmd.selectTaskFile": "AutoAntigravity: 작업 파일(PRD) 선택",
+    "cmd.checkForUpdates": "AutoAntigravity: 업데이트 확인",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Loop",
+    "cfg.pollInterval": "Auto Accept 폴링 주기(ms)",
+    "cfg.customButtonTexts": "자동 수락을 위한 추가 버튼 텍스트 목록",
+    "cfg.cdpPort": "CDP 포트 (기본: 9559)",
+    "cfg.maxIterations": "Ralph Loop 최대 반복 횟수",
+    "cfg.taskFile": "작업 파일 이름 (작업 영역 루트 기준)",
+    "cfg.progressFile": "진행 상태 파일 이름",
+    "cfg.autoCommit": "매 반복마다 자동 git commit",
+    "cfg.autoDeleteBranch": "머지 후 자동 브랜치 폐기",
+    "cfg.autoPush": "세션 종료 후 자동으로 git push 실행",
+    "cfg.iterationDelayMs": "반복 간 대기 시간(ms)",
+    "cfg.allowPrdModification": "Ralph Loop 중 에이전트의 PRD 수정 허용",
+    "cfg.autoStart": "PRD 내용 변경 시 Ralph Loop 자동 시작",
+    "cfg.enableParallel": "[병렬진행] 태그 작업의 병렬 실행 허용",
+    "cfg.maxParallelTasks": "최대 동시 병렬 작업 수",
+    "cfg.sparseCheckoutPaths": "병렬 워크트리 sparse-checkout 경로 (비어있으면 전체)",
+    "cfg.autoInstall": "업데이트 감지 시 자동 설치",
+    "cfg.telemetryPoll": "AI 모델 사용량 등 텔레메트리 조회 주기(초)",
+    "cfg.telegramEnabled": "텔레그램 알림 활성화 (.env 구성 필요)",
+    "cfg.enableCodeReview": "작업 완료 후 Gemini Flash 코드 리뷰 활성화"
+  },
+  "ja": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Auto AcceptとRalph Loopの統合 — 自動ボタンクリックと反復AIループを実行します。",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Auto Acceptの切り替え",
+    "cmd.startRalphLoop": "AutoAntigravity: Ralph Loopの開始",
+    "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loopの停止",
+    "cmd.selectTaskFile": "AutoAntigravity: タスクファイルの選択",
+    "cmd.checkForUpdates": "AutoAntigravity: 更新の確認",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Loop",
+    "cfg.pollInterval": "Auto Acceptのポーリング間隔（ミリ秒）",
+    "cfg.customButtonTexts": "自動クリックする追加ボタンテキスト",
+    "cfg.cdpPort": "CDPリモートデバッグポート（デフォルト: 9559）",
+    "cfg.maxIterations": "Ralph Loopの最大反復回数",
+    "cfg.taskFile": "タスクファイル名（ワークスペースルート相対）",
+    "cfg.progressFile": "進行状況ファイル名",
+    "cfg.autoCommit": "各反復後の自動git commit",
+    "cfg.autoDeleteBranch": "マージ後にタスクブランチを自動削除",
+    "cfg.autoPush": "セッション終了後に自動でgit pushを実行する",
+    "cfg.iterationDelayMs": "反復間の遅延（ミリ秒）",
+    "cfg.allowPrdModification": "AgentによるPRDファイルの修正を許可",
+    "cfg.autoStart": "タスクファイル変更時に自動開始",
+    "cfg.enableParallel": "[病列進行]タグ付きタスクの並列実行を有効にする",
+    "cfg.maxParallelTasks": "最大同時並列タスク数",
+    "cfg.sparseCheckoutPaths": "スパースチェックアウトのパス一覧",
+    "cfg.autoInstall": "確認なしで更新を自動インストール",
+    "cfg.telemetryPoll": "テレメトリのポーリング間隔（秒）",
+    "cfg.telegramEnabled": "Telegramボットを有効にする（.envで設定）",
+    "cfg.enableCodeReview": "Gemini Flashによるコードレビューを有効にする"
+  },
+  "zh-cn": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Auto Accept + Ralph Loop — 自动点击按钮并执行持久化内存的迭代AI循环。",
+    "cmd.toggleAutoAccept": "AutoAntigravity: 切换自动接受",
+    "cmd.startRalphLoop": "AutoAntigravity: 启动 Ralph Loop",
+    "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
+    "cmd.selectTaskFile": "AutoAntigravity: 选择任务文件",
+    "cmd.checkForUpdates": "AutoAntigravity: 检查更新",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Loop",
+    "cfg.pollInterval": "自动接受轮询间隔（毫秒）",
+    "cfg.customButtonTexts": "额外要自动点击的按钮文本",
+    "cfg.cdpPort": "CDP 远程调试端口（默认: 9559）",
+    "cfg.maxIterations": "最大迭代次数",
+    "cfg.taskFile": "任务文件名（相对工作区根目录）",
+    "cfg.progressFile": "进度文件名",
+    "cfg.autoCommit": "每次迭代后自动 git commit",
+    "cfg.autoDeleteBranch": "合并后自动删除分支",
+    "cfg.autoPush": "任务完成后自动执行 git push",
+    "cfg.iterationDelayMs": "迭代延迟时间（毫秒）",
+    "cfg.allowPrdModification": "允许代理修改PRD文件",
+    "cfg.autoStart": "检测到PRD修改时自动启动",
+    "cfg.enableParallel": "启用标记为[并列进行]的任务并行执行",
+    "cfg.maxParallelTasks": "最大并发任务数",
+    "cfg.sparseCheckoutPaths": "并行执行的稀疏签出路径列表",
+    "cfg.autoInstall": "自动安装更新（无需确认）",
+    "cfg.telemetryPoll": "遥测查询间隔（秒）",
+    "cfg.telegramEnabled": "启用 Telegram 通知",
+    "cfg.enableCodeReview": "使用 Gemini Flash 进行代码审计"
+  },
+  "zh-tw": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Auto Accept + Ralph Loop — 自動點擊按鈕並執行持續記憶體的迭代 AI 循環。",
+    "cmd.toggleAutoAccept": "AutoAntigravity: 切換自動接受",
+    "cmd.startRalphLoop": "AutoAntigravity: 啟動 Ralph Loop",
+    "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
+    "cmd.selectTaskFile": "AutoAntigravity: 選擇任務文件",
+    "cmd.checkForUpdates": "AutoAntigravity: 檢查更新",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Loop",
+    "cfg.pollInterval": "自動接受輪詢間隔（毫秒）",
+    "cfg.customButtonTexts": "額外要自動點擊的按鈕文字",
+    "cfg.cdpPort": "CDP 遠端除錯連接埠（預設: 9559）",
+    "cfg.maxIterations": "最大迭代次數",
+    "cfg.taskFile": "任務檔案名（相對工作區根目錄）",
+    "cfg.progressFile": "進度檔案名",
+    "cfg.autoCommit": "每次迭代後自動 git commit",
+    "cfg.autoDeleteBranch": "合併後自動刪除分支",
+    "cfg.autoPush": "任務完成後自動執行 git push",
+    "cfg.iterationDelayMs": "迭代延遲時間（毫秒）",
+    "cfg.allowPrdModification": "允許代理修改 PRD 文件",
+    "cfg.autoStart": "檢測到 PRD 修改時自動啟動",
+    "cfg.enableParallel": "啟用標有[病列進行] 的任務並行執行",
+    "cfg.maxParallelTasks": "最大並發任務數",
+    "cfg.sparseCheckoutPaths": "並行執行的稀疏簽出路徑列表",
+    "cfg.autoInstall": "自動安裝更新（無需確認）",
+    "cfg.telemetryPoll": "遙測查詢間隔（秒）",
+    "cfg.telegramEnabled": "啟用 Telegram 通知",
+    "cfg.enableCodeReview": "使用 Gemini Flash 進行程式碼審查"
+  },
+  "es": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Bucle Ralph + Aceptación Automática para AutoAntigravity.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Alternar aceptación automática",
+    "cmd.startRalphLoop": "AutoAntigravity: Iniciar bucle Ralph",
+    "cmd.stopRalphLoop": "AutoAntigravity: Detener bucle Ralph",
+    "cmd.selectTaskFile": "AutoAntigravity: Seleccionar archivo de tareas",
+    "cmd.checkForUpdates": "AutoAntigravity: Buscar actualizaciones",
+    "cmd.pushNow": "AutoAntigravity: Empujar a Git",
+    "view.ralphLoop": "Bucle Ralph",
+    "cfg.pollInterval": "Intervalo de muestreo de autoaceptar (ms)",
+    "cfg.customButtonTexts": "Textos adicionales de botones a aceptar",
+    "cfg.cdpPort": "Puerto CDP (por defecto: 9559)",
+    "cfg.maxIterations": "Máximo de iteraciones del bucle",
+    "cfg.taskFile": "Nombre del archivo de tareas",
+    "cfg.progressFile": "Nombre del archivo de progreso",
+    "cfg.autoCommit": "Commit automático en cada iteración",
+    "cfg.autoDeleteBranch": "Eliminar la rama automáticamente después del merge",
+    "cfg.autoPush": "Push automático al finalizar la sesión",
+    "cfg.iterationDelayMs": "Retraso entre iteraciones (ms)",
+    "cfg.allowPrdModification": "Permitir modificar el PRD",
+    "cfg.autoStart": "Auto-iniciar al cambiar el archivo de tareas",
+    "cfg.enableParallel": "Permitir ejecución en paralelo",
+    "cfg.maxParallelTasks": "Máximo de tareas en paralelo",
+    "cfg.sparseCheckoutPaths": "Rutas de sparse-checkout",
+    "cfg.autoInstall": "Instalar actualizaciones automáticamente",
+    "cfg.telemetryPoll": "Intervalo entre telemetría (s)",
+    "cfg.telegramEnabled": "Habilitar notificaciones en Telegram",
+    "cfg.enableCodeReview": "Habilitar revisión de código de Gemini"
+  },
+  "fr": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Acceptation automatique + Ralph Loop.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Basculer l'acceptation automatique",
+    "cmd.startRalphLoop": "AutoAntigravity: Démarrer Ralph Loop",
+    "cmd.stopRalphLoop": "AutoAntigravity: Arrêter Ralph Loop",
+    "cmd.selectTaskFile": "AutoAntigravity: Sélectionner le fichier de tâches",
+    "cmd.checkForUpdates": "AutoAntigravity: Vérifier les mises à jour",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Boucle Ralph",
+    "cfg.pollInterval": "Intervalle de sondage (ms)",
+    "cfg.customButtonTexts": "Boutons supplémentaires à accepter",
+    "cfg.cdpPort": "Port CDP (défaut : 9559)",
+    "cfg.maxIterations": "Itérations maximales",
+    "cfg.taskFile": "Nom du fichier de tâches",
+    "cfg.progressFile": "Nom du fichier de progression",
+    "cfg.autoCommit": "Git commit automatique",
+    "cfg.autoDeleteBranch": "Suppression automatique de branche de travail",
+    "cfg.autoPush": "Git push automatique après session",
+    "cfg.iterationDelayMs": "Délai entre les itérations (ms)",
+    "cfg.allowPrdModification": "Permettre de modifier le PRD",
+    "cfg.autoStart": "Démarrage automatique au changement de PRD",
+    "cfg.enableParallel": "Exécution parallèle active",
+    "cfg.maxParallelTasks": "Tâches parallèles max",
+    "cfg.sparseCheckoutPaths": "Chemins sparse-checkout",
+    "cfg.autoInstall": "Installation automatique",
+    "cfg.telemetryPoll": "Intervalle télémétrie (s)",
+    "cfg.telegramEnabled": "Activer Telegram",
+    "cfg.enableCodeReview": "Revue de code active"
+  },
+  "de": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Automatisches Akzeptieren & Schleifen für Antigravity.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Automatisches Akzeptieren umschalten",
+    "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop starten",
+    "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop stoppen",
+    "cmd.selectTaskFile": "AutoAntigravity: Aufgabendatei auswählen",
+    "cmd.checkForUpdates": "AutoAntigravity: Nach Updates suchen",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ralph Schleife",
+    "cfg.pollInterval": "Polling-Intervall (ms)",
+    "cfg.customButtonTexts": "Zusätzliche Button-Texte",
+    "cfg.cdpPort": "CDP-Port (Standard: 9559)",
+    "cfg.maxIterations": "Maximale Iterationen",
+    "cfg.taskFile": "Name der Aufgabendatei",
+    "cfg.progressFile": "Name der Fortschrittsdatei",
+    "cfg.autoCommit": "Git Commit automatisch anwenden",
+    "cfg.autoDeleteBranch": "Arbeitszweig automatisch löschen",
+    "cfg.autoPush": "Git Push automatisch am Ende",
+    "cfg.iterationDelayMs": "Verzögerung zwischen Iterationen (ms)",
+    "cfg.allowPrdModification": "PRD-Modifikationen durch Agenten zulassen",
+    "cfg.autoStart": "Automatisch starten bei Aufgabendateiwechsel",
+    "cfg.enableParallel": "Parallele Ausführung aktivieren",
+    "cfg.maxParallelTasks": "Maximale parallele Tasks",
+    "cfg.sparseCheckoutPaths": "Pfadliste für sparse-checkout",
+    "cfg.autoInstall": "Updates ohne Bestätigung installieren",
+    "cfg.telemetryPoll": "Abfrageintervall (s)",
+    "cfg.telegramEnabled": "Telegram-Benachrichtigungen",
+    "cfg.enableCodeReview": "Code-Überprüfung aktivieren"
+  },
+  "ru": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Автопринятие и циклы AI для Antigravity.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Переключить авто-принятие",
+    "cmd.startRalphLoop": "AutoAntigravity: Запустить цикл Ralph",
+    "cmd.stopRalphLoop": "AutoAntigravity: Остановить цикл",
+    "cmd.selectTaskFile": "AutoAntigravity: Выбрать файл задач",
+    "cmd.checkForUpdates": "AutoAntigravity: Проверить обновления",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Цикл Ralph",
+    "cfg.pollInterval": "Интервал авто-принятия (мс)",
+    "cfg.customButtonTexts": "Дополнительные тексты для нажатия",
+    "cfg.cdpPort": "CDP Порт (по умолчанию: 9559)",
+    "cfg.maxIterations": "Максимум итераций цикла",
+    "cfg.taskFile": "Файл задач",
+    "cfg.progressFile": "Файл прогресса",
+    "cfg.autoCommit": "Автоматический git commit",
+    "cfg.autoDeleteBranch": "Автоудаление рабочей ветки",
+    "cfg.autoPush": "Авто git push в конце сессии",
+    "cfg.iterationDelayMs": "Задержка цикла (мс)",
+    "cfg.allowPrdModification": "Разрешить агентам изменять PRD",
+    "cfg.autoStart": "Автозапуск при изменении файла задач",
+    "cfg.enableParallel": "Разрешить параллельное выполнение",
+    "cfg.maxParallelTasks": "Макс. параллельных задач",
+    "cfg.sparseCheckoutPaths": "Пути sparse-checkout",
+    "cfg.autoInstall": "Автоообновление без запроса",
+    "cfg.telemetryPoll": "Интервал телеметрии (сек)",
+    "cfg.telegramEnabled": "Уведомления Telegram",
+    "cfg.enableCodeReview": "Код ревью включено"
+  },
+  "pt-br": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "Aceite automático e Ralph Loop para Antigravity.",
+    "cmd.toggleAutoAccept": "AutoAntigravity: Alternar aceite automático",
+    "cmd.startRalphLoop": "AutoAntigravity: Iniciar Ralph Loop",
+    "cmd.stopRalphLoop": "AutoAntigravity: Parar Ralph Loop",
+    "cmd.selectTaskFile": "AutoAntigravity: Selecionar arquivo de tarefas",
+    "cmd.checkForUpdates": "AutoAntigravity: Verificar atualizações",
+    "cmd.pushNow": "AutoAntigravity: Git Push",
+    "view.ralphLoop": "Ciclo Ralph",
+    "cfg.pollInterval": "Intervalo (ms)",
+    "cfg.customButtonTexts": "Textos extras de botões para clicar",
+    "cfg.cdpPort": "Porta CDP (padrão: 9559)",
+    "cfg.maxIterations": "Máximo de iterações",
+    "cfg.taskFile": "Arquivo de tarefas",
+    "cfg.progressFile": "Arquivo de progresso",
+    "cfg.autoCommit": "Git commit automático",
+    "cfg.autoDeleteBranch": "Deletar branch após merge",
+    "cfg.autoPush": "Git push no fim da sessão",
+    "cfg.iterationDelayMs": "Atraso da iteração (ms)",
+    "cfg.allowPrdModification": "Permitir alteração de PRD",
+    "cfg.autoStart": "Auto start com PRD",
+    "cfg.enableParallel": "Execução em paralelo",
+    "cfg.maxParallelTasks": "Máximo tarefas simultâneas",
+    "cfg.sparseCheckoutPaths": "Caminhos de sparse-checkout",
+    "cfg.autoInstall": "Instalação automática de atualização",
+    "cfg.telemetryPoll": "Telemetria (s)",
+    "cfg.telegramEnabled": "Notificações de Telegram",
+    "cfg.enableCodeReview": "Habilitar code review"
+  },
+  "hi": {
+    "ext.displayName": "ऑटोएंटिग्रैविटी",
+    "ext.description": "एंटिग्रैविटी के लिए ऑटो एक्सेप्ट और राल्फ लूप — एआई लूप्स चलाएं।",
+    "cmd.toggleAutoAccept": "ऑटोएंटिग्रैविटी: स्वचालित स्वीकार टॉगल करें",
+    "cmd.startRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप प्रारंभ करें",
+    "cmd.stopRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप रोकें",
+    "cmd.selectTaskFile": "ऑटोएंटिग्रैविटी: कार्य फ़ाइल का चयन करें",
+    "cmd.checkForUpdates": "ऑटोएंटिग्रैविटी: अद्यतनों की जाँच करें",
+    "cmd.pushNow": "ऑटोएंटिग्रैविटी: गिट पुश (Git Push)",
+    "view.ralphLoop": "राल्फ लूप",
+    "cfg.pollInterval": "स्वचालित मतदान अंतराल (एमएस)",
+    "cfg.customButtonTexts": "अतिरिक्त बटन पाठ",
+    "cfg.cdpPort": "CDP पोर्ट (डिफ़ॉल्ट: 9559)",
+    "cfg.maxIterations": "अधिकतम लूप पुनरावृत्तियाँ",
+    "cfg.taskFile": "कार्य फ़ाइल नाम",
+    "cfg.progressFile": "प्रगति फ़ाइल नाम",
+    "cfg.autoCommit": "स्वतः गिट कमिट",
+    "cfg.autoDeleteBranch": "स्वतः कार्य ब्रांच हटाएं",
+    "cfg.autoPush": "लूप समाप्त होने के बाद स्वतः पुश करें",
+    "cfg.iterationDelayMs": "पुनरावृत्ति के बीच की देरी (एमएस)",
+    "cfg.allowPrdModification": "कार्य फ़ाइल (PRD) परिवर्तन की अनुमति दें",
+    "cfg.autoStart": "कार्य फ़ाइल परिवर्तन पर ऑटो-प्रारंभ",
+    "cfg.enableParallel": "समानांतर निष्पादन सक्षम करें",
+    "cfg.maxParallelTasks": "अधिकतम समानांतर कार्य",
+    "cfg.sparseCheckoutPaths": "स्पार्स चेकआउट (Sparse-checkout) पथ",
+    "cfg.autoInstall": "पुष्टि के बिना अपडेट स्वतः इंस्टॉल करें",
+    "cfg.telemetryPoll": "टेलीमेट्री मतदान का अंतराल (सेकंड)",
+    "cfg.telegramEnabled": "टेलीग्राम सूचनाएँ सक्षम करें",
+    "cfg.enableCodeReview": "कोड समीक्षा सक्षम करें"
+  },
+  "ar": {
+    "ext.displayName": "AutoAntigravity",
+    "ext.description": "حلقة رالف والموافقة التلقائية للتطبيق.",
+    "cmd.toggleAutoAccept": "تبديل القبول التلقائي",
+    "cmd.startRalphLoop": "بدء حلقة رالف",
+    "cmd.stopRalphLoop": "إيقاف حلقة رالف",
+    "cmd.selectTaskFile": "تحديد ملف المهام",
+    "cmd.checkForUpdates": "تحقق من التحديثات",
+    "cmd.pushNow": "Git Push دفع لـ",
+    "view.ralphLoop": "حلقة رالف (Ralph Loop)",
+    "cfg.pollInterval": "الفاصل الزمني بالملي ثانية",
+    "cfg.customButtonTexts": "نصوص أخرى للأزرار لضغطها تلقائياً",
+    "cfg.cdpPort": "CDP منفذ (افتراضي: 9559)",
+    "cfg.maxIterations": "الحد الأقصى للتكرارات لحلقة رالف",
+    "cfg.taskFile": "اسم ملف المهام",
+    "cfg.progressFile": "اسم ملف التقدم",
+    "cfg.autoCommit": "الحفظ التلقائي في جيت عند كل إنجاز",
+    "cfg.autoDeleteBranch": "حذف مسار العمل التلقائي",
+    "cfg.autoPush": "الدفع التلقائي في نهاية المهمة",
+    "cfg.iterationDelayMs": "فترة الانتظار بين التنفيذ (ميلي ثانية)",
+    "cfg.allowPrdModification": "السماح بتغيير مستندات المتطلبات (PRD)",
+    "cfg.autoStart": "بدء تلقائي عند تغيير الملف",
+    "cfg.enableParallel": "تمكين التنفيذ المتوازي",
+    "cfg.maxParallelTasks": "أقصى عدد من المهام المتزامنة",
+    "cfg.sparseCheckoutPaths": "قائمة مسارات التنزيل الجزئي",
+    "cfg.autoInstall": "التثبيت التلقائي للتحديثات",
+    "cfg.telemetryPoll": "فترة التنبيه للاستخدام (ثانية)",
+    "cfg.telegramEnabled": "تفعيل إشعارات تيليجرام",
+    "cfg.enableCodeReview": "مراجعة الكود باستخدام جيميني"
+  }
+};
+
+const pkgPath = path.join(__dirname, 'package.json');
+let pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+// Apply parameterization on package.json commands & configs
+pkg.displayName = "%ext.displayName%";
+pkg.description = "%ext.description%";
+
+pkg.contributes.commands.forEach(cmd => {
+    if (cmd.command === "autoAntigravity.toggleAutoAccept") cmd.title = "%cmd.toggleAutoAccept%";
+    if (cmd.command === "autoAntigravity.startRalphLoop") cmd.title = "%cmd.startRalphLoop%";
+    if (cmd.command === "autoAntigravity.stopRalphLoop") cmd.title = "%cmd.stopRalphLoop%";
+    if (cmd.command === "autoAntigravity.selectTaskFile") cmd.title = "%cmd.selectTaskFile%";
+    if (cmd.command === "autoAntigravity.checkForUpdates") cmd.title = "%cmd.checkForUpdates%";
+    if (cmd.command === "autoAntigravity.pushNow") cmd.title = "%cmd.pushNow%";
+});
+
+if (pkg.contributes.views.autoAntigravity && pkg.contributes.views.autoAntigravity[0]) {
+    pkg.contributes.views.autoAntigravity[0].name = "%view.ralphLoop%";
+}
+
+const props = pkg.contributes.configuration.properties;
+if (props) {
+    props["autoAntigravity.autoAccept.pollInterval"].description = "%cfg.pollInterval%";
+    props["autoAntigravity.autoAccept.customButtonTexts"].description = "%cfg.customButtonTexts%";
+    props["autoAntigravity.autoAccept.cdpPort"].description = "%cfg.cdpPort%";
+    props["autoAntigravity.ralphLoop.maxIterations"].description = "%cfg.maxIterations%";
+    props["autoAntigravity.ralphLoop.taskFile"].description = "%cfg.taskFile%";
+    props["autoAntigravity.ralphLoop.progressFile"].description = "%cfg.progressFile%";
+    props["autoAntigravity.ralphLoop.autoCommit"].description = "%cfg.autoCommit%";
+    props["autoAntigravity.ralphLoop.autoDeleteBranch"].description = "%cfg.autoDeleteBranch%";
+    props["autoAntigravity.ralphLoop.autoPush"].description = "%cfg.autoPush%";
+    props["autoAntigravity.ralphLoop.iterationDelayMs"].description = "%cfg.iterationDelayMs%";
+    props["autoAntigravity.ralphLoop.allowPrdModification"].description = "%cfg.allowPrdModification%";
+    props["autoAntigravity.ralphLoop.autoStart"].description = "%cfg.autoStart%";
+    props["autoAntigravity.ralphLoop.enableParallel"].description = "%cfg.enableParallel%";
+    props["autoAntigravity.ralphLoop.maxParallelTasks"].description = "%cfg.maxParallelTasks%";
+    props["autoAntigravity.ralphLoop.sparseCheckoutPaths"].description = "%cfg.sparseCheckoutPaths%";
+    props["autoAntigravity.updater.autoInstall"].description = "%cfg.autoInstall%";
+    props["autoAntigravity.telemetry.pollInterval"].description = "%cfg.telemetryPoll%";
+    props["autoAntigravity.telegram.enabled"].description = "%cfg.telegramEnabled%";
+    props["autoAntigravity.ralphLoop.enableCodeReview"].description = "%cfg.enableCodeReview%";
+}
+
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 4));
+
+// Write nls files
+for (const [lang, translations] of Object.entries(i18n)) {
+    const filename = lang === 'en' ? 'package.nls.json' : `package.nls.${lang}.json`;
+    fs.writeFileSync(path.join(__dirname, filename), JSON.stringify(translations, null, 4));
+}
+
+console.log('generated!');

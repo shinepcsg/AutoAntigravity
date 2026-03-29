@@ -1,0 +1,198 @@
+{
+    "name": "auto-antigravity",
+    "displayName": "%ext.displayName%",
+    "description": "%ext.description%",
+    "version": "1.8.138",
+    "publisher": "shinepcs",
+    "icon": "images/icon.png",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./src/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "autoAntigravity.toggleAutoAccept",
+                "title": "%cmd.toggleAutoAccept%"
+            },
+            {
+                "command": "autoAntigravity.startRalphLoop",
+                "title": "%cmd.startRalphLoop%"
+            },
+            {
+                "command": "autoAntigravity.stopRalphLoop",
+                "title": "%cmd.stopRalphLoop%"
+            },
+            {
+                "command": "autoAntigravity.selectTaskFile",
+                "title": "%cmd.selectTaskFile%"
+            },
+            {
+                "command": "autoAntigravity.checkForUpdates",
+                "title": "%cmd.checkForUpdates%"
+            },
+            {
+                "command": "autoAntigravity.pushNow",
+                "title": "%cmd.pushNow%"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "autoAntigravity",
+                    "title": "AutoAntigravity",
+                    "icon": "images/sidebar-icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "autoAntigravity": [
+                {
+                    "type": "webview",
+                    "id": "autoAntigravity.ralphSidebar",
+                    "name": "%view.ralphLoop%"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "command": "autoAntigravity.toggleAutoAccept",
+                "key": "ctrl+alt+shift+u",
+                "mac": "cmd+alt+shift+u"
+            },
+            {
+                "command": "workbench.action.closeOtherEditors",
+                "key": "ctrl+shift+w",
+                "mac": "cmd+shift+w"
+            }
+        ],
+        "configuration": {
+            "title": "AutoAntigravity",
+            "properties": {
+                "autoAntigravity.autoAccept.pollInterval": {
+                    "type": "number",
+                    "default": 500,
+                    "description": "%cfg.pollInterval%"
+                },
+                "autoAntigravity.autoAccept.customButtonTexts": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "%cfg.customButtonTexts%"
+                },
+                "autoAntigravity.autoAccept.cdpPort": {
+                    "type": "number",
+                    "default": 9559,
+                    "description": "%cfg.cdpPort%"
+                },
+                "autoAntigravity.ralphLoop.maxIterations": {
+                    "type": "number",
+                    "default": 50,
+                    "description": "%cfg.maxIterations%"
+                },
+                "autoAntigravity.ralphLoop.taskFile": {
+                    "type": "string",
+                    "default": "PRD.md",
+                    "description": "%cfg.taskFile%"
+                },
+                "autoAntigravity.ralphLoop.progressFile": {
+                    "type": "string",
+                    "default": "progress.txt",
+                    "description": "%cfg.progressFile%"
+                },
+                "autoAntigravity.ralphLoop.autoCommit": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%cfg.autoCommit%"
+                },
+                "autoAntigravity.ralphLoop.autoDeleteBranch": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%cfg.autoDeleteBranch%"
+                },
+                "autoAntigravity.ralphLoop.autoPush": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%cfg.autoPush%"
+                },
+                "autoAntigravity.ralphLoop.iterationDelayMs": {
+                    "type": "number",
+                    "default": 1500,
+                    "description": "%cfg.iterationDelayMs%"
+                },
+                "autoAntigravity.ralphLoop.allowPrdModification": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%cfg.allowPrdModification%"
+                },
+                "autoAntigravity.ralphLoop.autoStart": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%cfg.autoStart%"
+                },
+                "autoAntigravity.ralphLoop.enableParallel": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%cfg.enableParallel%"
+                },
+                "autoAntigravity.ralphLoop.maxParallelTasks": {
+                    "type": "number",
+                    "default": 3,
+                    "minimum": 2,
+                    "maximum": 8,
+                    "description": "%cfg.maxParallelTasks%"
+                },
+                "autoAntigravity.ralphLoop.sparseCheckoutPaths": {
+                    "type": "array",
+                    "scope": "resource",
+                    "default": [],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "%cfg.sparseCheckoutPaths%"
+                },
+                "autoAntigravity.updater.autoInstall": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%cfg.autoInstall%"
+                },
+                "autoAntigravity.telemetry.pollInterval": {
+                    "type": "number",
+                    "default": 90,
+                    "minimum": 30,
+                    "maximum": 600,
+                    "description": "%cfg.telemetryPoll%"
+                },
+                "autoAntigravity.telegram.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%cfg.telegramEnabled%"
+                },
+                "autoAntigravity.ralphLoop.enableCodeReview": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "%cfg.enableCodeReview%"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "package": "npx @vscode/vsce package",
+        "release:patch": "npm version patch && git push origin HEAD --tags",
+        "release:minor": "npm version minor && git push origin HEAD --tags",
+        "release:major": "npm version major && git push origin HEAD --tags"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/shinepcsg/AutoAntigravity.git"
+    },
+    "license": "MIT"
+}
