@@ -582,7 +582,7 @@ class RalphSidebarProvider {
      * Generate the HTML for the sidebar webview
      */
     _getHtml(webview) {
-        return getSidebarHtml(webview);
+        return getSidebarHtml(webview, vscode.env.language);
     }
 }
 
