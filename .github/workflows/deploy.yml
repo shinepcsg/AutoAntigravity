@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*' # npm version 명령어가 생성하는 'vX.X.X' 형태의 태그에만 반응
+  workflow_dispatch: # 수동으로 빌드/배포를 트리거할 수 있는 옵션 추가
 
 jobs:
   build_and_release:
