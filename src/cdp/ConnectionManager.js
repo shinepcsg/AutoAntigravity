@@ -589,6 +589,30 @@ class ConnectionManager {
             return configPort;
         }
 
+        // Electron sometimes opens the debug port on a different port than requested.
+        // Scan a range around the configured port to find the actual CDP endpoint.
+        const scanRange = 100;
+        const startPort = Math.max(1024, configPort - scanRange);
+        const endPort = Math.min(65535, configPort + scanRange);
+        const batchSize = 20;
+
+        for (let base = startPort; base <= endPort; base += batchSize) {
+            const ports = [];
+            for (let p = base; p < Math.min(base + batchSize, endPort + 1); p++) {
+                if (p === configPort) continue; // Already tried
+                ports.push(p);
+            }
+            const results = await Promise.all(
+                ports.map(async (p) => ({ port: p, ok: await this._pingPort(p) }))
+            );
+            const found = results.find(r => r.ok);
+            if (found) {
+                this.log(`[CDP] ✓ Discovered CDP on port ${found.port} (configured: ${configPort})`);
+                this.activeCdpPort = found.port;
+                return found.port;
+            }
+        }
+
         return null;
     }
 

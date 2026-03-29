@@ -664,6 +664,49 @@ class RalphLoopManager {
     }
 
     /**
+     * Find the actual CDP port, scanning nearby ports if the configured one doesn't respond.
+     * Caches the discovered port to avoid repeated scans.
+     * @returns {Promise<number|null>}
+     */
+    async _findActiveCdpPort() {
+        // Return cached port if still alive
+        if (this._discoveredCdpPort && await this._pingPort(this._discoveredCdpPort)) {
+            return this._discoveredCdpPort;
+        }
+
+        const configPort = this._getCdpPort();
+        if (await this._pingPort(configPort)) {
+            this._discoveredCdpPort = configPort;
+            return configPort;
+        }
+
+        // Scan nearby ports (Electron may have shifted the port)
+        const scanRange = 100;
+        const startPort = Math.max(1024, configPort - scanRange);
+        const endPort = Math.min(65535, configPort + scanRange);
+        const batchSize = 20;
+
+        for (let base = startPort; base <= endPort; base += batchSize) {
+            const ports = [];
+            for (let p = base; p < Math.min(base + batchSize, endPort + 1); p++) {
+                if (p === configPort) continue;
+                ports.push(p);
+            }
+            const results = await Promise.all(
+                ports.map(async (p) => ({ port: p, ok: await this._pingPort(p) }))
+            );
+            const found = results.find(r => r.ok);
+            if (found) {
+                this._addLog(`[Ralph] ✓ CDP 포트 자동 감지: ${found.port} (설정: ${configPort})`);
+                this._discoveredCdpPort = found.port;
+                return found.port;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get list of CDP targets (pages)
      */
     _getTargets(port) {
@@ -849,7 +892,10 @@ class RalphLoopManager {
      * @returns {Promise<Object>} CDP target object with webSocketDebuggerUrl
      */
     async _findMainTarget(verbose = false) {
-        const cdpPort = this._getCdpPort();
+        const cdpPort = await this._findActiveCdpPort();
+        if (!cdpPort) {
+            throw new Error('CDP 포트 없음 — 설정 포트(' + this._getCdpPort() + ') 및 근처 포트 스캔 실패');
+        }
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
@@ -911,7 +957,8 @@ class RalphLoopManager {
      * @returns {Promise<Object[]>} Array of CDP target objects
      */
     async _findAllWorkbenchTargets() {
-        const cdpPort = this._getCdpPort();
+        const cdpPort = await this._findActiveCdpPort();
+        if (!cdpPort) return [];
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
@@ -949,7 +996,11 @@ class RalphLoopManager {
      * @returns {Promise<{cancelled: number, total: number}>}
      */
     async _cancelAllActiveConversations() {
-        const cdpPort = this._getCdpPort();
+        const cdpPort = await this._findActiveCdpPort();
+        if (!cdpPort) {
+            this._addLog(`[Ralph] ❌ _cancelAllActiveConversations: CDP 포트 없음 — 스캔 실패`, 'error');
+            return { cancelled: 0, total: 0 };
+        }
         let targets;
         try {
             targets = await this._getTargets(cdpPort);
