@@ -1,0 +1,37 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*' # npm version 명령어가 생성하는 'vX.X.X' 형태의 태그에만 반응
+
+jobs:
+  build_and_release:
+    name: Build & Release Extension
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub Release 생성 권한
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install # npm ci 대신 npm install 사용 (package-lock.json 상황 불확실성 대비)
+
+      - name: Build Extension Package (.vsix)
+        run: npx vsce package -o auto-antigravity.vsix
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: auto-antigravity.vsix
+          generate_release_notes: true
+          draft: false
+          prerelease: false
