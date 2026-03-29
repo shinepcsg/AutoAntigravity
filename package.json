@@ -176,22 +176,10 @@
                     "default": false,
                     "description": "텔레그램 봇 연동 활성화 — 워크스페이스 루트의 .env 파일에 TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요. (Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in the workspace .env file.)"
                 },
-                "autoAntigravity.ralphLoop.enableVerification": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "작업 완료 후 다른 AI 모델로 구현 결과를 검증합니다. Opus→Gemini Pro, Gemini→Opus 교차 검증. (Enable cross-model verification after task completion)"
-                },
                 "autoAntigravity.ralphLoop.enableCodeReview": {
                     "type": "boolean",
                     "default": false,
                     "description": "작업 완료 후 Gemini Flash 모델로 변경된 코드를 리뷰합니다. (Enable code review by Gemini Flash after task completion)"
-                },
-                "autoAntigravity.ralphLoop.maxVerificationRetries": {
-                    "type": "number",
-                    "default": 2,
-                    "minimum": 1,
-                    "maximum": 5,
-                    "description": "판단 실패 시 구현 재시도 최대 횟수 (Maximum retries when verification fails)"
                 }
             }
         }

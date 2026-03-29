@@ -132,30 +132,12 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
-                case 'toggleEnableVerification': {
-                    const config = vscode.workspace.getConfiguration('autoAntigravity');
-                    const current = config.get('ralphLoop.enableVerification', false);
-                    await config.update('ralphLoop.enableVerification', !current, vscode.ConfigurationTarget.Global);
-                    this._log(`[Sidebar] Enable Verification: ${!current ? 'ON' : 'OFF'}`);
-                    this.updateState();
-                    break;
-                }
                 case 'toggleEnableCodeReview': {
                     const config = vscode.workspace.getConfiguration('autoAntigravity');
                     const current = config.get('ralphLoop.enableCodeReview', false);
                     await config.update('ralphLoop.enableCodeReview', !current, vscode.ConfigurationTarget.Global);
                     this._log(`[Sidebar] Enable Code Review: ${!current ? 'ON' : 'OFF'}`);
                     this.updateState();
-                    break;
-                }
-                case 'runVerificationNow': {
-                    if (this.ralphLoop) {
-                        const taskText = message.taskText || '마지막 작업 검증';
-                        this._log(`[Sidebar] 수동 판단 실행: ${taskText.substring(0, 50)}`);
-                        this.ralphLoop.runVerification(taskText).catch(err => {
-                            this._log(`[Sidebar] ❌ 판단 실행 에러: ${err.message}`);
-                        });
-                    }
                     break;
                 }
                 case 'runCodeReviewNow': {
@@ -523,7 +505,6 @@ class RalphSidebarProvider {
             autoStart: config.get('ralphLoop.autoStart', true),
             autoCommit: config.get('ralphLoop.autoCommit', true),
             autoDeleteBranch: config.get('ralphLoop.autoDeleteBranch', true),
-            enableVerification: config.get('ralphLoop.enableVerification', false),
             enableCodeReview: config.get('ralphLoop.enableCodeReview', false),
             autoPush: config.get('ralphLoop.autoPush', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
@@ -1308,10 +1289,6 @@ class RalphSidebarProvider {
             <input id="chkAutoDeleteBranch" type="checkbox" />
             🗑 자동 브랜치 폐기 (머지 후 삭제)
         </label>
-        <label id="labelEnableVerification" class="toggle-row">
-            <input id="chkEnableVerification" type="checkbox" />
-            🔍 작업 판단 (다른 AI 모델로 검증)
-        </label>
         <label id="labelEnableCodeReview" class="toggle-row">
             <input id="chkEnableCodeReview" type="checkbox" />
             📝 코드 리뷰 (Gemini Flash)
@@ -1399,10 +1376,6 @@ class RalphSidebarProvider {
     document.getElementById('labelAutoPush').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleAutoPush' });
-    });
-    document.getElementById('labelEnableVerification').addEventListener('click', (e) => {
-        e.preventDefault();
-        vscodeApi.postMessage({ command: 'toggleEnableVerification' });
     });
     document.getElementById('labelEnableCodeReview').addEventListener('click', (e) => {
         e.preventDefault();
@@ -1560,7 +1533,6 @@ class RalphSidebarProvider {
         document.getElementById('chkAutoCommit').checked = !!s.autoCommit;
         document.getElementById('chkAutoDeleteBranch').checked = !!s.autoDeleteBranch;
         document.getElementById('chkAutoPush').checked = !!s.autoPush;
-        document.getElementById('chkEnableVerification').checked = !!s.enableVerification;
         document.getElementById('chkEnableCodeReview').checked = !!s.enableCodeReview;
 
         // Version
