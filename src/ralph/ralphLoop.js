@@ -330,55 +330,6 @@ class RalphLoopManager {
     }
 
     /**
-     * Cancel all active conversations by clicking Cancel buttons via CDP.
-     * Iterates through all CDP targets, checks for the Cancel button, and clicks it.
-     * @returns {Promise<{cancelled: number, total: number}>}
-     */
-    async _cancelAllActiveConversations() {
-        const cdpPort = this._getCdpPort();
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            this._addLog(`[Ralph] ⚠ 대화 정지: 타겟 목록 조회 실패 — ${e.message}`, 'warn');
-            return { cancelled: 0, total: 0 };
-        }
-
-        const wsTargets = targets.filter(t => t.webSocketDebuggerUrl);
-        const total = wsTargets.length;
-        let cancelled = 0;
-
-        this._addLog(`[Ralph] 🔍 대화 정지: ${total}개 타겟 검색 중...`);
-
-        for (const target of wsTargets) {
-            try {
-                const result = await this._cdpEvaluateOnTarget(
-                    target.webSocketDebuggerUrl,
-                    `(() => {
-                        const btn = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
-                        if (btn) { btn.click(); return 'cancelled'; }
-                        return 'no-button';
-                    })()`,
-                    5000
-                );
-
-                const value = result && result.result && result.result.value;
-                if (value === 'cancelled') {
-                    cancelled++;
-                    this._addLog(`[Ralph] ✅ 대화 취소 성공: ${target.title || target.url || 'unknown'}`);
-                } else {
-                    this._addLog(`[Ralph] ⏭ Cancel 버튼 없음: ${target.title || target.url || 'unknown'}`);
-                }
-            } catch (e) {
-                this._addLog(`[Ralph] ⚠ 타겟 처리 에러 (무시): ${target.title || target.url || 'unknown'} — ${e.message}`, 'warn');
-            }
-        }
-
-        this._addLog(`[Ralph] 🏁 대화 정지 완료: ${cancelled}/${total}개 취소됨`);
-        return { cancelled, total };
-    }
-
-    /**
      * Stop the Ralph Loop gracefully
      */
     async stop() {

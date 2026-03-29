@@ -89,7 +89,8 @@ class ParallelTaskRunner {
         let sentCount = 0;
 
         for (const info of worktreeInfos) {
-            if (this._loop.state !== 'running') {
+            const { LoopState } = require('./ralphLoop');
+            if (this._loop.state !== LoopState.RUNNING) {
                 this._log('[Parallel] ⚠ 정지 요청 감지 — 추가 프롬프트 전송 중단');
                 break;
             }
@@ -301,7 +302,8 @@ class ParallelTaskRunner {
 
         while (elapsed < MAX_WAIT_MS && pending.size > 0) {
             // 루프 상태 확인 (중단 시 즉시 반환)
-            if (this._loop.state !== 'running') {
+            const { LoopState } = require('./ralphLoop');
+            if (this._loop.state !== LoopState.RUNNING) {
                 this._log('[Parallel] ⚠ 루프 상태 변경 — 마커 대기 취소');
                 return results;
             }
