@@ -98,7 +98,7 @@ class AutoAcceptManager {
     // ─── Internal ─────────────────────────────────────────────────────
 
     _getConfiguredPort() {
-        return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9333);
+        return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9559);
     }
 
     _startPolling() {

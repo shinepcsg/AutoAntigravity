@@ -31,11 +31,11 @@ PRD.md 기반 **반복적 에이전트 자율 실행** 시스템입니다.
 Antigravity 실행 시 다음 플래그를 추가하세요:
 
 ```
---remote-debugging-port=9333
+--remote-debugging-port=9559
 ```
 
 **Windows**: 바로가기 → 속성 → 대상에 추가  
-**Mac**: `open -a "Antigravity" --args --remote-debugging-port=9333`  
+**Mac**: `open -a "Antigravity" --args --remote-debugging-port=9559`  
 **Linux**: `.desktop` 파일의 Exec 라인에 추가
 
 > 💡 설치 후 첫 실행 시 포트가 닫혀있으면 자동 패치 안내가 표시됩니다.
@@ -157,7 +157,7 @@ Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git wor
 | 설정 | 기본값 | 설명 |
 |---|---|---|
 | `autoAntigravity.autoAccept.pollInterval` | `500` | 폴링 간격 (ms) |
-| `autoAntigravity.autoAccept.cdpPort` | `9333` | CDP 디버그 포트 |
+| `autoAntigravity.autoAccept.cdpPort` | `9559` | CDP 디버그 포트 |
 | `autoAntigravity.autoAccept.customButtonTexts` | `[]` | 추가 버튼 텍스트 |
 | `autoAntigravity.ralphLoop.maxIterations` | `50` | 최대 반복 횟수 |
 | `autoAntigravity.ralphLoop.taskFile` | `PRD.md` | 작업 파일명 |

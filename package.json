@@ -90,8 +90,8 @@
                 },
                 "autoAntigravity.autoAccept.cdpPort": {
                     "type": "number",
-                    "default": 9333,
-                    "description": "CDP remote-debugging-port (default 9333 avoids browser control conflict)"
+                    "default": 9559,
+                    "description": "CDP remote-debugging-port (default 9559 avoids browser control conflict)"
                 },
                 "autoAntigravity.ralphLoop.maxIterations": {
                     "type": "number",
