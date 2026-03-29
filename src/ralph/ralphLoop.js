@@ -1733,41 +1733,99 @@ class RalphLoopManager {
         try {
             const result = await this._cdpEvaluateOnTarget(wsUrl, `
                 (function() {
-                    // Antigravity 채팅 UI에서 에이전트 응답 버블을 찾는 셀렉터들
+                    var MAX_LEN = 4000;
+                    function truncate(text) {
+                        text = (text || '').trim();
+                        if (!text) return null;
+                        return text.length > MAX_LEN ? text.substring(0, MAX_LEN) + '...' : text;
+                    }
+
+                    // ── Strategy 1: Antigravity-specific selectors ──
                     var selectors = [
-                        '.chat-response-content',
+                        // Antigravity/Cursor-style chat UI
+                        '[data-role="assistant"]',
+                        '[data-turn-role="assistant"]',
+                        '.assistant-message',
+                        '.ai-message',
                         '.response-markdown',
+                        '.chat-response-content',
                         '.agent-response',
                         '.assistant-message .message-content',
                         '.chat-message-content',
-                        '[data-role="assistant"]',
+                        // Generic chat patterns
+                        '[class*="assistant"][class*="message"]',
+                        '[class*="response"][class*="content"]',
+                        '[class*="agent"][class*="message"]',
                     ];
 
-                    // 1) 특정 셀렉터로 마지막 응답 버블 찾기
                     for (var i = 0; i < selectors.length; i++) {
-                        var els = document.querySelectorAll(selectors[i]);
-                        if (els.length > 0) {
-                            var last = els[els.length - 1];
-                            var text = (last.innerText || last.textContent || '').trim();
-                            if (text.length > 0) {
-                                // 최대 4000자 (텔레그램 제한 고려)
-                                return text.length > 4000 ? text.substring(0, 4000) + '...' : text;
+                        try {
+                            var els = document.querySelectorAll(selectors[i]);
+                            if (els.length > 0) {
+                                var last = els[els.length - 1];
+                                var text = truncate(last.innerText || last.textContent);
+                                if (text && text.length > 10) return text;
                             }
-                        }
+                        } catch (e) { /* selector parse error — skip */ }
                     }
 
-                    // 2) 폴백: 모든 채팅 턴에서 마지막 assistant 턴 찾기
-                    var turns = document.querySelectorAll('.chat-turn, .conversation-turn, .message-group');
-                    if (turns.length > 0) {
-                        // 역순으로 탐색하여 마지막 assistant 턴 찾기
-                        for (var j = turns.length - 1; j >= 0; j--) {
-                            var turn = turns[j];
-                            var role = turn.getAttribute('data-role') || turn.className || '';
-                            if (role.indexOf('user') !== -1 || role.indexOf('human') !== -1) continue;
-                            var text = (turn.innerText || turn.textContent || '').trim();
-                            if (text.length > 20) {
-                                return text.length > 4000 ? text.substring(0, 4000) + '...' : text;
+                    // ── Strategy 2: Turn-based containers ──
+                    var turnSelectors = [
+                        '[class*="turn"]',
+                        '[class*="Turn"]',
+                        '.chat-turn',
+                        '.conversation-turn',
+                        '.message-group',
+                        '[class*="message-row"]',
+                        '[class*="chat-row"]',
+                    ];
+                    for (var t = 0; t < turnSelectors.length; t++) {
+                        try {
+                            var turns = document.querySelectorAll(turnSelectors[t]);
+                            if (turns.length > 1) {
+                                // 역순으로 user가 아닌 마지막 턴 찾기
+                                for (var j = turns.length - 1; j >= 0; j--) {
+                                    var turn = turns[j];
+                                    var attrs = (turn.getAttribute('data-role') || '') +
+                                                (turn.getAttribute('data-turn-role') || '') +
+                                                (turn.className || '');
+                                    var lower = attrs.toLowerCase();
+                                    if (lower.indexOf('user') !== -1 || lower.indexOf('human') !== -1) continue;
+                                    var text = truncate(turn.innerText || turn.textContent);
+                                    if (text && text.length > 30) return text;
+                                }
                             }
+                        } catch (e) { /* skip */ }
+                    }
+
+                    // ── Strategy 3: Broad heuristic — find large text blocks near chat input ──
+                    // Antigravity chat input uses .cursor-text[contenteditable]
+                    var chatInput = document.querySelector('.cursor-text[contenteditable]');
+                    if (chatInput) {
+                        // 채팅 입력창의 부모 컨테이너에서 큰 텍스트 블록들을 찾는다
+                        var container = chatInput;
+                        // 상위 5단계까지 올라감
+                        for (var up = 0; up < 8 && container.parentElement; up++) {
+                            container = container.parentElement;
+                        }
+                        // container 내에서 긴 텍스트를 가진 div들을 역순탐색
+                        var blocks = container.querySelectorAll('div, section, article');
+                        var candidates = [];
+                        for (var b = 0; b < blocks.length; b++) {
+                            var block = blocks[b];
+                            // 입력창 자체 또는 하위 입력 영역은 제외
+                            if (block.querySelector('.cursor-text[contenteditable]')) continue;
+                            if (block.getAttribute('contenteditable')) continue;
+                            var blockText = (block.innerText || '').trim();
+                            if (blockText.length > 50 && block.children.length > 0) {
+                                candidates.push({ el: block, len: blockText.length });
+                            }
+                        }
+                        // 가장 마지막에 위치한 충분히 큰 블록을 선택
+                        if (candidates.length > 0) {
+                            var last = candidates[candidates.length - 1];
+                            var text = truncate(last.el.innerText);
+                            if (text && text.length > 30) return text;
                         }
                     }
 
@@ -2859,7 +2917,7 @@ class RalphLoopManager {
 
             // busy → idle 전환 감지
             if (this._codeReviewWatcherLastBusy && !currentBusy) {
-                this._addLog('[Ralph] 👁 에이전트 대화 완료 감지 → 코드 리뷰 자동 실행');
+                this._addLog('[Ralph] 👁 에이전트 대화 완료 감지 → 코드 리뷰 준비');
                 this._codeReviewRunning = true;
                 this._codeReviewCancelled = false;
                 try {
@@ -2867,8 +2925,25 @@ class RalphLoopManager {
                     const lastResponse = await this._getLastAgentResponse();
                     const contextSummary = lastResponse
                         ? lastResponse.substring(0, 500)
-                        : '(대화 내용을 가져올 수 없음)';
-                    await this.runCodeReview(contextSummary, 0, { isFromWatcher: true });
+                        : null;
+
+                    // 변경 파일도 확인
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    let hasDiffChanges = false;
+                    if (workspaceFolders && workspaceFolders.length > 0) {
+                        this.gitManager._workspaceRoot = this.gitManager._workspaceRoot || workspaceFolders[0].uri.fsPath;
+                        const diff = this.gitManager.getUncommittedDiffSummary();
+                        hasDiffChanges = diff.hasChanges;
+                    }
+
+                    // 대화 내용과 변경 파일 모두 없으면 리뷰 스킵
+                    if (!contextSummary && !hasDiffChanges) {
+                        this._addLog('[Ralph] 👁 대화 내용 수집 불가 & 파일 변경 없음 → 코드 리뷰 스킵');
+                    } else {
+                        const reviewContext = contextSummary || '(대화 내용을 가져올 수 없음 — 파일 변경 기반 리뷰)';
+                        this._addLog('[Ralph] 👁 코드 리뷰 자동 실행');
+                        await this.runCodeReview(reviewContext, 0, { isFromWatcher: true });
+                    }
                 } catch (err) {
                     if (!this._codeReviewCancelled) {
                         this._addLog(`[Ralph] ❌ 코드 리뷰 워처 에러: ${err.message}`, 'error');
@@ -2903,8 +2978,13 @@ class RalphLoopManager {
     _buildCodeReviewPrompt(taskText, iteration, context = {}) {
         const { hasChanges = false, changedFiles = [], diffStat = '' } = context;
 
-        let prompt = `# 코드 리뷰 — Iteration ${iteration}\n\n`;
-        prompt += `## 이전 작업 내용\n${taskText}\n\n`;
+        let prompt = `당신은 코드 리뷰어입니다. 아래 내용을 기반으로 코드 리뷰를 수행해주세요.\n\n`;
+        prompt += `**중요 규칙:**\n`;
+        prompt += `- 파일 시스템을 탐색하거나 디렉토리를 조회하지 마세요.\n`;
+        prompt += `- 아래 제공된 정보만으로 리뷰를 작성하세요.\n`;
+        prompt += `- 새로운 대화로 시작되었으므로 이전 대화 컨텍스트는 없습니다.\n\n`;
+        prompt += `---\n\n`;
+        prompt += `## Iteration ${iteration} 작업 요약\n${taskText}\n\n`;
 
         if (hasChanges) {
             prompt += `## 변경된 파일 (${changedFiles.length}개)\n`;
@@ -2919,20 +2999,25 @@ class RalphLoopManager {
                 prompt += `## Git Diff 통계\n\`\`\`\n${diffStat}\n\`\`\`\n\n`;
             }
             prompt += `## 리뷰 요청\n`;
-            prompt += `위 작업에서 변경된 코드를 리뷰해주세요.\n`;
-            prompt += `최근 Git diff를 확인하여 변경 범위를 파악하세요.\n\n`;
+            prompt += `위 변경 파일들의 **Git diff** (\`git diff HEAD\`)를 확인하여 코드 변경 내역을 리뷰해주세요.\n\n`;
         } else {
             prompt += `## 리뷰 요청\n`;
             prompt += `파일 변경은 없었습니다.\n`;
-            prompt += `위 이전 대화 내용을 검토하여 에이전트 응답의 정확성과 유용성을 평가해주세요.\n\n`;
+            prompt += `위 작업 요약 내용을 기반으로 에이전트의 응답 품질을 평가해주세요.\n\n`;
         }
 
         prompt += `### 확인 사항\n`;
-        prompt += `1. **코드 품질**: 가독성, 명명 규칙, 코드 구조\n`;
-        prompt += `2. **버그 가능성**: null 참조, 경계 조건, 에러 핸들링\n`;
-        prompt += `3. **성능**: 불필요한 루프, 메모리 누수, 최적화 기회\n`;
-        prompt += `4. **보안**: 입력 검증, 인젝션 취약점\n`;
-        prompt += `5. **개선 제안**: 리팩터링 기회, 더 나은 패턴 제안\n\n`;
+        if (hasChanges) {
+            prompt += `1. **코드 품질**: 가독성, 명명 규칙, 코드 구조\n`;
+            prompt += `2. **버그 가능성**: null 참조, 경계 조건, 에러 핸들링\n`;
+            prompt += `3. **성능**: 불필요한 루프, 메모리 누수, 최적화 기회\n`;
+            prompt += `4. **보안**: 입력 검증, 인젝션 취약점\n`;
+            prompt += `5. **개선 제안**: 리팩터링 기회, 더 나은 패턴 제안\n\n`;
+        } else {
+            prompt += `1. **응답 정확성**: 에이전트의 답변이 정확한지\n`;
+            prompt += `2. **유용성**: 실용적이고 도움이 되는 응답인지\n`;
+            prompt += `3. **완전성**: 요청에 대해 빠진 부분은 없는지\n\n`;
+        }
         prompt += `리뷰 결과를 구체적이고 실행 가능한 피드백으로 제공해주세요.\n`;
         prompt += `심각한 문제가 있으면 ⚠ 아이콘으로 표시하고, 경미한 제안은 💡로 표시해주세요.\n`;
 
