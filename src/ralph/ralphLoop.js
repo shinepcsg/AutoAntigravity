@@ -2620,6 +2620,13 @@ class RalphLoopManager {
             const selectResult = await this._cdpEvaluateOnTarget(targetWsUrl, `
                 (function() {
                     var keyword = ${JSON.stringify(keyword)};
+                    var keywords = keyword.split(' ').filter(Boolean);
+                    function matchKeys(txt) {
+                        for(var w=0; w<keywords.length; w++) {
+                            if(!txt.includes(keywords[w])) return false;
+                        }
+                        return true;
+                    }
                     // Search in dropdown/listbox options
                     var optionSelectors = [
                         '[role="option"]',
@@ -2635,7 +2642,7 @@ class RalphLoopManager {
                         for (var j = 0; j < opts.length; j++) {
                             var opt = opts[j];
                             var text = (opt.textContent || '').trim().toLowerCase();
-                            if (text.includes(keyword)) {
+                            if (matchKeys(text)) {
                                 opt.click();
                                 return JSON.stringify({ selected: true, model: opt.textContent.trim(), selector: optionSelectors[i] });
                             }
@@ -2649,7 +2656,7 @@ class RalphLoopManager {
                         if (rect.width === 0 || rect.height === 0) continue;
                         var t = (el.textContent || '').trim().toLowerCase();
                         // Match only direct text nodes (avoid parent elements with aggregate text)
-                        if (el.children.length <= 2 && t.includes(keyword) && t.length < 80) {
+                        if (el.children.length <= 2 && matchKeys(t) && t.length < 80) {
                             el.click();
                             return JSON.stringify({ selected: true, model: el.textContent.trim(), selector: 'broad-scan' });
                         }
@@ -2856,7 +2863,11 @@ class RalphLoopManager {
         if (name.includes('opus')) return 'opus';
         if (name.includes('sonnet')) return 'sonnet';
         if (name.includes('flash')) return 'flash';
-        if (name.includes('gemini') && name.includes('pro')) return 'gemini pro';
+        if (name.includes('gemini') && name.includes('pro')) {
+            if (name.includes('high')) return 'gemini pro high';
+            if (name.includes('low')) return 'gemini pro low';
+            return 'gemini pro';
+        }
         if (name.includes('gemini')) return 'gemini';
         if (name.includes('claude')) return 'claude';
         // Return first two words as keyword
