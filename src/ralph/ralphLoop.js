@@ -339,7 +339,22 @@ class RalphLoopManager {
      * Stop the Ralph Loop gracefully
      */
     async stop() {
-        if (this.state === LoopState.IDLE) return;
+        if (this.state === LoopState.IDLE && !this._codeReviewRunning) return;
+
+        // ── 코드 리뷰 실행 중이면 취소 ──
+        if (this._codeReviewRunning) {
+            this._codeReviewCancelled = true;
+            this._addLog('[Ralph] ⏹ 코드 리뷰 취소 요청');
+        }
+
+        // ── 코드 리뷰 워처 중지 (재시작 방지) ──
+        this._stopCodeReviewWatcher();
+
+        if (this.state === LoopState.IDLE) {
+            // IDLE이지만 코드 리뷰만 실행 중인 경우 — 루프 정지 로직 불필요
+            this._addLog('[Ralph] ⏹ 코드 리뷰 취소 처리 완료');
+            return;
+        }
 
         this._sessionLock.release();
         this.state = LoopState.STOPPING;
@@ -1818,9 +1833,13 @@ class RalphLoopManager {
         let previousReason = null; // 이전 폴링의 reason 추적
 
         while (elapsed < MAX_WAIT_MS) {
-            // 루프 상태 확인
-            if (this.state !== LoopState.RUNNING) {
+            // 루프 상태 확인 (코드 리뷰 취소 포함)
+            if (this.state !== LoopState.RUNNING && this.state !== LoopState.IDLE) {
                 this._addLog('[Ralph] ⚠ 루프 상태 변경 — 대기 취소');
+                return;
+            }
+            if (this._codeReviewCancelled) {
+                this._addLog('[Ralph] ⚠ 코드 리뷰 취소됨 — 대기 중단');
                 return;
             }
 
@@ -2824,6 +2843,8 @@ class RalphLoopManager {
         if (this.state !== LoopState.IDLE) return;
         // 이미 코드 리뷰 실행 중이면 중복 방지
         if (this._codeReviewRunning) return;
+        // 취소됐으면 무시
+        if (this._codeReviewCancelled) return;
 
         try {
             const mainTarget = await this._findMainTarget(false);
@@ -2840,12 +2861,21 @@ class RalphLoopManager {
             if (this._codeReviewWatcherLastBusy && !currentBusy) {
                 this._addLog('[Ralph] 👁 에이전트 대화 완료 감지 → 코드 리뷰 자동 실행');
                 this._codeReviewRunning = true;
+                this._codeReviewCancelled = false;
                 try {
-                    await this.runCodeReview('기본 대화 작업', 0);
+                    // 이전 대화의 에이전트 응답을 컨텍스트로 가져옴
+                    const lastResponse = await this._getLastAgentResponse();
+                    const contextSummary = lastResponse
+                        ? lastResponse.substring(0, 500)
+                        : '(대화 내용을 가져올 수 없음)';
+                    await this.runCodeReview(contextSummary, 0, { isFromWatcher: true });
                 } catch (err) {
-                    this._addLog(`[Ralph] ❌ 코드 리뷰 워처 에러: ${err.message}`, 'error');
+                    if (!this._codeReviewCancelled) {
+                        this._addLog(`[Ralph] ❌ 코드 리뷰 워처 에러: ${err.message}`, 'error');
+                    }
                 } finally {
                     this._codeReviewRunning = false;
+                    this._codeReviewCancelled = false;
                     // 리뷰 자체의 busy→idle 전환이 다시 트리거되지 않도록 리셋
                     this._codeReviewWatcherLastBusy = false;
                 }
@@ -2861,27 +2891,48 @@ class RalphLoopManager {
     // ─── Code Review (코드 리뷰) ──────────────────────────────────────
 
     /**
-     * Build a code review prompt for the completed task.
-     * @param {string} taskText - The completed task text
+     * Build a code review prompt.
+     * 항상 이전 대화 내용(또는 작업 내용)을 기반으로 리뷰 프롬프트를 생성한다.
+     * 변경된 파일이 있으면 파일 목록과 diff 통계도 포함.
+     *
+     * @param {string} taskText - 이전 대화 요약 또는 완료된 작업 설명
      * @param {number} iteration - Current iteration number
+     * @param {{ hasChanges?: boolean, changedFiles?: string[], diffStat?: string }} [context]
      * @returns {string} Code review prompt
      */
-    _buildCodeReviewPrompt(taskText, iteration) {
-        const taskFilePath = this.taskManager.getTaskFile();
+    _buildCodeReviewPrompt(taskText, iteration, context = {}) {
+        const { hasChanges = false, changedFiles = [], diffStat = '' } = context;
 
         let prompt = `# 코드 리뷰 — Iteration ${iteration}\n\n`;
-        prompt += `## 완료된 작업\n${taskText}\n\n`;
-        prompt += `## 리뷰 요청\n`;
-        prompt += `위 작업으로 변경된 코드를 리뷰해주세요.\n\n`;
+        prompt += `## 이전 작업 내용\n${taskText}\n\n`;
+
+        if (hasChanges) {
+            prompt += `## 변경된 파일 (${changedFiles.length}개)\n`;
+            for (const f of changedFiles.slice(0, 20)) {
+                prompt += `- \`${f}\`\n`;
+            }
+            if (changedFiles.length > 20) {
+                prompt += `- ... 외 ${changedFiles.length - 20}개\n`;
+            }
+            prompt += `\n`;
+            if (diffStat) {
+                prompt += `## Git Diff 통계\n\`\`\`\n${diffStat}\n\`\`\`\n\n`;
+            }
+            prompt += `## 리뷰 요청\n`;
+            prompt += `위 작업에서 변경된 코드를 리뷰해주세요.\n`;
+            prompt += `최근 Git diff를 확인하여 변경 범위를 파악하세요.\n\n`;
+        } else {
+            prompt += `## 리뷰 요청\n`;
+            prompt += `파일 변경은 없었습니다.\n`;
+            prompt += `위 이전 대화 내용을 검토하여 에이전트 응답의 정확성과 유용성을 평가해주세요.\n\n`;
+        }
+
         prompt += `### 확인 사항\n`;
         prompt += `1. **코드 품질**: 가독성, 명명 규칙, 코드 구조\n`;
         prompt += `2. **버그 가능성**: null 참조, 경계 조건, 에러 핸들링\n`;
         prompt += `3. **성능**: 불필요한 루프, 메모리 누수, 최적화 기회\n`;
         prompt += `4. **보안**: 입력 검증, 인젝션 취약점\n`;
         prompt += `5. **개선 제안**: 리팩터링 기회, 더 나은 패턴 제안\n\n`;
-        prompt += `### 참고 파일\n`;
-        prompt += `- 작업 파일: \`${taskFilePath}\`\n`;
-        prompt += `- 최근 Git diff를 확인하여 변경 범위를 파악하세요\n\n`;
         prompt += `리뷰 결과를 구체적이고 실행 가능한 피드백으로 제공해주세요.\n`;
         prompt += `심각한 문제가 있으면 ⚠ 아이콘으로 표시하고, 경미한 제안은 💡로 표시해주세요.\n`;
 
@@ -2970,14 +3021,42 @@ class RalphLoopManager {
     /**
      * Run code review stage using Gemini Flash model.
      * Can be called independently (from sidebar) or from Ralph Loop.
-     * @param {string} taskText - The task that was completed
+     *
+     * 항상 이전 대화 내용을 기반으로 리뷰를 수행한다.
+     * 변경된 파일이 있으면 diff 정보도 포함.
+     * 취소 시(_codeReviewCancelled) 즉시 중단하고 원래 모델로 복원.
+     *
+     * @param {string} taskText - The task that was completed (or conversation summary for watcher)
      * @param {number} [iteration=0] - Current iteration number
+     * @param {{ isFromWatcher?: boolean }} [options] - Additional options
      * @returns {Promise<void>}
      */
-    async runCodeReview(taskText, iteration = 0) {
+    async runCodeReview(taskText, iteration = 0, options = {}) {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
+        const { isFromWatcher = false } = options;
 
         this._addLog('[Ralph] 📝 ═══ 코드 리뷰 시작 ═══');
+
+        // 0. Git 변경사항 사전 확인
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        let diffSummary = { hasChanges: false, changedFiles: [], diffStat: '' };
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            this.gitManager._workspaceRoot = this.gitManager._workspaceRoot || workspaceFolders[0].uri.fsPath;
+            diffSummary = this.gitManager.getUncommittedDiffSummary();
+        }
+
+        if (diffSummary.hasChanges) {
+            this._addLog(`[Ralph] 📊 변경 파일 ${diffSummary.changedFiles.length}개 감지`);
+        } else {
+            this._addLog('[Ralph] 📊 변경된 파일 없음 — 이전 대화 내용 기반으로 리뷰 진행');
+        }
+
+        // 취소 확인
+        if (this._codeReviewCancelled) {
+            this._addLog('[Ralph] ⚠ 코드 리뷰 취소됨');
+            this._addLog('[Ralph] 📝 ═══ 코드 리뷰 완료 (취소) ═══');
+            return;
+        }
 
         // 1. Get current model (to restore later)
         const originalModel = await this._getCurrentModel();
@@ -2992,28 +3071,52 @@ class RalphLoopManager {
 
         await delay(1000);
 
-        // 3. Build and send code review prompt
-        const prompt = this._buildCodeReviewPrompt(taskText, iteration);
-        this._addLog('[Ralph] 📤 코드 리뷰 프롬프트 전송 중...');
-        await this._sendToAgent(prompt);
-        this._addLog('[Ralph] ✅ 코드 리뷰 프롬프트 전송 완료');
-
-        // 4. Wait for agent to complete
-        this._addLog('[Ralph] ⏳ 코드 리뷰 에이전트 작업 완료 대기...');
-        await this._waitForAgentCompletion();
-        this._addLog('[Ralph] ✅ 코드 리뷰 에이전트 작업 완료');
-
-        // 5. Restore original model
-        if (originalModel && switched) {
-            const restoreKeyword = this._extractModelKeyword(originalModel);
-            if (restoreKeyword) {
-                this._addLog(`[Ralph] 🔄 원래 모델로 복원: ${restoreKeyword}`);
-                await this._switchModel(restoreKeyword);
-                await delay(500);
+        try {
+            // 취소 확인
+            if (this._codeReviewCancelled) {
+                this._addLog('[Ralph] ⚠ 코드 리뷰 취소됨');
+                return;
             }
-        }
 
-        this._addLog('[Ralph] 📝 ═══ 코드 리뷰 완료 ═══');
+            // 3. Build and send code review prompt
+            const promptContext = {
+                hasChanges: diffSummary.hasChanges,
+                changedFiles: diffSummary.changedFiles,
+                diffStat: diffSummary.diffStat,
+            };
+            const prompt = this._buildCodeReviewPrompt(taskText, iteration, promptContext);
+            this._addLog('[Ralph] 📤 코드 리뷰 프롬프트 전송 중...');
+            await this._sendToAgent(prompt);
+            this._addLog('[Ralph] ✅ 코드 리뷰 프롬프트 전송 완료');
+
+            // 취소 확인
+            if (this._codeReviewCancelled) {
+                this._addLog('[Ralph] ⚠ 코드 리뷰 취소됨 — 에이전트 응답 대기 건너뜀');
+                return;
+            }
+
+            // 4. Wait for agent to complete
+            this._addLog('[Ralph] ⏳ 코드 리뷰 에이전트 작업 완료 대기...');
+            await this._waitForAgentCompletion();
+            this._addLog('[Ralph] ✅ 코드 리뷰 에이전트 작업 완료');
+
+        } finally {
+            // 5. 항상 원래 모델로 복원 (취소/에러 시에도)
+            if (originalModel && switched) {
+                const restoreKeyword = this._extractModelKeyword(originalModel);
+                if (restoreKeyword) {
+                    this._addLog(`[Ralph] 🔄 원래 모델로 복원: ${restoreKeyword}`);
+                    try {
+                        await this._switchModel(restoreKeyword);
+                        await delay(500);
+                    } catch (e) {
+                        this._addLog(`[Ralph] ⚠ 모델 복원 실패: ${e.message}`, 'warn');
+                    }
+                }
+            }
+
+            this._addLog('[Ralph] 📝 ═══ 코드 리뷰 완료 ═══');
+        }
     }
 }
 

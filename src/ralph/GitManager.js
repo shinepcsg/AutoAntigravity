@@ -892,6 +892,44 @@ class GitManager {
     }
 
     /**
+     * Get a summary of uncommitted changes (staged + unstaged).
+     * Used by code review to determine if there are any code changes to review.
+     *
+     * @returns {{ hasChanges: boolean, changedFiles: string[], diffStat: string }}
+     */
+    getUncommittedDiffSummary() {
+        if (!this._workspaceRoot || !this.isGitRepo()) {
+            return { hasChanges: false, changedFiles: [], diffStat: '' };
+        }
+
+        try {
+            const status = this._execGit(['status', '--porcelain']);
+            if (!status || !status.trim()) {
+                return { hasChanges: false, changedFiles: [], diffStat: '' };
+            }
+
+            const changedFiles = status.trim().split('\n')
+                .map(line => line.substring(3).trim())
+                .filter(f => f.length > 0);
+
+            let diffStat = '';
+            try {
+                diffStat = this._execGit(['diff', '--stat', 'HEAD']);
+            } catch {
+                // HEAD가 없는 경우 (첫 커밋 전) 등
+                try {
+                    diffStat = this._execGit(['diff', '--stat']);
+                } catch { /* ignore */ }
+            }
+
+            return { hasChanges: changedFiles.length > 0, changedFiles, diffStat };
+        } catch (e) {
+            this.log(`[Git] ⚠ diff 조회 실패: ${e.message}`);
+            return { hasChanges: false, changedFiles: [], diffStat: '' };
+        }
+    }
+
+    /**
      * Get current session info for UI display
      * @returns {{ active: boolean, originalBranch?: string, workBranch?: string }}
      */
