@@ -1,0 +1,101 @@
+name: Release VSIX
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    # [skip ci] 커밋은 무시 (무한 루프 방지)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: macos-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Git
+        run: |
+          git config user.name "CI Bot"
+          git config user.email "ci@trollgames.co.kr"
+
+      - name: Bump patch version
+        id: version
+        run: |
+          NEW_VERSION=$(npm version patch --no-git-tag-version)
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Bumped to ${NEW_VERSION}"
+
+      - name: Commit version bump
+        run: |
+          git add package.json
+          git commit -m "chore: bump to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin master --tags
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package VSIX
+        run: vsce package --no-dependencies --allow-star-activation --baseContentUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master" --baseImagesUrl "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/raw/branch/master"
+
+      - name: Find VSIX file
+        id: pkg
+        run: |
+          VSIX_FILE=$(ls -1 *.vsix | head -1)
+          VERSION=$(node -p "require('./package.json').version")
+          echo "vsix_file=${VSIX_FILE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Found VSIX: ${VSIX_FILE}"
+
+      - name: Create Release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG_NAME: ${{ steps.version.outputs.new_version }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          GITEA_URL="http://office.trollgames.co.kr:3000"
+          REPO="trollgames/AutoAntigravity"
+
+          curl -s -X POST \
+            "${GITEA_URL}/api/v1/repos/${REPO}/releases" \
+            -H "Authorization: token ${RELEASE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"${TAG_NAME}\",
+              \"name\": \"Release ${TAG_NAME}\",
+              \"body\": \"## AutoAntigravity ${VERSION}\n\n### 설치 방법\n1. 아래 .vsix 파일을 다운로드합니다.\n2. VS Code에서 Extensions: Install from VSIX... 명령을 실행합니다.\n3. 다운로드한 .vsix 파일을 선택하여 설치합니다.\",
+              \"draft\": false,
+              \"prerelease\": false
+            }" -o release_response.json
+
+          cat release_response.json
+
+      - name: Upload VSIX to Release
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          VSIX_FILE: ${{ steps.pkg.outputs.vsix_file }}
+        run: |
+          GITEA_URL="http://office.trollgames.co.kr:3000"
+          REPO="trollgames/AutoAntigravity"
+
+          RELEASE_ID=$(python3 -c "import json; print(json.load(open('release_response.json'))['id'])")
+          echo "Release ID: ${RELEASE_ID}"
+          echo "Uploading: ${VSIX_FILE}"
+
+          curl -v -X POST \
+            "${GITEA_URL}/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${VSIX_FILE}" \
+            -H "Authorization: token ${RELEASE_TOKEN}" \
+            -F "attachment=@./${VSIX_FILE};type=application/octet-stream"
+
+          echo "✅ Done!"
