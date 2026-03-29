@@ -74,6 +74,11 @@ class RalphLoopManager {
 
         // Quota 일시정지 자동 재개 타이머
         this._quotaResumeTimer = null;
+
+        // 코드 리뷰 워처 — 기본 대화에서도 에이전트 완료 감지 후 자동 리뷰
+        this._codeReviewWatcherTimer = null;
+        this._codeReviewWatcherLastBusy = false; // 이전 폴링 상태
+        this._codeReviewRunning = false; // 리뷰 실행 중 중복 방지
     }
 
     /**
@@ -249,6 +254,7 @@ class RalphLoopManager {
         }
 
         this.state = LoopState.RUNNING;
+        this._stopCodeReviewWatcher(); // 루프 시작 시 워처 중지 (루프 내 리뷰와 중복 방지)
         this.consecutiveErrors = 0;
         this.lastError = null;
         this.progressTracker.initializeProgressFile();
@@ -359,6 +365,7 @@ class RalphLoopManager {
         this._endGitSession();
 
         this.state = LoopState.IDLE;
+        this._startCodeReviewWatcherIfEnabled(); // 루프 정지 후 워처 재시작
         vscode.window.showInformationMessage('⏹ Ralph Loop stopped.');
         this._addLog('[Ralph] ⏹ 루프가 정지되었습니다.');
         this._notifyStateChange();
@@ -370,6 +377,7 @@ class RalphLoopManager {
      */
     dispose() {
         this.disableAutoStart();
+        this._stopCodeReviewWatcher();
         this.stop().catch(() => {});
     }
 
@@ -1128,6 +1136,7 @@ class RalphLoopManager {
             vscode.window.showInformationMessage(msg);
             this._endGitSession();
             this.state = LoopState.IDLE;
+            this._startCodeReviewWatcherIfEnabled();
             this._notifyStateChange();
             return;
         }
@@ -1139,6 +1148,7 @@ class RalphLoopManager {
             vscode.window.showErrorMessage(`Ralph Loop: ${msg}\n마지막 에러: ${this.lastError}`);
             this._endGitSession();
             this.state = LoopState.IDLE;
+            this._startCodeReviewWatcherIfEnabled();
             this._notifyStateChange();
             return;
         }
@@ -1174,6 +1184,7 @@ class RalphLoopManager {
 
             vscode.window.showInformationMessage('🎉 Ralph Loop: All tasks completed!');
             this.state = LoopState.IDLE;
+            this._startCodeReviewWatcherIfEnabled();
             this._notifyStateChange();
             return;
         }
@@ -2762,6 +2773,91 @@ class RalphLoopManager {
         return words || null;
     }
 
+    // ─── Code Review Watcher (기본 대화 코드 리뷰 워처) ─────────────────
+
+    /**
+     * enableCodeReview 설정이 켜져 있고 Ralph Loop가 IDLE이면 워처 시작.
+     * 에이전트가 busy → idle 전환 시 자동으로 코드 리뷰를 실행한다.
+     */
+    _startCodeReviewWatcherIfEnabled() {
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+        const enabled = config.get('ralphLoop.enableCodeReview', false);
+        if (enabled && this.state === LoopState.IDLE) {
+            this._startCodeReviewWatcher();
+        } else {
+            this._stopCodeReviewWatcher();
+        }
+    }
+
+    /**
+     * CDP 폴링 기반 코드 리뷰 워처 시작.
+     * 3초 간격으로 에이전트 busy 상태를 폴링하여 busy→idle 전환 시 리뷰 실행.
+     */
+    _startCodeReviewWatcher() {
+        this._stopCodeReviewWatcher(); // 기존 워처 정리
+
+        this._codeReviewWatcherLastBusy = false;
+        this._addLog('[Ralph] 👁 코드 리뷰 워처 시작 (기본 대화 감시)');
+
+        this._codeReviewWatcherTimer = setInterval(async () => {
+            await this._pollCodeReviewWatcher();
+        }, 3000);
+    }
+
+    /**
+     * 코드 리뷰 워처 중지.
+     */
+    _stopCodeReviewWatcher() {
+        if (this._codeReviewWatcherTimer) {
+            clearInterval(this._codeReviewWatcherTimer);
+            this._codeReviewWatcherTimer = null;
+            this._addLog('[Ralph] 👁 코드 리뷰 워처 중지');
+        }
+    }
+
+    /**
+     * 코드 리뷰 워처 폴링 1회 실행.
+     * busy→idle 전환 감지 시 runCodeReview() 호출.
+     */
+    async _pollCodeReviewWatcher() {
+        // Ralph Loop가 실행 중이면 무시 (루프 내 리뷰가 처리)
+        if (this.state !== LoopState.IDLE) return;
+        // 이미 코드 리뷰 실행 중이면 중복 방지
+        if (this._codeReviewRunning) return;
+
+        try {
+            const mainTarget = await this._findMainTarget(false);
+            if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
+                // CDP 타겟을 못 찾으면 상태 리셋
+                this._codeReviewWatcherLastBusy = false;
+                return;
+            }
+
+            const status = await this._isAgentBusy(mainTarget.webSocketDebuggerUrl);
+            const currentBusy = !!status.busy;
+
+            // busy → idle 전환 감지
+            if (this._codeReviewWatcherLastBusy && !currentBusy) {
+                this._addLog('[Ralph] 👁 에이전트 대화 완료 감지 → 코드 리뷰 자동 실행');
+                this._codeReviewRunning = true;
+                try {
+                    await this.runCodeReview('기본 대화 작업', 0);
+                } catch (err) {
+                    this._addLog(`[Ralph] ❌ 코드 리뷰 워처 에러: ${err.message}`, 'error');
+                } finally {
+                    this._codeReviewRunning = false;
+                    // 리뷰 자체의 busy→idle 전환이 다시 트리거되지 않도록 리셋
+                    this._codeReviewWatcherLastBusy = false;
+                }
+            }
+
+            this._codeReviewWatcherLastBusy = currentBusy;
+        } catch (e) {
+            // CDP 연결 실패 등 — 조용히 무시
+            this._codeReviewWatcherLastBusy = false;
+        }
+    }
+
     // ─── Code Review (코드 리뷰) ──────────────────────────────────────
 
     /**
@@ -2804,63 +2900,71 @@ class RalphLoopManager {
     async runStandaloneTask(taskText) {
         const config = vscode.workspace.getConfiguration('autoAntigravity');
 
+        // 워처 임시 중지 (독립 작업 중 중복 리뷰 방지)
+        this._stopCodeReviewWatcher();
+
         this._addLog(`[Ralph] 🚀 ═══ 독립 작업 시작 ═══`);
         this._addLog(`[Ralph] 📋 작업: ${taskText.substring(0, 100)}`);
 
-        // 1. Send /write-prd prompt
-        const prompt = `/write-prd ${taskText}`;
-        this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
-        await this._sendToAgent(prompt);
-        this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
+        try {
+            // 1. Send /write-prd prompt
+            const prompt = `/write-prd ${taskText}`;
+            this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
+            await this._sendToAgent(prompt);
+            this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
 
-        // 2. Wait for agent completion
-        this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기...');
-        await this._waitForAgentCompletion();
-        this._addLog('[Ralph] ✅ 에이전트 작업 완료');
+            // 2. Wait for agent completion
+            this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기...');
+            await this._waitForAgentCompletion();
+            this._addLog('[Ralph] ✅ 에이전트 작업 완료');
 
-        // 3. Verification (if enabled)
-        const enableVerification = config.get('ralphLoop.enableVerification', false);
-        if (enableVerification) {
-            const maxRetries = config.get('ralphLoop.maxVerificationRetries', 2);
-            let retryCount = 0;
-            let failReason = null;
-            let verificationPassed = false;
+            // 3. Verification (if enabled)
+            const enableVerification = config.get('ralphLoop.enableVerification', false);
+            if (enableVerification) {
+                const maxRetries = config.get('ralphLoop.maxVerificationRetries', 2);
+                let retryCount = 0;
+                let failReason = null;
+                let verificationPassed = false;
 
-            while (retryCount <= maxRetries && !verificationPassed) {
-                const vResult = await this.runVerification(taskText, 0, failReason);
+                while (retryCount <= maxRetries && !verificationPassed) {
+                    const vResult = await this.runVerification(taskText, 0, failReason);
 
-                if (vResult.pass) {
-                    verificationPassed = true;
-                    this._addLog(`[Ralph] ✅ 작업 판단 통과 (시도 ${retryCount + 1}/${maxRetries + 1})`);
-                } else {
-                    retryCount++;
-                    failReason = vResult.reason;
-
-                    if (retryCount > maxRetries) {
-                        this._addLog(`[Ralph] ⚠ 판단 실패 — 최대 재시도 횟수(${maxRetries}) 초과. 작업을 PASS로 간주합니다.`, 'warn');
+                    if (vResult.pass) {
                         verificationPassed = true;
+                        this._addLog(`[Ralph] ✅ 작업 판단 통과 (시도 ${retryCount + 1}/${maxRetries + 1})`);
                     } else {
-                        this._addLog(`[Ralph] 🔄 판단 실패 → 구현 재시도 (${retryCount}/${maxRetries})`, 'warn');
+                        retryCount++;
+                        failReason = vResult.reason;
 
-                        const failContext = `이전 작업 "${taskText}"이(가) 다음 이유로 검증에 실패했습니다:\n> ${failReason}\n\n위 문제를 수정하여 작업을 다시 완료해주세요.`;
+                        if (retryCount > maxRetries) {
+                            this._addLog(`[Ralph] ⚠ 판단 실패 — 최대 재시도 횟수(${maxRetries}) 초과. 작업을 PASS로 간주합니다.`, 'warn');
+                            verificationPassed = true;
+                        } else {
+                            this._addLog(`[Ralph] 🔄 판단 실패 → 구현 재시도 (${retryCount}/${maxRetries})`, 'warn');
 
-                        this._addLog('[Ralph] 📤 수정 프롬프트 전송 중...');
-                        await this._sendToAgent(failContext);
-                        this._addLog('[Ralph] ⏳ 수정 작업 완료 대기 중...');
-                        await this._waitForAgentCompletion();
-                        this._addLog('[Ralph] ✅ 수정 작업 완료');
+                            const failContext = `이전 작업 "${taskText}"이(가) 다음 이유로 검증에 실패했습니다:\n> ${failReason}\n\n위 문제를 수정하여 작업을 다시 완료해주세요.`;
+
+                            this._addLog('[Ralph] 📤 수정 프롬프트 전송 중...');
+                            await this._sendToAgent(failContext);
+                            this._addLog('[Ralph] ⏳ 수정 작업 완료 대기 중...');
+                            await this._waitForAgentCompletion();
+                            this._addLog('[Ralph] ✅ 수정 작업 완료');
+                        }
                     }
                 }
             }
-        }
 
-        // 4. Code Review (if enabled)
-        const enableCodeReview = config.get('ralphLoop.enableCodeReview', false);
-        if (enableCodeReview) {
-            await this.runCodeReview(taskText, 0);
-        }
+            // 4. Code Review (if enabled)
+            const enableCodeReview = config.get('ralphLoop.enableCodeReview', false);
+            if (enableCodeReview) {
+                await this.runCodeReview(taskText, 0);
+            }
 
-        this._addLog(`[Ralph] 🚀 ═══ 독립 작업 완료 ═══`);
+            this._addLog(`[Ralph] 🚀 ═══ 독립 작업 완료 ═══`);
+        } finally {
+            // 워처 재시작
+            this._startCodeReviewWatcherIfEnabled();
+        }
     }
 
     /**

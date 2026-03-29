@@ -610,6 +610,9 @@ function activate(context) {
         updateRalphStatusBar();
     };
 
+    // ─── Code Review Watcher 초기 시작 (설정이 켜져 있으면) ───────────
+    ralphLoop._startCodeReviewWatcherIfEnabled();
+
     // ─── 전체 작업 완료 시: 사이드바 큐 처리 + 텔레그램 알림 ──────────
     ralphLoop.onAllTasksCompleteCallback = async (sessionLabel, tasks, totalIterations) => {
         // 1) 텔레그램 알림 (연결 시)
@@ -690,7 +693,7 @@ function activate(context) {
         ralphLoop.enableAutoStart();
     }
 
-    // 설정 변경 시 동적으로 autoStart ON/OFF
+    // 설정 변경 시 동적으로 autoStart ON/OFF, Code Review Watcher ON/OFF
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('autoAntigravity.ralphLoop.autoStart')) {
@@ -702,6 +705,13 @@ function activate(context) {
                     ralphLoop.disableAutoStart();
                 }
                 log(`Auto Start ${enabled ? 'enabled' : 'disabled'}`);
+            }
+            // 코드 리뷰 설정 변경 시 워처 동적 관리
+            if (e.affectsConfiguration('autoAntigravity.ralphLoop.enableCodeReview')) {
+                ralphLoop._startCodeReviewWatcherIfEnabled();
+                const enabled = vscode.workspace.getConfiguration('autoAntigravity')
+                    .get('ralphLoop.enableCodeReview', false);
+                log(`Code Review Watcher ${enabled ? 'enabled' : 'disabled'}`);
             }
         })
     );
