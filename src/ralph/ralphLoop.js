@@ -1727,8 +1727,22 @@ class RalphLoopManager {
      * @returns {Promise<string|null>} 마지막 에이전트 응답 텍스트, 없으면 null
      */
     async _getLastAgentResponse() {
-        const wsUrl = this._lastAgentTargetWsUrl;
-        if (!wsUrl) return null;
+        let wsUrl = this._lastAgentTargetWsUrl;
+        if (!wsUrl) {
+            // _lastAgentTargetWsUrl이 없는 경우 (사용자가 직접 채팅한 대화 등)
+            // _findMainTarget으로 CDP 타겟을 동적으로 찾아서 사용
+            try {
+                const target = await this._findMainTarget(false);
+                if (target && target.webSocketDebuggerUrl) {
+                    wsUrl = target.webSocketDebuggerUrl;
+                } else {
+                    return null;
+                }
+            } catch (e) {
+                this._addLog(`[Ralph] ⚠ _getLastAgentResponse: CDP 타겟 없음 — ${e.message}`, 'warn');
+                return null;
+            }
+        }
 
         try {
             const result = await this._cdpEvaluateOnTarget(wsUrl, `
