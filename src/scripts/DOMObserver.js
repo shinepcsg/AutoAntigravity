@@ -93,13 +93,13 @@ function buildDOMObserverScript(customTexts) {
                     text === 'expand' || text === 'requires input') {
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
-                        return null;
+                        continue;
                     }
                     var btnKey = _domPath(clickable) + ':' + (clickable.textContent || '').trim().toLowerCase().substring(0, 30);
                     var cooldown = (text === 'expand' || text === 'requires input') ? EXPAND_COOLDOWN_MS : COOLDOWN_MS;
                     var lastClick = clickCooldowns[btnKey] || 0;
                     if (lastClick && (Date.now() - lastClick < cooldown)) {
-                        return null;
+                        continue;
                     }
                     return clickable;
                 }
