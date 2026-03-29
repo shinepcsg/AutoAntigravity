@@ -3,6 +3,7 @@
 // Uses CDP (Chrome DevTools Protocol) to inject prompts into Antigravity chat
 
 const vscode = require('vscode');
+const { CdpClient } = require('./CdpClient');
 const http = require('http');
 const path = require('path');
 const { TaskFileManager } = require('./TaskFileManager');
@@ -35,6 +36,7 @@ class RalphLoopManager {
         this._parallelRunner = null; // initialized lazily
 
         this.state = LoopState.IDLE;
+        this.cdpClient = new CdpClient((msg, level) => this._addLog(msg, level));
         this.currentIteration = 0;
         this.loopTimer = null;
         this.onStateChange = null; // callback for UI updates
@@ -57,7 +59,7 @@ class RalphLoopManager {
 
         // CDP 관련
         this._connectionManager = null; // shared from AutoAccept
-        this._lastAgentTargetWsUrl = null; // 마지막으로 프롬프트를 보낸 타겟의 WS URL
+        this.cdpClient.setLastAgentTargetWsUrl(null); // 마지막으로 프롬프트를 보낸 타겟의 WS URL
 
         // ExtensionContext — workspaceState 영속 저장용 (워크스페이스별)
         this._context = null;
@@ -358,7 +360,7 @@ class RalphLoopManager {
 
         this._sessionLock.release();
         this.state = LoopState.STOPPING;
-        await this._cancelAllActiveConversations();
+        await this.cdpClient.cancelAllActiveConversations();
         this._addLog('[Ralph] ⏹ 루프 정지 요청 — 현재 반복 마무리 중...');
         this._notifyStateChange();
 
@@ -615,527 +617,6 @@ class RalphLoopManager {
     }
 
     // ─── CDP Helpers ──────────────────────────────────────────────────
-
-    /**
-     * Get configured CDP port
-     */
-    _getCdpPort() {
-        return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9559);
-    }
-
-    /**
-     * Ping a port to check if CDP is running
-     */
-    _pingPort(port) {
-        return new Promise((resolve) => {
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version', timeout: 800 }, (res) => {
-                res.on('data', () => { });
-                res.on('end', () => resolve(true));
-            });
-            req.on('error', () => resolve(false));
-            req.on('timeout', () => { req.destroy(); resolve(false); });
-        });
-    }
-
-    /**
-     * Find the actual CDP port, scanning nearby ports if the configured one doesn't respond.
-     * Caches the discovered port to avoid repeated scans.
-     * @returns {Promise<number|null>}
-     */
-    async _findActiveCdpPort() {
-        // Return cached port if still alive
-        if (this._discoveredCdpPort && await this._pingPort(this._discoveredCdpPort)) {
-            return this._discoveredCdpPort;
-        }
-
-        const configPort = this._getCdpPort();
-        if (await this._pingPort(configPort)) {
-            this._discoveredCdpPort = configPort;
-            return configPort;
-        }
-
-        // Scan nearby ports (Electron may have shifted the port)
-        const scanRange = 100;
-        const startPort = Math.max(1024, configPort - scanRange);
-        const endPort = Math.min(65535, configPort + scanRange);
-        const batchSize = 20;
-
-        for (let base = startPort; base <= endPort; base += batchSize) {
-            const ports = [];
-            for (let p = base; p < Math.min(base + batchSize, endPort + 1); p++) {
-                if (p === configPort) continue;
-                ports.push(p);
-            }
-            const results = await Promise.all(
-                ports.map(async (p) => ({ port: p, ok: await this._pingPort(p) }))
-            );
-            const found = results.find(r => r.ok);
-            if (found) {
-                this._addLog(`[Ralph] ✓ CDP 포트 자동 감지: ${found.port} (설정: ${configPort})`);
-                this._discoveredCdpPort = found.port;
-                return found.port;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Get list of CDP targets (pages)
-     */
-    _getTargets(port) {
-        return new Promise((resolve, reject) => {
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json', timeout: 3000 }, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) { reject(e); }
-                });
-            });
-            req.on('error', reject);
-            req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-        });
-    }
-
-    /**
-     * Send a CDP command to a target via WebSocket (one-shot connection)
-     * General-purpose: supports any CDP method (Runtime.evaluate, Input.insertText, etc.)
-     * @param {string} targetWsUrl - WebSocket debugger URL
-     * @param {string} method - CDP method name (e.g. 'Runtime.evaluate', 'Input.insertText')
-     * @param {object} params - CDP method parameters
-     * @param {number} timeout - Timeout in ms
-     */
-    async _cdpSendCommand(targetWsUrl, method, params, timeout = 10000) {
-        return new Promise((resolve, reject) => {
-            const net = require('net');
-            const crypto = require('crypto');
-            const parsed = new URL(targetWsUrl);
-            const port = parsed.port || 80;
-            const key = crypto.randomBytes(16).toString('base64');
-
-            const socket = net.createConnection({ host: parsed.hostname, port }, () => {
-                const path = parsed.pathname + parsed.search;
-                const req = [
-                    `GET ${path} HTTP/1.1`,
-                    `Host: ${parsed.hostname}:${port}`,
-                    `Upgrade: websocket`,
-                    `Connection: Upgrade`,
-                    `Sec-WebSocket-Key: ${key}`,
-                    `Sec-WebSocket-Version: 13`,
-                    '', ''
-                ].join('\r\n');
-                socket.write(req);
-            });
-
-            let upgraded = false;
-            let buffer = Buffer.alloc(0);
-            let msgId = 1;
-            const timer = setTimeout(() => {
-                try { socket.destroy(); } catch (e) { }
-                reject(new Error(`CDP ${method} timeout`));
-            }, timeout);
-
-            const sendWsFrame = (data) => {
-                const crypto2 = require('crypto');
-                const payload = Buffer.from(data, 'utf-8');
-                const maskKey = crypto2.randomBytes(4);
-                let header;
-                if (payload.length < 126) {
-                    header = Buffer.alloc(2);
-                    header[0] = 0x81;
-                    header[1] = 0x80 | payload.length;
-                } else if (payload.length < 65536) {
-                    header = Buffer.alloc(4);
-                    header[0] = 0x81;
-                    header[1] = 0x80 | 126;
-                    header.writeUInt16BE(payload.length, 2);
-                } else {
-                    header = Buffer.alloc(10);
-                    header[0] = 0x81;
-                    header[1] = 0x80 | 127;
-                    header.writeBigUInt64BE(BigInt(payload.length), 2);
-                }
-                const masked = Buffer.alloc(payload.length);
-                for (let i = 0; i < payload.length; i++) {
-                    masked[i] = payload[i] ^ maskKey[i & 3];
-                }
-                socket.write(Buffer.concat([header, maskKey, masked]));
-            };
-
-            socket.on('data', (data) => {
-                buffer = Buffer.concat([buffer, data]);
-
-                if (!upgraded) {
-                    const headerEnd = buffer.indexOf('\r\n\r\n');
-                    if (headerEnd === -1) return;
-                    const header = buffer.slice(0, headerEnd).toString();
-                    if (!header.includes('101')) {
-                        clearTimeout(timer);
-                        socket.destroy();
-                        reject(new Error('WebSocket upgrade failed'));
-                        return;
-                    }
-                    upgraded = true;
-                    buffer = buffer.slice(headerEnd + 4);
-
-                    // Send the CDP command
-                    const cmd = JSON.stringify({ id: msgId, method, params });
-                    sendWsFrame(cmd);
-
-                    if (buffer.length > 0) {
-                        tryParseResponse();
-                    }
-                    return;
-                }
-
-                tryParseResponse();
-            });
-
-            function tryParseResponse() {
-                while (buffer.length >= 2) {
-                    const secondByte = buffer[1];
-                    const isMasked = (secondByte & 0x80) !== 0;
-                    let payloadLen = secondByte & 0x7f;
-                    let offset = 2;
-
-                    if (payloadLen === 126) {
-                        if (buffer.length < 4) return;
-                        payloadLen = buffer.readUInt16BE(2);
-                        offset = 4;
-                    } else if (payloadLen === 127) {
-                        if (buffer.length < 10) return;
-                        payloadLen = Number(buffer.readBigUInt64BE(2));
-                        offset = 10;
-                    }
-
-                    if (isMasked) offset += 4;
-                    if (buffer.length < offset + payloadLen) return;
-
-                    let payload = buffer.slice(offset, offset + payloadLen);
-                    if (isMasked) {
-                        const mask = buffer.slice(offset - 4, offset);
-                        for (let i = 0; i < payload.length; i++) {
-                            payload[i] ^= mask[i & 3];
-                        }
-                    }
-                    buffer = buffer.slice(offset + payloadLen);
-
-                    try {
-                        const msg = JSON.parse(payload.toString());
-                        if (msg.id === msgId) {
-                            clearTimeout(timer);
-                            try { socket.destroy(); } catch (e) { }
-                            if (msg.error) {
-                                reject(new Error(msg.error.message || JSON.stringify(msg.error)));
-                            } else {
-                                resolve(msg.result);
-                            }
-                            return;
-                        }
-                    } catch (e) { /* ignore non-JSON frames */ }
-                }
-            }
-
-            socket.on('error', (err) => {
-                clearTimeout(timer);
-                reject(err);
-            });
-
-            socket.on('close', () => {
-                clearTimeout(timer);
-                reject(new Error('Connection closed before response'));
-            });
-        });
-    }
-
-    /**
-     * Shorthand: evaluate JS expression on a CDP target
-     */
-    async _cdpEvaluateOnTarget(targetWsUrl, expression, timeout = 10000) {
-        return this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-            expression,
-            returnByValue: true
-        }, timeout);
-    }
-
-    /**
-     * Find the main CDP target matching the current workspace
-     * @param {boolean} [verbose=false] - Log detailed target information
-     * @returns {Promise<Object>} CDP target object with webSocketDebuggerUrl
-     */
-    async _findMainTarget(verbose = false) {
-        const cdpPort = await this._findActiveCdpPort();
-        if (!cdpPort) {
-            throw new Error('CDP 포트 없음 — 설정 포트(' + this._getCdpPort() + ') 및 근처 포트 스캔 실패');
-        }
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            throw new Error('CDP 타겟 조회 실패 (port ' + cdpPort + '): ' + e.message);
-        }
-
-        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
-            ? vscode.workspace.workspaceFolders[0].name : '';
-
-        if (verbose) {
-            this._addLog('[Ralph] 워크스페이스: "' + workspaceName + '", CDP 타겟 수: ' + targets.length);
-        }
-
-        const pageTargets = targets.filter(function (t) { return t.type === 'page'; });
-        if (verbose) {
-            for (const t of pageTargets) {
-                this._addLog('[Ralph]   타겟: ' + (t.title || 'no-title').substring(0, 70));
-            }
-        }
-
-        let mainTarget = null;
-        if (workspaceName) {
-            mainTarget = pageTargets.find(function (t) {
-                return t.url && t.url.includes('workbench.html') &&
-                    !t.url.includes('jetski-agent') &&
-                    t.title && t.title.includes(workspaceName);
-            });
-        }
-
-        if (!mainTarget) {
-            mainTarget = pageTargets.find(function (t) {
-                return t.url && t.url.includes('workbench.html') &&
-                    !t.url.includes('jetski-agent');
-            });
-            if (mainTarget && verbose) {
-                this._addLog('[Ralph] ⚠ 워크스페이스 매칭 실패 — 첫 번째 workbench 타겟 사용', 'warn');
-            }
-        }
-
-        if (!mainTarget) {
-            mainTarget = pageTargets.find(function (t) { return t.webSocketDebuggerUrl; });
-        }
-
-        if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
-            throw new Error('CDP 타겟 없음 (' + targets.length + '개 중 page 없음)');
-        }
-
-        if (verbose) {
-            this._addLog('[Ralph] ✅ 선택된 타겟: ' + (mainTarget.title || '').substring(0, 60));
-        }
-
-        return mainTarget;
-    }
-
-    /**
-     * Find workbench CDP targets matching the CURRENT workspace only
-     * 현재 워크스페이스에 해당하는 Antigravity 윈도우만 반환
-     * @returns {Promise<Object[]>} Array of CDP target objects
-     */
-    async _findAllWorkbenchTargets() {
-        const cdpPort = await this._findActiveCdpPort();
-        if (!cdpPort) return [];
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            return [];
-        }
-
-        const workspaceName = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0)
-            ? vscode.workspace.workspaceFolders[0].name : '';
-
-        let filtered = targets.filter(function (t) {
-            return t.type === 'page' &&
-                t.url && t.url.includes('workbench.html') &&
-                !t.url.includes('jetski-agent') &&
-                t.webSocketDebuggerUrl;
-        });
-
-        // 현재 워크스페이스 이름이 있으면 해당 타겟만 필터링
-        if (workspaceName) {
-            const wsFiltered = filtered.filter(function (t) {
-                return t.title && t.title.includes(workspaceName);
-            });
-            if (wsFiltered.length > 0) {
-                filtered = wsFiltered;
-            }
-        }
-
-        return filtered;
-    }
-
-    /**
-     * Cancel all active conversations by clicking the Cancel button via CDP.
-     * Iterates over all CDP targets, checks for the Cancel button, and clicks it.
-     * Individual target errors are caught and logged without interrupting the process.
-     * @returns {Promise<{cancelled: number, total: number}>}
-     */
-    async _cancelAllActiveConversations() {
-        const cdpPort = await this._findActiveCdpPort();
-        if (!cdpPort) {
-            this._addLog(`[Ralph] ❌ _cancelAllActiveConversations: CDP 포트 없음 — 스캔 실패`, 'error');
-            return { cancelled: 0, total: 0 };
-        }
-        let targets;
-        try {
-            targets = await this._getTargets(cdpPort);
-        } catch (e) {
-            this._addLog(`[Ralph] ❌ _cancelAllActiveConversations: CDP 타겟 조회 실패 — ${e.message}`, 'error');
-            return { cancelled: 0, total: 0 };
-        }
-
-        // webSocketDebuggerUrl이 있는 page 타겟만 필터링
-        const pageTargets = targets.filter(t => t.type === 'page' && t.webSocketDebuggerUrl);
-        const total = pageTargets.length;
-        let cancelled = 0;
-
-        this._addLog(`[Ralph] 🔍 _cancelAllActiveConversations: ${total}개 page 타겟 검사 시작`);
-
-        const cancelExpression = [
-            '(function() {',
-            '  var btn = document.querySelector("[data-tooltip-id=input-send-button-cancel-tooltip]");',
-            '  if (btn) {',
-            '    btn.click();',
-            '    return JSON.stringify({ clicked: true });',
-            '  }',
-            '  return JSON.stringify({ clicked: false });',
-            '})()',
-        ].join('\n');
-
-        for (const target of pageTargets) {
-            const targetLabel = (target.title || target.url || 'unknown').substring(0, 60);
-            try {
-                const result = await this._cdpEvaluateOnTarget(target.webSocketDebuggerUrl, cancelExpression, 5000);
-                if (result && result.result && result.result.value) {
-                    const parsed = JSON.parse(result.result.value);
-                    if (parsed.clicked) {
-                        cancelled++;
-                        this._addLog(`[Ralph] ✅ Cancel 클릭 성공: ${targetLabel}`);
-                    } else {
-                        this._addLog(`[Ralph] ⏭ Cancel 버튼 없음 (유휴 상태): ${targetLabel}`);
-                    }
-                } else {
-                    this._addLog(`[Ralph] ⏭ 평가 결과 없음: ${targetLabel}`);
-                }
-            } catch (e) {
-                this._addLog(`[Ralph] ⚠ 타겟 처리 에러 무시: ${targetLabel} — ${e.message}`, 'warn');
-            }
-        }
-
-        this._addLog(`[Ralph] 📊 _cancelAllActiveConversations 완료: ${cancelled}/${total}개 대화 취소됨`);
-        return { cancelled, total };
-    }
-
-    /**
-     * Check if the Antigravity agent is currently busy via CDP DOM inspection
-     * Send button approach: when Send button is disabled, agent is busy; when enabled, agent is done
-     * @param {string} targetWsUrl - WebSocket debugger URL
-     * @param {boolean} [diagnostic=false] - If true, log all visible buttons for debugging
-     * @returns {Promise<{busy: boolean, reason?: string, detail?: string}>}
-     */
-    async _isAgentBusy(targetWsUrl, diagnostic = false) {
-        try {
-            const expr = diagnostic
-                ? [
-                    '(function() {',
-                    '  var btns = document.querySelectorAll("button");',
-                    '  var all = [];',
-                    '  for (var i = 0; i < btns.length; i++) {',
-                    '    var b = btns[i];',
-                    '    var rect = b.getBoundingClientRect();',
-                    '    if (rect.width === 0 || rect.height === 0) continue;',
-                    '    var label = b.getAttribute("aria-label") || "";',
-                    '    var title = b.getAttribute("title") || "";',
-                    '    var text = (b.textContent || "").trim().substring(0, 20);',
-                    '    var cls = (b.className || "").substring(0, 40);',
-                    '    var info = label || title || text || cls || "(empty)";',
-                    '    if (!label && !title && !text && b.querySelector("svg")) {',
-                    '      var svg = b.querySelector("svg");',
-                    '      var pc = svg.querySelectorAll("path").length;',
-                    '      var rc = svg.querySelectorAll("rect").length;',
-                    '      var sz = Math.round(rect.width) + "x" + Math.round(rect.height);',
-                    '      info += " [SVG:p=" + pc + ",r=" + rc + ",sz=" + sz + "," + (b.innerHTML || "").replace(/\\s+/g," ").substring(0,60) + "]";',
-                    '    }',
-                    '    all.push(info);',
-                    '  }',
-                    '  // 채팅 입력창 상태 진단',
-                    '  var inputInfo = {};',
-                    '  var chatInput = document.querySelector(".cursor-text[contenteditable]");',
-                    '  if (chatInput) {',
-                    '    var ir = chatInput.getBoundingClientRect();',
-                    '    inputInfo.found = true;',
-                    '    inputInfo.visible = ir.width > 0 && ir.height > 0;',
-                    '    inputInfo.disabled = chatInput.getAttribute("aria-disabled") === "true";',
-                    '    inputInfo.readonly = chatInput.getAttribute("aria-readonly") === "true" || chatInput.getAttribute("contenteditable") === "false";',
-                    '    inputInfo.hasContent = (chatInput.textContent || "").trim().length > 0;',
-                    '    inputInfo.cls = (chatInput.className || "").substring(0, 60);',
-                    '  } else {',
-                    '    inputInfo.found = false;',
-                    '    // contenteditable 요소 전체 탐색',
-                    '    var ces = document.querySelectorAll("[contenteditable]");',
-                    '    inputInfo.totalContentEditable = ces.length;',
-                    '  }',
-                    '  return JSON.stringify({ buttons: all, inputState: inputInfo });',
-                    '})()',
-                ].join('\n')
-                : [
-                    '(function() {',
-                    '  var bodyText = document.body.innerText || "";',
-                    '',
-                    '  // ── 0. Quota 감지 (최우선) ──',
-                    '  if (bodyText.includes("Model quota reached") && bodyText.includes("refresh on")) {',
-                    '    var match = bodyText.match(/refresh on (.*?)\\./);',
-                    '    if (match) {',
-                    '      return JSON.stringify({ busy: true, reason: "quota", refreshTime: match[1] });',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // ── 1. 정지(Cancel) 버튼 존재 여부 확인 ──',
-                    '  // 에이전트 작업 중이면 보내기 버튼이 사라지고 정지용 div가 나타남',
-                    '  var cancelDiv = document.querySelector("[data-tooltip-id=input-send-button-cancel-tooltip]");',
-                    '  if (cancelDiv) {',
-                    '    return JSON.stringify({ busy: true, reason: "cancel_btn_present", detail: "Cancel/Stop div found" });',
-                    '  }',
-                    '',
-                    '  // ── 2. 보내기(Send) 버튼 상태로 작업 완료 여부 판단 ──',
-                    '  // 정지 버튼이 없고 보내기 버튼이 있으면 작업 완료',
-                    '  var sendBtn = document.querySelector("button[data-tooltip-id=input-send-button-send-tooltip]");',
-                    '  if (sendBtn) {',
-                    '    var isDisabled = sendBtn.disabled || sendBtn.hasAttribute("disabled");',
-                    '    if (isDisabled) {',
-                    '      // 입력창 텍스트 확인 — 비어있으면 텍스트 미입력 때문에 disabled (에이전트는 idle)',
-                    '      var chatInput = document.querySelector(".cursor-text[contenteditable]");',
-                    '      var hasText = chatInput && (chatInput.textContent || "").trim().length > 0;',
-                    '      if (!hasText) {',
-                    '        return JSON.stringify({ busy: false, reason: "send_btn_disabled_no_text", detail: "Send button disabled due to empty input — agent is idle" });',
-                    '      }',
-                    '      return JSON.stringify({ busy: true, reason: "send_btn_disabled", detail: "Send button is disabled" });',
-                    '    } else {',
-                    '      return JSON.stringify({ busy: false, detail: "send_btn_enabled" });',
-                    '    }',
-                    '  }',
-                    '',
-                    '  // ── 3. 둘 다 찾지 못한 경우 — busy로 간주 (안전 측) ──',
-                    '  return JSON.stringify({ busy: true, reason: "no_btn_found", detail: "Neither send nor cancel button found" });',
-                    '})()',
-                ].join('\n');
-
-            const result = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
-                expression: expr,
-                returnByValue: true
-            }, 5000);
-
-            var val = result && result.result && result.result.value;
-            if (!val) return diagnostic ? { buttons: [] } : { busy: true, reason: 'no_result' };
-            try {
-                return JSON.parse(val);
-            } catch (e) {
-                return diagnostic ? { buttons: [] } : { busy: true, reason: 'parse_error' };
-            }
-        } catch (e) {
-            return diagnostic ? { buttons: [] } : { busy: true, reason: 'cdp_error', detail: e.message };
-        }
-    }
-
     // ─── Internal Loop Logic ──────────────────────────────────────────
 
     async _runNextIteration() {
@@ -1312,7 +793,10 @@ class RalphLoopManager {
                 this._addLog('[Ralph] ✅ 에이전트 작업 완료 감지');
 
                 // ── 에이전트 응답에서 도구 쿼터 에러 감지 (generate_image 429 등) ──
-                await this._checkResponseForToolQuota();
+                const quotaInfo = await this.cdpClient.checkResponseForToolQuota();
+                if (quotaInfo) {
+                    await this._enterQuotaPause(quotaInfo.waitMs, quotaInfo.refreshLabel, quotaInfo.wsUrl);
+                }
 
                 // Mark task as complete and record progress
                 this.taskManager.markTaskComplete(task.line);
@@ -1449,12 +933,12 @@ class RalphLoopManager {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
         // ─── Step 1: Get CDP target matching CURRENT workspace ───
-        const mainTarget = await this._findMainTarget(true);
+        const mainTarget = await this.cdpClient.findMainTarget(true);
         const targetWsUrl = mainTarget.webSocketDebuggerUrl;
-        this._lastAgentTargetWsUrl = targetWsUrl; // 완료 대기 시 이 타겟에서 확인
+        this.cdpClient.setLastAgentTargetWsUrl(targetWsUrl); // 완료 대기 시 이 타겟에서 확인
 
         const sendKey = async (type, params) => {
-            await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
+            await this.cdpClient.sendCommand(targetWsUrl, 'Input.dispatchKeyEvent', { type, ...params }, 5000);
         };
 
         // --- Step 2: Create new conversation ---
@@ -1525,7 +1009,7 @@ class RalphLoopManager {
 
                 const atRef = `@${refPath} `;
                 try {
-                    await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
+                    await this.cdpClient.sendCommand(targetWsUrl, 'Input.insertText', {
                         text: atRef
                     }, 5000);
                     this._addLog(`[Ralph]   📎 미디어 참조 삽입: ${atRef.trim()}`);
@@ -1544,7 +1028,7 @@ class RalphLoopManager {
 
         // 3a: Focus the chat input via Runtime.evaluate
         try {
-            const focusResult = await this._cdpSendCommand(targetWsUrl, 'Runtime.evaluate', {
+            const focusResult = await this.cdpClient.sendCommand(targetWsUrl, 'Runtime.evaluate', {
                 expression: [
                     '(function() {',
                     '  var ceSelectors = [',
@@ -1602,7 +1086,7 @@ class RalphLoopManager {
             for (let i = 0; i < lines.length; i++) {
                 // Insert the line text (even if empty, we still need Shift+Enter for blank lines)
                 if (lines[i].length > 0) {
-                    await this._cdpSendCommand(targetWsUrl, 'Input.insertText', {
+                    await this.cdpClient.sendCommand(targetWsUrl, 'Input.insertText', {
                         text: lines[i]
                     }, 5000);
                 }
@@ -1610,7 +1094,7 @@ class RalphLoopManager {
                 // Insert line break between lines (not after the last line)
                 if (i < lines.length - 1) {
                     // Shift+Enter = new line without submitting
-                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
+                    await this.cdpClient.sendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
                         type: 'keyDown',
                         key: 'Enter',
                         code: 'Enter',
@@ -1618,7 +1102,7 @@ class RalphLoopManager {
                         nativeVirtualKeyCode: 13,
                         modifiers: 8, // Shift modifier
                     }, 5000);
-                    await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
+                    await this.cdpClient.sendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
                         type: 'keyUp',
                         key: 'Enter',
                         code: 'Enter',
@@ -1656,7 +1140,7 @@ class RalphLoopManager {
             });
 
             // Fallback: Click the send button if it exists
-            await this._cdpEvaluateOnTarget(targetWsUrl, `
+            await this.cdpClient.evaluateOnTarget(targetWsUrl, `
                 (function() {
                     var selectors = [
                         'button[data-tooltip-id="input-send-button-send-tooltip"]',
@@ -1686,12 +1170,12 @@ class RalphLoopManager {
      * @returns {Promise<string|null>} 마지막 에이전트 응답 텍스트, 없으면 null
      */
     async _getLastAgentResponse() {
-        let wsUrl = this._lastAgentTargetWsUrl;
+        let wsUrl = this.cdpClient.getLastAgentTargetWsUrl();
         if (!wsUrl) {
             // _lastAgentTargetWsUrl이 없는 경우 (사용자가 직접 채팅한 대화 등)
             // _findMainTarget으로 CDP 타겟을 동적으로 찾아서 사용
             try {
-                const target = await this._findMainTarget(false);
+                const target = await this.cdpClient.findMainTarget(false);
                 if (target && target.webSocketDebuggerUrl) {
                     wsUrl = target.webSocketDebuggerUrl;
                 } else {
@@ -1704,7 +1188,7 @@ class RalphLoopManager {
         }
 
         try {
-            const result = await this._cdpEvaluateOnTarget(wsUrl, `
+            const result = await this.cdpClient.evaluateOnTarget(wsUrl, `
                 (function() {
                     var MAX_LEN = 4000;
                     function truncate(text) {
@@ -1827,10 +1311,10 @@ class RalphLoopManager {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
         // CDP 타겟 찾기 — 프롬프트를 보낸 타겟을 우선 사용
-        let targetWsUrl = this._lastAgentTargetWsUrl;
+        let targetWsUrl = this.cdpClient.getLastAgentTargetWsUrl();
         if (!targetWsUrl) {
             try {
-                const target = await this._findMainTarget(false);
+                const target = await this.cdpClient.findMainTarget(false);
                 targetWsUrl = target.webSocketDebuggerUrl;
             } catch (e) {
                 this._addLog('[Ralph] ⚠ CDP 타겟 찾기 실패 — 시간 기반 대기(60초)로 대체: ' + e.message, 'warn');
@@ -1845,7 +1329,7 @@ class RalphLoopManager {
         await delay(INITIAL_WAIT_MS);
 
         // ── 첫 폴링: 진단 모드로 DOM 버튼 + 입력창 상태 로그 ──
-        const diag = await this._isAgentBusy(targetWsUrl, true);
+        const diag = await this.cdpClient.isAgentBusy(targetWsUrl, true);
         if (diag.buttons && diag.buttons.length > 0) {
             this._addLog('[Ralph] 🔍 DOM 버튼 진단 (' + diag.buttons.length + '개):');
             diag.buttons.forEach((btn, idx) => {
@@ -1875,15 +1359,15 @@ class RalphLoopManager {
             }
 
             // CDP로 에이전트 활동 상태 확인 (현재 워크스페이스 타겟만 스캔)
-            let status = await this._isAgentBusy(targetWsUrl);
+            let status = await this.cdpClient.isAgentBusy(targetWsUrl);
 
             // 저장된 타겟에서 감지 실패 시, 현재 워크스페이스의 다른 workbench 타겟도 스캔
             if (!status.busy) {
                 try {
-                    const allTargets = await this._findAllWorkbenchTargets();
+                    const allTargets = await this.cdpClient.findAllWorkbenchTargets();
                     for (const t of allTargets) {
                         if (t.webSocketDebuggerUrl === targetWsUrl) continue;
-                        const altStatus = await this._isAgentBusy(t.webSocketDebuggerUrl);
+                        const altStatus = await this.cdpClient.isAgentBusy(t.webSocketDebuggerUrl);
                         if (altStatus.busy) {
                             status = altStatus;
                             // 다음부터 이 타겟을 직접 사용
@@ -2027,7 +1511,7 @@ class RalphLoopManager {
         // Dismiss 버튼 정리
         if (targetWsUrl) {
             try {
-                await this._cdpEvaluateOnTarget(targetWsUrl, `
+                await this.cdpClient.evaluateOnTarget(targetWsUrl, `
                     var btns = document.querySelectorAll('button');
                     for (var i=0; i<btns.length; i++) {
                         if (btns[i].textContent.includes('Dismiss')) {
@@ -2049,11 +1533,11 @@ class RalphLoopManager {
      * @param {string} [targetWsUrl] - CDP 타겟 WebSocket URL
      */
     async _checkResponseForToolQuota(targetWsUrl) {
-        const wsUrl = targetWsUrl || this._lastAgentTargetWsUrl;
+        const wsUrl = targetWsUrl || this.cdpClient.getLastAgentTargetWsUrl();
         if (!wsUrl) return;
 
         try {
-            const result = await this._cdpEvaluateOnTarget(wsUrl, `
+            const result = await this.cdpClient.evaluateOnTarget(wsUrl, `
                 (function() {
                     var text = document.body.innerText || '';
                     var chunk = text.substring(Math.max(0, text.length - 8000));
@@ -2412,10 +1896,10 @@ class RalphLoopManager {
     async _getCurrentModel() {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        let targetWsUrl = this._lastAgentTargetWsUrl;
+        let targetWsUrl = this.cdpClient.getLastAgentTargetWsUrl();
         if (!targetWsUrl) {
             try {
-                const target = await this._findMainTarget(false);
+                const target = await this.cdpClient.findMainTarget(false);
                 targetWsUrl = target.webSocketDebuggerUrl;
             } catch (e) {
                 this._addLog(`[Ralph] ⚠ _getCurrentModel: CDP 타겟 없음 — ${e.message}`, 'warn');
@@ -2424,7 +1908,7 @@ class RalphLoopManager {
         }
 
         try {
-            const result = await this._cdpEvaluateOnTarget(targetWsUrl, `
+            const result = await this.cdpClient.evaluateOnTarget(targetWsUrl, `
                 (function() {
                     // Strategy 1: Model selector button with aria-haspopup
                     var selectors = [
@@ -2499,10 +1983,10 @@ class RalphLoopManager {
     async _switchModel(targetModelKeyword) {
         const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-        let targetWsUrl = this._lastAgentTargetWsUrl;
+        let targetWsUrl = this.cdpClient.getLastAgentTargetWsUrl();
         if (!targetWsUrl) {
             try {
-                const target = await this._findMainTarget(false);
+                const target = await this.cdpClient.findMainTarget(false);
                 targetWsUrl = target.webSocketDebuggerUrl;
             } catch (e) {
                 this._addLog(`[Ralph] ❌ _switchModel: CDP 타겟 없음 — ${e.message}`, 'error');
@@ -2514,7 +1998,7 @@ class RalphLoopManager {
 
         try {
             // Step 1: Click the model selector to open dropdown
-            const openResult = await this._cdpEvaluateOnTarget(targetWsUrl, `
+            const openResult = await this.cdpClient.evaluateOnTarget(targetWsUrl, `
                 (function() {
                     var selectors = [
                         'button[aria-haspopup="listbox"]',
@@ -2576,7 +2060,7 @@ class RalphLoopManager {
 
             // Step 2: Find and click the target model in the dropdown
             const keyword = targetModelKeyword.toLowerCase();
-            const selectResult = await this._cdpEvaluateOnTarget(targetWsUrl, `
+            const selectResult = await this.cdpClient.evaluateOnTarget(targetWsUrl, `
                 (function() {
                     var keyword = ${JSON.stringify(keyword)};
                     var keywords = keyword.split(' ').filter(Boolean);
@@ -2640,7 +2124,7 @@ class RalphLoopManager {
 
             // Close dropdown by pressing Escape
             try {
-                await this._cdpSendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
+                await this.cdpClient.sendCommand(targetWsUrl, 'Input.dispatchKeyEvent', {
                     type: 'keyDown', key: 'Escape', code: 'Escape',
                     windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27
                 }, 3000);
@@ -2736,14 +2220,14 @@ class RalphLoopManager {
         if (this._codeReviewCancelled) return;
 
         try {
-            const mainTarget = await this._findMainTarget(false);
+            const mainTarget = await this.cdpClient.findMainTarget(false);
             if (!mainTarget || !mainTarget.webSocketDebuggerUrl) {
                 // CDP 타겟을 못 찾으면 상태 리셋
                 this._codeReviewWatcherLastBusy = false;
                 return;
             }
 
-            const status = await this._isAgentBusy(mainTarget.webSocketDebuggerUrl);
+            const status = await this.cdpClient.isAgentBusy(mainTarget.webSocketDebuggerUrl);
             const currentBusy = !!status.busy;
 
             // busy → idle 전환 감지
