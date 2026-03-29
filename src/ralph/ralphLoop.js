@@ -2791,6 +2791,77 @@ class RalphLoopManager {
     }
 
     /**
+     * Run a standalone task (from sidebar task queue) with full pipeline:
+     * 1. Send /write-prd prompt to agent
+     * 2. Wait for agent completion
+     * 3. Run verification (if enabled)
+     * 4. Run code review (if enabled)
+     * @param {string} taskText - Task description from the sidebar input
+     * @returns {Promise<void>}
+     */
+    async runStandaloneTask(taskText) {
+        const config = vscode.workspace.getConfiguration('autoAntigravity');
+
+        this._addLog(`[Ralph] 🚀 ═══ 독립 작업 시작 ═══`);
+        this._addLog(`[Ralph] 📋 작업: ${taskText.substring(0, 100)}`);
+
+        // 1. Send /write-prd prompt
+        const prompt = `/write-prd ${taskText}`;
+        this._addLog('[Ralph] 📤 에이전트에 프롬프트 전송 중...');
+        await this._sendToAgent(prompt);
+        this._addLog('[Ralph] ✅ 에이전트에 프롬프트 전송 완료');
+
+        // 2. Wait for agent completion
+        this._addLog('[Ralph] ⏳ 에이전트 작업 완료 대기...');
+        await this._waitForAgentCompletion();
+        this._addLog('[Ralph] ✅ 에이전트 작업 완료');
+
+        // 3. Verification (if enabled)
+        const enableVerification = config.get('ralphLoop.enableVerification', false);
+        if (enableVerification) {
+            const maxRetries = config.get('ralphLoop.maxVerificationRetries', 2);
+            let retryCount = 0;
+            let failReason = null;
+            let verificationPassed = false;
+
+            while (retryCount <= maxRetries && !verificationPassed) {
+                const vResult = await this.runVerification(taskText, 0, failReason);
+
+                if (vResult.pass) {
+                    verificationPassed = true;
+                    this._addLog(`[Ralph] ✅ 작업 판단 통과 (시도 ${retryCount + 1}/${maxRetries + 1})`);
+                } else {
+                    retryCount++;
+                    failReason = vResult.reason;
+
+                    if (retryCount > maxRetries) {
+                        this._addLog(`[Ralph] ⚠ 판단 실패 — 최대 재시도 횟수(${maxRetries}) 초과. 작업을 PASS로 간주합니다.`, 'warn');
+                        verificationPassed = true;
+                    } else {
+                        this._addLog(`[Ralph] 🔄 판단 실패 → 구현 재시도 (${retryCount}/${maxRetries})`, 'warn');
+
+                        const failContext = `이전 작업 "${taskText}"이(가) 다음 이유로 검증에 실패했습니다:\n> ${failReason}\n\n위 문제를 수정하여 작업을 다시 완료해주세요.`;
+
+                        this._addLog('[Ralph] 📤 수정 프롬프트 전송 중...');
+                        await this._sendToAgent(failContext);
+                        this._addLog('[Ralph] ⏳ 수정 작업 완료 대기 중...');
+                        await this._waitForAgentCompletion();
+                        this._addLog('[Ralph] ✅ 수정 작업 완료');
+                    }
+                }
+            }
+        }
+
+        // 4. Code Review (if enabled)
+        const enableCodeReview = config.get('ralphLoop.enableCodeReview', false);
+        if (enableCodeReview) {
+            await this.runCodeReview(taskText, 0);
+        }
+
+        this._addLog(`[Ralph] 🚀 ═══ 독립 작업 완료 ═══`);
+    }
+
+    /**
      * Run code review stage using Gemini Flash model.
      * Can be called independently (from sidebar) or from Ralph Loop.
      * @param {string} taskText - The task that was completed

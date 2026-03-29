@@ -462,13 +462,14 @@ class RalphSidebarProvider {
                     if (text) {
                         const isIdle = this.ralphLoop && this.ralphLoop.getState() === 'idle';
                         if (isIdle) {
-                            // idle 상태 → 큐에 넣지 않고 즉시 실행
-                            const prompt = `/write-prd ${text}`;
-                            this._log(`[Sidebar] 📤 즉시 실행 (idle): ${text.substring(0, 50)}...`);
-                            this.ralphLoop._sendToAgent(prompt).then(() => {
-                                this._log(`[Sidebar] ✅ write-prd 프롬프트 전송 완료`);
+                            // idle 상태 → 큐에 넣지 않고 즉시 실행 (작업 판단 + 코드 리뷰 포함)
+                            this._log(`[Sidebar] 🚀 독립 작업 실행 (idle): ${text.substring(0, 50)}...`);
+                            this.ralphLoop.runStandaloneTask(text).then(() => {
+                                this._log(`[Sidebar] ✅ 독립 작업 완료`);
+                                this.updateState();
                             }).catch(err => {
-                                this._log(`[Sidebar] ❌ write-prd 프롬프트 전송 실패: ${err.message}`);
+                                this._log(`[Sidebar] ❌ 독립 작업 실패: ${err.message}`);
+                                this.updateState();
                             });
                         } else {
                             // 실행 중 → 큐에 추가
@@ -1663,6 +1664,14 @@ class RalphSidebarProvider {
                     + '</div>';
             }
             queueList.innerHTML = qhtml;
+        }
+
+        // ─── Task Queue Button Text (idle → 작업 시작, running → 작업 예약) ───
+        const btnEnqueue = document.getElementById('btnEnqueueTask');
+        if (s.ralphState === 'idle') {
+            btnEnqueue.innerHTML = '🚀 작업 시작';
+        } else {
+            btnEnqueue.innerHTML = '📥 작업 예약';
         }
 
         // PRD Changes
