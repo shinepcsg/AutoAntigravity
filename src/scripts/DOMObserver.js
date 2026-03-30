@@ -9,6 +9,7 @@
  */
 function buildDOMObserverScript(customTexts) {
     const allTexts = [
+        'run all', '모두 실행', '항상 실행', '전부 실행', 'all run', 'run all commands',
         'run', '실행', '実行', '运行', 'ausführen', 'ejecutar', 'exécuter',
         'accept', '수락', '承認', '接受',
         'always allow', '항상 허용', '常に許可', '始终允许',
@@ -36,6 +37,9 @@ function buildDOMObserverScript(customTexts) {
         return !!(document.querySelector('.react-app-container') ||
             document.querySelector('[class*="agent"]') ||
             document.querySelector('[class*="webview"]') ||
+            document.querySelector('[class*="chat"]') ||
+            document.querySelector('[class*="composer"]') ||
+            document.querySelector('[class*="antigravity"]') ||
             document.querySelector('[data-vscode-context]') ||
             document.body.classList.contains('vscode-body'));
     }

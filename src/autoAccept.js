@@ -11,7 +11,11 @@ const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
     'antigravity.terminalCommand.accept',
     'antigravity.terminalCommand.run',
+    'antigravity.terminalCommand.runAll',
     'antigravity.command.accept',
+    'antigravity.command.runAll',
+    'workbench.action.chat.acceptInput',
+    'workbench.action.chat.submit'
 ];
 
 class AutoAcceptManager {
