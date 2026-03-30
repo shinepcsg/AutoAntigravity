@@ -34,11 +34,12 @@ class AutoAcceptManager {
         });
     }
 
-    async checkAndFixCDP() {
+    async checkAndFixCDP(extensionMode) {
         const configPort = this._getConfiguredPort();
 
         if (await this._pingPort(configPort)) {
             this.log(`[CDP] Debug port ${configPort} active ✓`);
+            this.cdpAvailable = true;
             return true;
         }
 
@@ -55,11 +56,20 @@ class AutoAcceptManager {
         const found = results.find(r => r.ok);
         if (found) {
             this.log(`[CDP] ✓ Auto-discovered CDP on port ${found.p}`);
+            this.cdpAvailable = true;
             return true;
         }
 
         // CDP 포트를 찾지 못해도 soft-fail: VS Code 명령 API 폴링은 계속 가능
         this.log(`[CDP] ⚠ No CDP port found — AutoAccept will run in VS Code command-only mode`);
+        this.cdpAvailable = false;
+        
+        // 윈도우 환경에서 CDP 포트가 안 열려있으면 단축키 자동 패치를 시도합니다.
+        // F5 디버깅 환경(ExtensionMode.Development === 2)에서는 단축키 기반이 아니므로 패치를 스킵.
+        if (extensionMode !== 2) {
+            this._applyWindowsPatch(configPort);
+        }
+
         return true;
     }
 
@@ -139,7 +149,7 @@ class AutoAcceptManager {
         };
         this.pollIntervalId = setTimeout(pollCycle, baseInterval);
 
-        if (this.connectionManager) {
+        if (this.connectionManager && this.cdpAvailable !== false) {
             this.connectionManager.resumeActiveScanning();
             this.connectionManager.start();
         }

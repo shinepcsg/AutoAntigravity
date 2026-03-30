@@ -869,7 +869,7 @@ function activate(context) {
     updateRalphStatusBar();
 
     // ─── CDP Check & Restore State ────────────────────────────────────
-    autoAccept.checkAndFixCDP().then(() => {
+    autoAccept.checkAndFixCDP(context.extensionMode).then(() => {
         // Restore Auto Accept state (CDP 유무와 무관하게 복원 — soft-fail 방식)
         if (context.globalState.get('autoAntigravity.autoAcceptEnabled', false)) {
             autoAccept.enable();
