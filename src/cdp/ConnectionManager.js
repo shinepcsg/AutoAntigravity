@@ -249,6 +249,8 @@ class ConnectionManager {
         this.heartbeatTimer = null;
         clearInterval(this.activeScanTimer);
         this.activeScanTimer = null;
+        // Cleanup injected DOMObserver scripts before closing connection
+        this._cleanupAllSessions();
         this._closeWebSocket();
         this.sessions.clear();
         this.ignoredTargets.clear();
@@ -271,6 +273,8 @@ class ConnectionManager {
         this.activeScanTimer = null;
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        // Cleanup injected DOMObserver scripts in all sessions
+        this._cleanupAllSessions();
     }
 
     /** Resume active scanning and heartbeat (when AutoAccept is ON) */
@@ -418,8 +422,10 @@ class ConnectionManager {
     _isCandidate(targetInfo) {
         const { url, type } = targetInfo;
         if (!url) return false;
-        return type === 'page' ||
-            url.includes('vscode-webview://') ||
+        // Exclude editor core pages that are not agent webviews
+        if (url.startsWith('file://') || url.startsWith('data:')) return false;
+        if (url.includes('/editor/') || url.includes('/workbench/')) return false;
+        return url.includes('vscode-webview://') ||
             url.includes('webview') ||
             type === 'iframe';
     }
@@ -523,6 +529,24 @@ class ConnectionManager {
             try {
                 this._send('Runtime.evaluate', {
                     expression: 'typeof window.__AA_FORCE_SCAN === "function" ? window.__AA_FORCE_SCAN() : null'
+                }, sessionId).catch(() => {});
+            } catch (e) { /* silent */ }
+        }
+    }
+
+    /**
+     * Cleanup injected DOMObserver scripts in all attached sessions.
+     * Called when AutoAccept is paused/stopped to free CPU resources.
+     */
+    _cleanupAllSessions() {
+        if (!this.ws || this.ws.readyState !== MiniWebSocket.OPEN) return;
+        if (this.sessions.size === 0) return;
+
+        this.log(`[CDP] Cleaning up ${this.sessions.size} session(s)...`);
+        for (const [targetId, sessionId] of this.sessions) {
+            try {
+                this._send('Runtime.evaluate', {
+                    expression: 'typeof window.__AA_CLEANUP === "function" ? window.__AA_CLEANUP() : "no-cleanup"'
                 }, sessionId).catch(() => {});
             } catch (e) { /* silent */ }
         }

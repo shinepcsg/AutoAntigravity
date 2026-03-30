@@ -189,7 +189,8 @@ function buildDOMObserverScript(customTexts) {
     // Expose for CDP-driven active polling (bypass inactive tab throttling)
     window.__AA_FORCE_SCAN = scanAndClick;
 
-    scanAndClick();
+    // Only run initial scan if this is an agent panel
+    if (isAgentPanel()) scanAndClick();
 
     // Use requestAnimationFrame-based debounce to limit scan rate to display
     // refresh rate (~60fps max) and avoid overwhelming CPU during rapid DOM changes.
@@ -201,6 +202,9 @@ function buildDOMObserverScript(customTexts) {
 
     var observer = new MutationObserver(function() {
         if (debounceScheduled) return;
+        // Skip scan entirely if this is not an agent panel (e.g. code editor)
+        // This prevents expensive DOM traversal on every keystroke in editor tabs.
+        if (!isAgentPanel()) return;
         debounceScheduled = true;
         scheduleScan();
     });
@@ -213,9 +217,21 @@ function buildDOMObserverScript(customTexts) {
     // Fallback: periodic scan every 4s using setInterval as a safety net.
     // Even if setInterval is throttled in background tabs, it still fires
     // (at reduced rate ~1/sec) unlike setTimeout chains which can stall.
-    setInterval(function() {
+    var fallbackTimer = setInterval(function() {
         scanAndClick();
     }, 4000);
+
+    // Cleanup function — called via CDP when AutoAccept is disabled.
+    // Disconnects MutationObserver, clears interval, and resets flags
+    // so that the injected script no longer consumes CPU.
+    window.__AA_CLEANUP = function() {
+        observer.disconnect();
+        clearInterval(fallbackTimer);
+        window.__AA_OBSERVER_ACTIVE = false;
+        window.__AA_FORCE_SCAN = null;
+        window.__AA_CLEANUP = null;
+        return 'cleaned-up';
+    };
 
     return 'observer-installed';
 })()
