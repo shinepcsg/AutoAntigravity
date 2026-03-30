@@ -384,6 +384,9 @@ class ConnectionManager {
                 case 'Runtime.executionContextsCleared':
                     if (msg.sessionId) this._reinjectForSession(msg.sessionId);
                     break;
+                case 'Runtime.consoleAPICalled':
+                    this._handleConsoleMessage(msg.params);
+                    break;
             }
         } catch (e) { }
     }
@@ -420,14 +423,23 @@ class ConnectionManager {
     }
 
     _isCandidate(targetInfo) {
-        const { url, type } = targetInfo;
+        const { url, type, title } = targetInfo;
         if (!url) return false;
-        // Exclude editor core pages that are not agent webviews
-        if (url.startsWith('file://') || url.startsWith('data:')) return false;
-        if (url.includes('/editor/') || url.includes('/workbench/')) return false;
+        
+        const lowerUrl = url.toLowerCase();
+        const lowerTitle = (title || '').toLowerCase();
+
+        // Include anything that looks like an Antigravity agent or a VS Code webview
+        if (lowerUrl.includes('agent') || lowerUrl.includes('jetski') || lowerTitle.includes('agent') || lowerTitle.includes('antigravity')) return true;
+        
+        // Exclude generic editor/workbench shells that definitely aren't agents (e.g. settings)
+        if (url.startsWith('file://') && !url.includes('workbench.html')) return false;
+        if (url.includes('/editor/')) return false;
+        
         return url.includes('vscode-webview://') ||
             url.includes('webview') ||
-            type === 'iframe';
+            type === 'iframe' ||
+            type === 'page'; // page is usually the workbench or launcher
     }
 
     async _handleNewTarget(targetInfo) {
@@ -459,7 +471,7 @@ class ConnectionManager {
 
             const result = await this._injectObserver(sessionId);
 
-            if (result === 'not-agent-panel') {
+            if (result === 'not-agent-panel' || result === 'not-a-browser-window' || result === 'not-a-browser-window') {
                 await this._send('Target.detachFromTarget', { sessionId }).catch(() => { });
                 this.ignoredTargets.add(targetId);
                 return;
@@ -486,6 +498,17 @@ class ConnectionManager {
                 this.log(`[CDP] Session detached [${tid.substring(0, 6)}]`);
                 break;
             }
+        }
+    }
+
+    _handleConsoleMessage(params) {
+        if (!params || !params.args) return;
+        // Only log our own dense messages (prefix with [AA_LOG]) to avoid spamming user with all page logs
+        const prefixFlag = '[AA_LOG]';
+        let firstArg = params.args[0]?.value;
+        if (typeof firstArg === 'string' && firstArg.includes(prefixFlag)) {
+            const texts = params.args.map(a => a.value || JSON.stringify(a.value)).join(' ');
+            this.log(`[CDP Debug] ${texts}`);
         }
     }
 

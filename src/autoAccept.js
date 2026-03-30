@@ -15,7 +15,11 @@ const ACCEPT_COMMANDS = [
     'antigravity.command.accept',
     'antigravity.command.runAll',
     'workbench.action.chat.acceptInput',
-    'workbench.action.chat.submit'
+    'workbench.action.chat.submit',
+    'workbench.action.terminal.chat.runCommand',
+    'workbench.action.terminal.chat.runFirstCommand',
+    'chatEditing.acceptAllFiles',
+    'notification.acceptPrimaryAction'
 ];
 
 class AutoAcceptManager {

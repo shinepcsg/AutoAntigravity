@@ -30,18 +30,52 @@ function buildDOMObserverScript(customTexts) {
 
     return `
 (function() {
-    if (window.__AA_OBSERVER_ACTIVE) return 'already-active';
+    if (typeof window === 'undefined' || typeof document === 'undefined') return 'not-a-browser-window';
+    
+    // Support hot-reloading for extension debug (F5) sessions!
+    if (window.__AA_OBSERVER_ACTIVE && typeof window.__AA_CLEANUP === 'function') {
+        try { window.__AA_CLEANUP(); } catch(e) {}
+    }
     window.__AA_OBSERVER_ACTIVE = true;
 
     function isAgentPanel() {
-        return !!(document.querySelector('.react-app-container') ||
-            document.querySelector('[class*="agent"]') ||
-            document.querySelector('[class*="webview"]') ||
-            document.querySelector('[class*="chat"]') ||
-            document.querySelector('[class*="composer"]') ||
-            document.querySelector('[class*="antigravity"]') ||
-            document.querySelector('[data-vscode-context]') ||
-            document.body.classList.contains('vscode-body'));
+        var urlCheck = !!(location.href.includes('webview') || 
+            location.href.includes('agent') || 
+            location.href.includes('jetski') || 
+            location.href.includes('workbench.html') || 
+            location.href.includes('antigravity'));
+            
+        if (urlCheck) return 'Matched URL: ' + location.href;
+
+        var selectors = ['.react-app-container', '[class*="agent"]', '[class*="webview"]', 
+                         '[class*="chat"]', '[class*="composer"]', '[class*="antigravity"]', 
+                         '[data-vscode-context]', '.vscode-body', '.monaco-workbench'];
+        
+        for (var s = 0; s < selectors.length; s++) {
+            if (document.querySelector(selectors[s])) return 'Matched selector: ' + selectors[s];
+        }
+
+        // Generic VS Code theme markers
+        var bodyClass = document.body.className || '';
+        if (bodyClass.includes('vscode-') || bodyClass.includes('monaco-')) return 'Matched bodyClass: ' + bodyClass;
+        
+        // Final fallback for workbench targets: always scan if we attached successfully
+        if (location.href.includes('workbench')) return 'Workbench fallback';
+
+        try {
+            var iframes = document.querySelectorAll('iframe');
+            for (var i = 0; i < iframes.length; i++) {
+                var cDoc = iframes[i].contentDocument;
+                if (cDoc && cDoc.body) {
+                    for (var s = 0; s < selectors.length; s++) {
+                        if (cDoc.querySelector(selectors[s])) return 'Matched iframe selector: ' + selectors[s];
+                    }
+                    var iBodyClass = cDoc.body.className || '';
+                    if (iBodyClass.includes('vscode-') || iBodyClass.includes('monaco-')) return 'Matched iframeBodyClass: ' + iBodyClass;
+                }
+            }
+        } catch(e) {}
+        return false;
     }
 
     var BUTTON_TEXTS = ${JSON.stringify(allTexts)};
@@ -85,9 +119,19 @@ function buildDOMObserverScript(customTexts) {
         var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
         var node;
         while ((node = walker.nextNode())) {
+            var nodeTag = (node.tagName || '').toLowerCase();
+            
             if (node.shadowRoot) {
                 var result = findButton(node.shadowRoot, text);
                 if (result) return result;
+            }
+            if (nodeTag === 'iframe') {
+                try {
+                    if (node.contentDocument && node.contentDocument.body) {
+                        var result = findButton(node.contentDocument.body, text);
+                        if (result) return result;
+                    }
+                } catch(e) {}
             }
 
             // Check data-testid and data-action first (high confidence)
@@ -103,7 +147,7 @@ function buildDOMObserverScript(customTexts) {
             var nodeText = (node.textContent || '').trim().toLowerCase();
             var nodeTitle = (node.getAttribute('title') || '').trim().toLowerCase();
             var nodeAria = (node.getAttribute('aria-label') || '').trim().toLowerCase();
-            
+
             var tests = [nodeText];
             if (nodeTitle) tests.push(nodeTitle);
             if (nodeAria) tests.push(nodeAria);
@@ -126,10 +170,13 @@ function buildDOMObserverScript(customTexts) {
             if (isMatch) {
                 var clickable = closestClickable(node);
                 var tag2 = (clickable.tagName || '').toLowerCase();
-                if (tag2 === 'button' || tag2.includes('button') || clickable.getAttribute('role') === 'button' ||
+                
+                var isValidButton = tag2 === 'button' || tag2.includes('button') || clickable.getAttribute('role') === 'button' ||
                     tag2.includes('btn') || clickable.classList.contains('cursor-pointer') ||
                     clickable.onclick || clickable.getAttribute('tabindex') === '0' ||
-                    text === 'expand' || text === 'requires input') {
+                    text === 'expand' || text === 'requires input';
+                
+                if (isValidButton) {
                     
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
@@ -167,7 +214,20 @@ function buildDOMObserverScript(customTexts) {
 
     function scanAndClick() {
         pruneCooldowns();
-        if (!isAgentPanel()) return null;
+        var isPanelMsg = isAgentPanel();
+        if (!isPanelMsg) {
+            // Check once if this really is something with buttons
+            for (var t = 0; t < BUTTON_TEXTS.length; t++) {
+                if (findButton(document.body, BUTTON_TEXTS[t])) {
+                    isPanelMsg = 'Force-bypass (found button)';
+                    break;
+                }
+            }
+        }
+
+        if (!isPanelMsg) {
+            return null;
+        }
 
         for (var t = 0; t < BUTTON_TEXTS.length; t++) {
             var btn = findButton(document.body, BUTTON_TEXTS[t]);
