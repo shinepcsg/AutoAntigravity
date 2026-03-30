@@ -123,12 +123,19 @@ class AutoAcceptManager {
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
-                const results = await Promise.allSettled(
-                    ACCEPT_COMMANDS.map(cmd =>
-                        vscode.commands.executeCommand(cmd)
-                            .then(r => ({ cmd, status: 'ok', result: r }))
-                    )
-                );
+                // CDP Active Scan이 모든 세션을 커버하므로, CDP 세션이 있으면 명령 폴링 생략
+                const cdpCoversAll = this.connectionManager
+                    && this.connectionManager.getSessionCount() > 0;
+
+                if (!cdpCoversAll) {
+                    // CDP 미연결 시 fallback: VS Code 명령 API로 활성 탭 버튼 클릭
+                    await Promise.allSettled(
+                        ACCEPT_COMMANDS.map(cmd =>
+                            vscode.commands.executeCommand(cmd)
+                                .then(r => ({ cmd, status: 'ok', result: r }))
+                        )
+                    );
+                }
 
                 // Periodic diagnostic logging
                 const now = Date.now();
@@ -138,7 +145,8 @@ class AutoAcceptManager {
                         ? `CDP: port=${this.connectionManager.getActivePort() || 'none'}, sessions=${this.connectionManager.getSessionCount()}`
                         : 'CDP: not initialized';
                     const idleMode = (now - this._lastAcceptTime > this._idleThresholdMs) ? 'idle' : 'active';
-                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}, mode=${idleMode}`);
+                    const pollMode = cdpCoversAll ? 'cdp-only' : 'cmd-fallback';
+                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}, mode=${idleMode}, poll=${pollMode}`);
                 }
             } catch (e) { /* silent */ }
             if (this.isEnabled) {
