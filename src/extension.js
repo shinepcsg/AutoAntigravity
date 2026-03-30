@@ -869,20 +869,21 @@ function activate(context) {
     updateRalphStatusBar();
 
     // ─── CDP Check & Restore State ────────────────────────────────────
-    autoAccept.checkAndFixCDP().then(cdpOk => {
-        if (cdpOk) {
-            // Restore Auto Accept state
-            if (context.globalState.get('autoAntigravity.autoAcceptEnabled', false)) {
-                autoAccept.enable();
-            }
-        } else {
-            log('CDP not available — Auto Accept will not start until debug port is enabled');
+    autoAccept.checkAndFixCDP().then(() => {
+        // Restore Auto Accept state (CDP 유무와 무관하게 복원 — soft-fail 방식)
+        if (context.globalState.get('autoAntigravity.autoAcceptEnabled', false)) {
+            autoAccept.enable();
+            log('[AutoAccept] 이전 ON 상태 복원됨');
         }
         updateAutoAcceptStatusBar();
         updateRalphStatusBar();
         log('AutoAntigravity activated successfully');
     }).catch(err => {
         log(`CDP check error: ${err.message} — continuing with status bar visible`);
+        // 에러 발생 시에도 상태 복원 시도
+        if (context.globalState.get('autoAntigravity.autoAcceptEnabled', false)) {
+            autoAccept.enable();
+        }
         updateAutoAcceptStatusBar();
         updateRalphStatusBar();
     });

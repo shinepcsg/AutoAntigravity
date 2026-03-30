@@ -42,32 +42,25 @@ class AutoAcceptManager {
             return true;
         }
 
-        // Try auto-discovery via ConnectionManager before giving up
-        if (this.connectionManager) {
-            this.log(`[CDP] Port ${configPort} refused — scanning nearby ports...`);
-            // Trigger a connection attempt which includes port scanning
-            this.connectionManager.start();
-            // Give it a moment to scan
-            await new Promise(r => setTimeout(r, 3000));
-            const discoveredPort = this.connectionManager.getActivePort();
-            if (discoveredPort) {
-                this.log(`[CDP] ✓ Auto-discovered CDP on port ${discoveredPort}`);
-                return true;
-            }
+        // 포트 병렬 스캔 (connectionManager.start() 없이 — isRunning 오염 방지)
+        this.log(`[CDP] Port ${configPort} not responding — scanning nearby ports...`);
+        const scanRange = 20;
+        const portsToScan = [];
+        for (let p = Math.max(1024, configPort - scanRange); p <= Math.min(65535, configPort + scanRange); p++) {
+            if (p !== configPort) portsToScan.push(p);
+        }
+        const results = await Promise.all(
+            portsToScan.map(p => this._pingPort(p).then(ok => ({ p, ok })))
+        );
+        const found = results.find(r => r.ok);
+        if (found) {
+            this.log(`[CDP] ✓ Auto-discovered CDP on port ${found.p}`);
+            return true;
         }
 
-        this.log(`[CDP] ⚠ Port ${configPort} refused — remote debugging not enabled`);
-        vscode.window.showErrorMessage(
-            `⚡ AutoAntigravity needs Debug Mode (Port ${configPort}). Please apply the fix or update your shortcut.`,
-            'Auto-Fix Shortcut (Windows)',
-            'Manual Guide'
-        ).then(action => {
-            if (action === 'Auto-Fix Shortcut (Windows)') this._applyWindowsPatch(configPort);
-            else if (action === 'Manual Guide') vscode.env.openExternal(
-                vscode.Uri.parse('https://github.com/yazanbaker94/AntiGravity-AutoAccept#setup')
-            );
-        });
-        return false;
+        // CDP 포트를 찾지 못해도 soft-fail: VS Code 명령 API 폴링은 계속 가능
+        this.log(`[CDP] ⚠ No CDP port found — AutoAccept will run in VS Code command-only mode`);
+        return true;
     }
 
     toggle() {
@@ -83,20 +76,14 @@ class AutoAcceptManager {
     enable() {
         if (!this.isEnabled) {
             this.isEnabled = true;
-            this._startPolling();
-            if (this.connectionManager) {
-                this.connectionManager.resumeActiveScanning();
-            }
+            this._startPolling(); // resumeActiveScanning + start 포함
         }
     }
 
     disable() {
         if (this.isEnabled) {
             this.isEnabled = false;
-            this._stopPolling();
-            if (this.connectionManager) {
-                this.connectionManager.pauseActiveScanning();
-            }
+            this._stopPolling(); // pauseActiveScanning + stop 포함
         }
     }
 
