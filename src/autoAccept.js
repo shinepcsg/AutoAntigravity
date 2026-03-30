@@ -223,7 +223,8 @@ foreach ($dir in $paths) {
     }
 }
 if ($manualFixNeeded) { Write-Output "MANUAL_NEEDED" }
-elseif ($patched -or $patchedLnk) { Write-Output "SUCCESS|$patchedLnk" }
+elseif ($patched) { Write-Output "PATCHED|$patchedLnk" }
+elseif ($patchedLnk) { Write-Output "ALREADY_PATCHED|$patchedLnk" }
 else { Write-Output "NOT_FOUND" }
 `;
 
@@ -244,9 +245,9 @@ else { Write-Output "NOT_FOUND" }
                     vscode.window.showWarningMessage(
                         `Your shortcut already has a debugging port. Please manually change it to ${targetPort}.`
                     );
-                } else if (out.includes('SUCCESS|')) {
-                    const lnkPath = out.split('SUCCESS|')[1].trim();
-                    this.log(`[CDP] ✓ Shortcut ready: ${lnkPath}`);
+                } else if (out.includes('PATCHED|')) {
+                    const lnkPath = out.split('PATCHED|')[1].trim();
+                    this.log(`[CDP] ✓ Shortcut patched: ${lnkPath}`);
                     vscode.window.showInformationMessage(
                         `✅ Shortcut ready! Restart Antigravity to activate AutoAccept.`,
                         'Restart Now'
@@ -255,6 +256,9 @@ else { Write-Output "NOT_FOUND" }
                             vscode.commands.executeCommand('workbench.action.quit');
                         }
                     });
+                } else if (out.includes('ALREADY_PATCHED|')) {
+                    const lnkPath = out.split('ALREADY_PATCHED|')[1].trim();
+                    this.log(`[CDP] ✓ Shortcut already has the correct port: ${lnkPath}`);
                 } else {
                     this.log('[CDP] No matching shortcuts found');
                     vscode.window.showWarningMessage(
