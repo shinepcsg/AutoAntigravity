@@ -9,12 +9,19 @@
  */
 function buildDOMObserverScript(customTexts) {
     const allTexts = [
-        'run', 'accept',
-        'always allow', 'allow this conversation', 'allow',
-        'retry', 'continue',
+        'run', '실행', '実行', '运行', 'ausführen', 'ejecutar', 'exécuter',
+        'accept', '수락', '承認', '接受',
+        'always allow', '항상 허용', '常に許可', '始终允许',
+        'allow this conversation', '이 대화 허용', 'この会話を許可', '允许此对话',
+        'allow', '허용', '許可', '允许',
+        'retry', '재시도', '再試行', '重试',
+        'continue', '계속', '続行', '继续',
         ...customTexts
     ];
-    const expandTexts = ['expand', 'requires input'];
+    const expandTexts = [
+        'expand', '확장', '展開', '展开',
+        'requires input', '입력 필요', '入力が必要です', '需要输入'
+    ];
 
     return `
 (function() {
