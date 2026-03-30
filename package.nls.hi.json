@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "पुनरावृत्ति के बीच की देरी (एमएस)",
     "cfg.allowPrdModification": "कार्य फ़ाइल (PRD) परिवर्तन की अनुमति दें",
     "cfg.autoStart": "कार्य फ़ाइल परिवर्तन पर ऑटो-प्रारंभ",
-    "cfg.enableParallel": "समानांतर निष्पादन सक्षम करें",
+    "cfg.enableParallel": "#parallel टैग वाले कार्यों के लिए समानांतर निष्पादन सक्षम करें",
     "cfg.maxParallelTasks": "अधिकतम समानांतर कार्य",
     "cfg.sparseCheckoutPaths": "स्पार्स चेकआउट (Sparse-checkout) पथ",
     "cfg.telemetryPoll": "टेलीमेट्री मतदान का अंतराल (सेकंड)",

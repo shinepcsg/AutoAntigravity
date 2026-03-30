@@ -18,7 +18,7 @@ Antigravity 에이전트가 제안하는 **파일 편집, 터미널 명령, 권�
 PRD.md 기반 **반복적 에이전트 자율 실행** 시스템입니다.
 
 - **작업 파일 기반**: `PRD.md`에서 체크박스 형식(`- [ ]`)으로 작업 관리
-- **병렬 작업 지원**: `[병렬진행]` 태그를 통해 독립적인 git worktree에서 병렬 실행 및 자동 머지
+- **병렬 작업 지원**: `#parallel` 태그를 통해 독립적인 git worktree에서 병렬 실행 및 자동 머지
 - **진행 기록**: `progress.txt`에 각 반복의 결과를 append-only로 기록
 - **자동 커밋**: 매 반복마다 Git 자동 커밋
 - **컨텍스트 갱신**: 매 반복마다 새 세션으로 컨텍스트 윈도우 한계 극복
@@ -129,7 +129,7 @@ cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
 
 ### 🔀 병렬 작업 설정
 
-Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git worktree**에서 동시에 실행할 수 있습니다.
+Ralph Loop은 `#parallel` 태그가 붙은 작업을 **독립적인 git worktree**에서 동시에 실행할 수 있습니다.
 
 #### 활성화
 
@@ -142,19 +142,19 @@ Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git wor
 
 #### PRD에서 병렬 작업 지정
 
-작업 항목에 `[병렬진행]` 태그를 추가하면 해당 작업들이 병렬로 실행됩니다:
+작업 항목에 `#parallel` 태그를 추가하면 해당 작업들이 병렬로 실행됩니다:
 
 ```markdown
 ### Step 2: 독립적인 모듈 구현
-- [ ] [병렬진행] 작업 2-1: 사용자 모듈 구현 (src/user.js)
-- [ ] [병렬진행] 작업 2-2: 상품 모듈 구현 (src/product.js)
-- [ ] [병렬진행] 작업 2-3: 주문 모듈 구현 (src/order.js)
+- [ ] #parallel 작업 2-1: 사용자 모듈 구현 (src/user.js)
+- [ ] #parallel 작업 2-2: 상품 모듈 구현 (src/product.js)
+- [ ] #parallel 작업 2-3: 주문 모듈 구현 (src/order.js)
 - [ ] 검증 2: 모든 모듈의 단위 테스트 통과 확인
 ```
 
 #### 병렬 작업 규칙
 
-- **연속된 `[병렬진행]` 항목**이 하나의 병렬 그룹을 형성합니다.
+- **연속된 `#parallel` 항목**이 하나의 병렬 그룹을 형성합니다.
 - 일반 작업이 사이에 끼어있으면 **별개의 병렬 그룹**으로 구분됩니다.
 - **서로 다른 파일을 수정하는 작업**에만 사용하세요 — 같은 파일을 수정하면 머지 충돌이 발생합니다.
 - 이전 작업의 결과물에 의존하는 작업에는 **사용하지 마세요**.
@@ -183,7 +183,7 @@ Ralph Loop은 `[병렬진행]` 태그가 붙은 작업을 **독립적인 git wor
 | `autoAntigravity.ralphLoop.iterationDelayMs` | `1500` | 반복 간 대기 (ms) |
 | `autoAntigravity.ralphLoop.allowPrdModification` | `false` | 에이전트의 PRD 수정 허용 |
 | `autoAntigravity.ralphLoop.autoStart` | `true` | PRD 파일 변경 시 Ralph Loop 자동 시작 |
-| `autoAntigravity.ralphLoop.enableParallel` | `true` | `[병렬진행]` 작업 병렬 실행 활성화 |
+| `autoAntigravity.ralphLoop.enableParallel` | `true` | `#parallel` 작업 병렬 실행 활성화 |
 | `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | 동시 실행 최대 병렬 작업 수 (2~8) |
 
 ---

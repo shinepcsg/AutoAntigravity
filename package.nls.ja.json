@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "反復間の遅延（ミリ秒）",
     "cfg.allowPrdModification": "AgentによるPRDファイルの修正を許可",
     "cfg.autoStart": "タスクファイル変更時に自動開始",
-    "cfg.enableParallel": "[病列進行]タグ付きタスクの並列実行を有効にする",
+    "cfg.enableParallel": "#parallel タグ付きタスクの並列実行を有効にする",
     "cfg.maxParallelTasks": "最大同時並列タスク数",
     "cfg.sparseCheckoutPaths": "スパースチェックアウトのパス一覧",
     "cfg.telemetryPoll": "テレメトリのポーリング間隔（秒）",

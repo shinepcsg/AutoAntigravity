@@ -67,8 +67,8 @@ class TaskFileManager {
         const lines = content.split('\n');
         const tasks = [];
 
-        // Parallel tag pattern: [병렬진행] at the start of the task text
-        const parallelTagRe = /^\[병렬진행\]\s*/;
+        // Parallel tag pattern: #parallel at the start of the task text
+        const parallelTagRe = /^#parallel\s*/;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
@@ -115,7 +115,7 @@ class TaskFileManager {
     }
 
     /**
-     * Get the next task group — returns consecutive [병렬진행] tasks as a group,
+     * Get the next task group — returns consecutive #parallel tasks as a group,
      * or a single non-parallel task wrapped in an array.
      * @returns {{tasks: Array<{line: number, text: string, completed: boolean, parallel: boolean}>, parallel: boolean}}
      */

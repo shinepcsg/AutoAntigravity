@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "Задержка цикла (мс)",
     "cfg.allowPrdModification": "Разрешить агентам изменять PRD",
     "cfg.autoStart": "Автозапуск при изменении файла задач",
-    "cfg.enableParallel": "Разрешить параллельное выполнение",
+    "cfg.enableParallel": "Разрешить параллельное выполнение для задач с тегом #parallel",
     "cfg.maxParallelTasks": "Макс. параллельных задач",
     "cfg.sparseCheckoutPaths": "Пути sparse-checkout",
     "cfg.telemetryPoll": "Интервал телеметрии (сек)",

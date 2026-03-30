@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "迭代延迟时间（毫秒）",
     "cfg.allowPrdModification": "允许代理修改PRD文件",
     "cfg.autoStart": "检测到PRD修改时自动启动",
-    "cfg.enableParallel": "启用标记为[并列进行]的任务并行执行",
+    "cfg.enableParallel": "启用标记为 #parallel 的任务并行执行",
     "cfg.maxParallelTasks": "最大并发任务数",
     "cfg.sparseCheckoutPaths": "并行执行的稀疏签出路径列表",
     "cfg.telemetryPoll": "遥测查询间隔（秒）",

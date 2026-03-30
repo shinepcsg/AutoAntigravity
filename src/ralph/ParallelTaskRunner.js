@@ -1,5 +1,5 @@
 // AutoAntigravity — Parallel Task Runner
-// Orchestrates parallel execution of [병렬진행] task groups
+// Orchestrates parallel execution of #parallel task groups
 // Uses git worktrees for file isolation, file-based completion markers for status tracking
 
 const vscode = require('vscode');

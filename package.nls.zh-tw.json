@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "迭代延遲時間（毫秒）",
     "cfg.allowPrdModification": "允許代理修改 PRD 文件",
     "cfg.autoStart": "檢測到 PRD 修改時自動啟動",
-    "cfg.enableParallel": "啟用標有[病列進行] 的任務並行執行",
+    "cfg.enableParallel": "啟用標有 #parallel 的任務並行執行",
     "cfg.maxParallelTasks": "最大並發任務數",
     "cfg.sparseCheckoutPaths": "並行執行的稀疏簽出路徑列表",
     "cfg.telemetryPoll": "遙測查詢間隔（秒）",

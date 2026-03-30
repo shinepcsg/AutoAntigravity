@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "Délai entre les itérations (ms)",
     "cfg.allowPrdModification": "Permettre de modifier le PRD",
     "cfg.autoStart": "Démarrage automatique au changement de PRD",
-    "cfg.enableParallel": "Exécution parallèle active",
+    "cfg.enableParallel": "Activer l'exécution parallèle pour les tâches avec #parallel",
     "cfg.maxParallelTasks": "Tâches parallèles max",
     "cfg.sparseCheckoutPaths": "Chemins sparse-checkout",
     "cfg.telemetryPoll": "Intervalle télémétrie (s)",

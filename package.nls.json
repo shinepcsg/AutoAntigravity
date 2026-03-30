@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "Delay between iterations in milliseconds",
     "cfg.allowPrdModification": "Allow agent to add/modify tasks in PRD file during Ralph Loop iterations",
     "cfg.autoStart": "Auto-start Ralph Loop when task file changes",
-    "cfg.enableParallel": "Enable parallel execution for tasks tagged with [병렬진행]",
+    "cfg.enableParallel": "Enable parallel execution for tasks tagged with #parallel",
     "cfg.maxParallelTasks": "Maximum concurrent parallel tasks",
     "cfg.sparseCheckoutPaths": "Sparse-checkout paths list. Empty means full checkout.",
     "cfg.telemetryPoll": "Telemetry polling interval in seconds",

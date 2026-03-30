@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "فترة الانتظار بين التنفيذ (ميلي ثانية)",
     "cfg.allowPrdModification": "السماح بتغيير مستندات المتطلبات (PRD)",
     "cfg.autoStart": "بدء تلقائي عند تغيير الملف",
-    "cfg.enableParallel": "تمكين التنفيذ المتوازي",
+    "cfg.enableParallel": "تمكين التنفيذ المتوازي للمهام ذات الوسم #parallel",
     "cfg.maxParallelTasks": "أقصى عدد من المهام المتزامنة",
     "cfg.sparseCheckoutPaths": "قائمة مسارات التنزيل الجزئي",
     "cfg.telemetryPoll": "فترة التنبيه للاستخدام (ثانية)",

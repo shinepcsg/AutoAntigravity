@@ -19,7 +19,7 @@
     "cfg.iterationDelayMs": "Verzögerung zwischen Iterationen (ms)",
     "cfg.allowPrdModification": "PRD-Modifikationen durch Agenten zulassen",
     "cfg.autoStart": "Automatisch starten bei Aufgabendateiwechsel",
-    "cfg.enableParallel": "Parallele Ausführung aktivieren",
+    "cfg.enableParallel": "Parallele Ausführung für Aufgaben mit dem Tag #parallel aktivieren",
     "cfg.maxParallelTasks": "Maximale parallele Tasks",
     "cfg.sparseCheckoutPaths": "Pfadliste für sparse-checkout",
     "cfg.telemetryPoll": "Abfrageintervall (s)",
