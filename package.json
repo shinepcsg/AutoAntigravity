@@ -117,7 +117,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity.git"
+        "url": "https://github.com/shinepcsg/AutoAntigravity.git"
     },
     "license": "MIT"
 }

@@ -1,5 +1,16 @@
 # AutoAntigravity
 
+> ## 📢 저장소 이동 안내
+>
+> **이 저장소는 더 이상 업데이트되지 않습니다.**
+>
+> 새로운 업데이트는 아래 두 가지 방법으로 받을 수 있습니다:
+>
+> 1. **Antigravity IDE 확장 탭**에서 `AutoAntigravity` 검색 → 설치
+> 2. **GitHub**: [https://github.com/shinepcsg/AutoAntigravity/releases](https://github.com/shinepcsg/AutoAntigravity/releases)에서 `.vsix` 다운로드
+>
+> 지금 바로 최신 버전으로 업그레이드하세요! 🚀
+
 **Auto Accept** + **Ralph Loop** 기능을 하나로 통합한 Antigravity 확장 플러그인입니다.
 
 ---
@@ -41,7 +52,7 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 > 💡 설치 후 첫 실행 시 포트가 닫혀있으면 자동 패치 안내가 표시됩니다.
 
 ### 2. 확장 설치
-1. [Releases](http://office.trollgames.co.kr:3000/trollgames/AutoAntigravity/releases)에서 `.vsix` 다운로드
+1. [Releases](https://github.com/shinepcsg/AutoAntigravity/releases)에서 `.vsix` 다운로드
 2. Antigravity에서 `Ctrl+Shift+P` → `Extensions: Install from VSIX`
 3. 파일 선택 후 Reload Window
 

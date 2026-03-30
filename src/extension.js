@@ -6,6 +6,9 @@ const { AutoAcceptManager } = require('./autoAccept');
 const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
 const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 
+const NEW_REPO_URL = 'https://github.com/shinepcsg/AutoAntigravity';
+const MIGRATION_STATE_KEY = 'autoAntigravity.migrationNotified_v1.4.0';
+
 let autoAccept = null;
 let ralphLoop = null;
 let sidebarProvider = null;
@@ -60,10 +63,39 @@ function updateRalphStatusBar() {
     if (sidebarProvider) sidebarProvider.updateState();
 }
 
+/**
+ * Show a one-time migration notification directing users to the new GitHub repository.
+ * Uses globalState to ensure the message is shown only once.
+ */
+async function showMigrationNotice(context) {
+    const alreadyNotified = context.globalState.get(MIGRATION_STATE_KEY, false);
+    if (alreadyNotified) return;
+
+    const action = await vscode.window.showWarningMessage(
+        '📢 AutoAntigravity 저장소가 이동했습니다! '
+        + 'Antigravity IDE 확장 탭에서 "AutoAntigravity"를 검색하여 설치하거나, '
+        + 'GitHub에서 최신 버전을 다운로드하세요.',
+        { modal: false },
+        '🔗 GitHub Releases',
+        '다시 보지 않기'
+    );
+
+    if (action === '🔗 GitHub Releases') {
+        vscode.env.openExternal(vscode.Uri.parse(NEW_REPO_URL + '/releases'));
+    }
+
+    // Mark as notified regardless of which button was clicked (or dismissed)
+    await context.globalState.update(MIGRATION_STATE_KEY, true);
+    log('[Migration] User notified about repository move to GitHub');
+}
+
 // ─── Activation ───────────────────────────────────────────────────────
 function activate(context) {
     outputChannel = vscode.window.createOutputChannel('AutoAntigravity');
     log('AutoAntigravity extension activating (v1.4.0)');
+
+    // ─── Repository Migration Notice ─────────────────────────────────
+    showMigrationNotice(context);
 
     // ─── Initialize Auto Accept ───────────────────────────────────────
     autoAccept = new AutoAcceptManager(log);
