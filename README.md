@@ -18,10 +18,18 @@ Antigravity 에이전트가 제안하는 **파일 편집, 터미널 명령, 권�
 PRD.md 기반 **반복적 에이전트 자율 실행** 시스템입니다.
 
 - **작업 파일 기반**: `PRD.md`에서 체크박스 형식(`- [ ]`)으로 작업 관리
+- **병렬 작업 지원**: `[병렬진행]` 태그를 통해 독립적인 git worktree에서 병렬 실행 및 자동 머지
 - **진행 기록**: `progress.txt`에 각 반복의 결과를 append-only로 기록
 - **자동 커밋**: 매 반복마다 Git 자동 커밋
 - **컨텍스트 갱신**: 매 반복마다 새 세션으로 컨텍스트 윈도우 한계 극복
 - **안전장치**: 최대 반복 횟수 제한
+
+### 📱 텔레그램(Telegram) 봇 연동
+텔레그램 봇을 통해 작업 흐름을 모니터링하고 관리할 수 있습니다.
+
+- **간편한 UI 설정**: AutoAntigravity 사이드바 확장 설정 패널에서 봇 토큰 및 Chat ID 등록
+- **안전한 보존**: `.env` 파일을 활용한 봇 설정 유지 및 관리
+- **알림 전송 등**: 에이전트 작업 모니터링 등 주요 확장 기능 기반 마련
 
 ---
 
@@ -41,9 +49,8 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 > 💡 설치 후 첫 실행 시 포트가 닫혀있으면 자동 패치 안내가 표시됩니다.
 
 ### 2. 확장 설치
-1. [Releases](https://github.com/shinepcsg/AutoAntigravity/releases)에서 `.vsix` 다운로드
-2. Antigravity에서 `Ctrl+Shift+P` → `Extensions: Install from VSIX`
-3. 파일 선택 후 Reload Window
+Antigravity의 **확장(Extensions) 패널**에서 `AutoAntigravity`를 검색하여 바로 설치할 수 있습니다.
+- [Open VSX Registry: AutoAntigravity 페이지](https://open-vsx.org/extension/shinepcsg/AutoAntigravity)
 
 ---
 
@@ -53,7 +60,16 @@ Antigravity 실행 시 다음 플래그를 추가하세요:
 - **토글**: 상태바에서 `⚡ AutoAccept: ON` / `✕ AutoAccept: OFF` 클릭
 - **명령어**: `Ctrl+Shift+P` → `AutoAntigravity: Toggle Auto Accept`
 
-### Ralph Loop
+### 📱 텔레그램 봇 설정
+작업 모니터링 및 알림 수신을 위해 텔레그램 봇을 연동할 수 있습니다.
+
+1. **봇 생성**: 텔레그램에서 `@BotFather`를 통해 봇을 생성하고 **Bot Token**을 발급받습니다.
+2. **Chat ID 확인**: 봇에 메시지를 보내거나 `@msid_bot` 등을 사용해 본인의 **Chat ID**를 확인합니다.
+3. **설정 등록**: Antigravity 좌측 액티비티 바에서 **AutoAntigravity 아이콘**을 클릭하여 사이드바 패널을 엽니다.
+4. 패널의 **텔레그램 연동 관리** 메뉴에 토큰과 Chat ID를 입력한 뒤 저장합니다.
+   > 💡 *설정된 정보는 워크스페이스 루트의 `.env` 파일에 안전하게 보존됩니다.*
+
+### 🔄 Ralph Loop
 1. **작업 파일 준비**: 워크스페이스에 `PRD.md` 생성 (체크박스 형식)
    ```markdown
    - [ ] API 엔드포인트 구현
