@@ -39,6 +39,20 @@ class AutoAcceptManager {
             return true;
         }
 
+        // Try auto-discovery via ConnectionManager before giving up
+        if (this.connectionManager) {
+            this.log(`[CDP] Port ${configPort} refused — scanning nearby ports...`);
+            // Trigger a connection attempt which includes port scanning
+            this.connectionManager.start();
+            // Give it a moment to scan
+            await new Promise(r => setTimeout(r, 3000));
+            const discoveredPort = this.connectionManager.getActivePort();
+            if (discoveredPort) {
+                this.log(`[CDP] ✓ Auto-discovered CDP on port ${discoveredPort}`);
+                return true;
+            }
+        }
+
         this.log(`[CDP] ⚠ Port ${configPort} refused — remote debugging not enabled`);
         vscode.window.showErrorMessage(
             `⚡ AutoAntigravity needs Debug Mode (Port ${configPort}). Please apply the fix or update your shortcut.`,
@@ -84,7 +98,7 @@ class AutoAcceptManager {
     // ─── Internal ─────────────────────────────────────────────────────
 
     _getConfiguredPort() {
-        return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9333);
+        return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9559);
     }
 
     _startPolling() {
@@ -94,14 +108,28 @@ class AutoAcceptManager {
         const interval = config.get('autoAccept.pollInterval', 500);
         this.log(`[AutoAccept] Polling started (every ${interval}ms, ${ACCEPT_COMMANDS.length} commands)`);
 
+        let lastDiagLog = 0;
+        const DIAG_INTERVAL = 30000; // Log diagnostics every 30s
+
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
-                const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
-                const commandsPromise = Promise.allSettled(
-                    ACCEPT_COMMANDS.map(cmd => vscode.commands.executeCommand(cmd))
+                const results = await Promise.allSettled(
+                    ACCEPT_COMMANDS.map(cmd =>
+                        vscode.commands.executeCommand(cmd)
+                            .then(r => ({ cmd, status: 'ok', result: r }))
+                    )
                 );
-                await Promise.race([commandsPromise, timeoutPromise]);
+
+                // Periodic diagnostic logging
+                const now = Date.now();
+                if (now - lastDiagLog > DIAG_INTERVAL) {
+                    lastDiagLog = now;
+                    const cdpStatus = this.connectionManager
+                        ? `CDP: port=${this.connectionManager.getActivePort() || 'none'}, sessions=${this.connectionManager.getSessionCount()}`
+                        : 'CDP: not initialized';
+                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}`);
+                }
             } catch (e) { /* silent */ }
             if (this.isEnabled) {
                 this.pollIntervalId = setTimeout(pollCycle, interval);

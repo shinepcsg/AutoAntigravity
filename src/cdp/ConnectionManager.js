@@ -224,6 +224,7 @@ class ConnectionManager {
         this.isConnecting = false;
         this.reconnectTimer = null;
         this.heartbeatTimer = null;
+        this.activeScanTimer = null;
     }
 
     // ─── Public API ───────────────────────────────────────────────────
@@ -241,6 +242,8 @@ class ConnectionManager {
         this.reconnectTimer = null;
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        clearInterval(this.activeScanTimer);
+        this.activeScanTimer = null;
         this._closeWebSocket();
         this.sessions.clear();
         this.ignoredTargets.clear();
@@ -301,6 +304,9 @@ class ConnectionManager {
                 try {
                     await this._initializeTargetDiscovery();
                     this.heartbeatTimer = setInterval(() => this._heartbeat(), 30000);
+                    // Active scan: force scanAndClick() on all sessions every 3s
+                    // This bypasses inactive tab setTimeout throttling
+                    this.activeScanTimer = setInterval(() => this._activeScanAll(), 3000);
                     resolve();
                 } catch (e) {
                     this.log(`[CDP] Initialization error: ${e.message}`);
@@ -357,6 +363,8 @@ class ConnectionManager {
         this._clearPending();
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        clearInterval(this.activeScanTimer);
+        this.activeScanTimer = null;
 
         if (this.isRunning) {
             this._scheduleReconnect();
@@ -472,6 +480,25 @@ class ConnectionManager {
         } catch (e) { }
     }
 
+    /**
+     * Active scan: force scanAndClick() on all attached sessions via CDP.
+     * This is the key fix for inactive tab throttling — instead of relying
+     * on the injected script's own timers (which get throttled), we actively
+     * push a scan command from the extension host (Node.js, never throttled).
+     */
+    async _activeScanAll() {
+        if (!this.ws || this.ws.readyState !== MiniWebSocket.OPEN) return;
+        if (this.sessions.size === 0) return;
+
+        for (const [targetId, sessionId] of this.sessions) {
+            try {
+                this._send('Runtime.evaluate', {
+                    expression: 'typeof window.__AA_FORCE_SCAN === "function" ? window.__AA_FORCE_SCAN() : null'
+                }, sessionId).catch(() => {});
+            } catch (e) { /* silent */ }
+        }
+    }
+
     // ─── CDP Protocol Transport ───────────────────────────────────────
 
     _send(method, params = {}, sessionId = null) {
@@ -560,6 +587,30 @@ class ConnectionManager {
         if (await this._pingPort(configPort)) {
             this.activeCdpPort = configPort;
             return configPort;
+        }
+
+        // Electron sometimes opens the debug port on a different port than requested.
+        // Scan a range around the configured port to find the actual CDP endpoint.
+        const scanRange = 100;
+        const startPort = Math.max(1024, configPort - scanRange);
+        const endPort = Math.min(65535, configPort + scanRange);
+        const batchSize = 20;
+
+        for (let base = startPort; base <= endPort; base += batchSize) {
+            const ports = [];
+            for (let p = base; p < Math.min(base + batchSize, endPort + 1); p++) {
+                if (p === configPort) continue; // Already tried
+                ports.push(p);
+            }
+            const results = await Promise.all(
+                ports.map(async (p) => ({ port: p, ok: await this._pingPort(p) }))
+            );
+            const found = results.find(r => r.ok);
+            if (found) {
+                this.log(`[CDP] ✓ Discovered CDP on port ${found.port} (configured: ${configPort})`);
+                this.activeCdpPort = found.port;
+                return found.port;
+            }
         }
 
         return null;

@@ -93,13 +93,13 @@ function buildDOMObserverScript(customTexts) {
                     text === 'expand' || text === 'requires input') {
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
-                        return null;
+                        continue;
                     }
                     var btnKey = _domPath(clickable) + ':' + (clickable.textContent || '').trim().toLowerCase().substring(0, 30);
                     var cooldown = (text === 'expand' || text === 'requires input') ? EXPAND_COOLDOWN_MS : COOLDOWN_MS;
                     var lastClick = clickCooldowns[btnKey] || 0;
                     if (lastClick && (Date.now() - lastClick < cooldown)) {
-                        return null;
+                        continue;
                     }
                     return clickable;
                 }
@@ -149,21 +149,34 @@ function buildDOMObserverScript(customTexts) {
         return null;
     }
 
+    // Expose for CDP-driven active polling (bypass inactive tab throttling)
+    window.__AA_FORCE_SCAN = scanAndClick;
+
     scanAndClick();
 
-    var debounceTimer = null;
+    // Use microtask-based debounce instead of setTimeout to avoid
+    // inactive tab throttling (setTimeout is clamped to >=1s in background tabs)
+    var debounceScheduled = false;
     var observer = new MutationObserver(function() {
-        if (debounceTimer) return;
-        debounceTimer = setTimeout(function() {
-            debounceTimer = null;
+        if (debounceScheduled) return;
+        debounceScheduled = true;
+        Promise.resolve().then(function() {
+            debounceScheduled = false;
             scanAndClick();
-        }, 100);
+        });
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
+
+    // Fallback: periodic scan every 2s using setInterval as a safety net.
+    // Even if setInterval is throttled in background tabs, it still fires
+    // (at reduced rate ~1/sec) unlike setTimeout chains which can stall.
+    setInterval(function() {
+        scanAndClick();
+    }, 2000);
 
     return 'observer-installed';
 })()

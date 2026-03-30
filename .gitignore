@@ -1,7 +1,45 @@
+# Dependencies
 node_modules/
-*.vsix
-.vscode-test/
+
+# Build output
 out/
 dist/
+
+# VSIX packages (generated artifacts, not source)
+*.vsix
+
+# VS Code test
+.vscode-test/
+.vscode/
+
+# OS files
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Editor
+*.swp
+*.swo
+*~
+*~Stashed changes
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Gemini / AI
+.gemini/
+PRD.md
+progress.txt
+
+# Agent session lock
+.agent-running
+
+# Ralph parallel worktrees
+.ralph-worktrees/
+/ResultImages
+/.antigravity/media

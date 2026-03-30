@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "AutoAntigravity",
     "description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
-    "version": "1.4.0",
+    "version": "1.8.135",
     "publisher": "TrollGames",
     "icon": "images/icon.png",
     "engines": {
@@ -30,12 +30,16 @@
                 "title": "AutoAntigravity: Stop Ralph Loop"
             },
             {
-                "command": "autoAntigravity.emergencyStop",
-                "title": "AutoAntigravity: Emergency Stop"
-            },
-            {
                 "command": "autoAntigravity.selectTaskFile",
                 "title": "AutoAntigravity: Select Task File"
+            },
+            {
+                "command": "autoAntigravity.checkForUpdates",
+                "title": "AutoAntigravity: Check for Updates"
+            },
+            {
+                "command": "autoAntigravity.pushNow",
+                "title": "AutoAntigravity: Git Push"
             }
         ],
         "viewsContainers": {
@@ -61,6 +65,11 @@
                 "command": "autoAntigravity.toggleAutoAccept",
                 "key": "ctrl+alt+shift+u",
                 "mac": "cmd+alt+shift+u"
+            },
+            {
+                "command": "workbench.action.closeOtherEditors",
+                "key": "ctrl+shift+w",
+                "mac": "cmd+shift+w"
             }
         ],
         "configuration": {
@@ -81,8 +90,8 @@
                 },
                 "autoAntigravity.autoAccept.cdpPort": {
                     "type": "number",
-                    "default": 9333,
-                    "description": "CDP remote-debugging-port (default 9333 avoids browser control conflict)"
+                    "default": 9559,
+                    "description": "CDP remote-debugging-port (default 9559 avoids browser control conflict)"
                 },
                 "autoAntigravity.ralphLoop.maxIterations": {
                     "type": "number",
@@ -104,16 +113,82 @@
                     "default": true,
                     "description": "Automatically git commit after each iteration"
                 },
+                "autoAntigravity.ralphLoop.autoDeleteBranch": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically delete task branch after merge (자동 브랜치 폐기)"
+                },
+                "autoAntigravity.ralphLoop.autoPush": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "세션 종료 후 자동으로 git push 실행 (Auto push after session ends)"
+                },
                 "autoAntigravity.ralphLoop.iterationDelayMs": {
                     "type": "number",
-                    "default": 3000,
+                    "default": 1500,
                     "description": "Delay between iterations in milliseconds"
+                },
+                "autoAntigravity.ralphLoop.allowPrdModification": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Allow agent to add/modify tasks in PRD file during Ralph Loop iterations"
+                },
+                "autoAntigravity.ralphLoop.autoStart": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "PRD 파일 변경 감지 시 Ralph Loop 자동 시작 (Auto-start Ralph Loop when task file changes)"
+                },
+                "autoAntigravity.ralphLoop.enableParallel": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "[병렬진행] 태그가 있는 작업을 병렬로 실행 (Enable parallel execution for tasks tagged with [병렬진행])"
+                },
+                "autoAntigravity.ralphLoop.maxParallelTasks": {
+                    "type": "number",
+                    "default": 3,
+                    "minimum": 2,
+                    "maximum": 8,
+                    "description": "동시 실행 가능한 최대 병렬 작업 수 (Maximum concurrent parallel tasks)"
+                },
+                "autoAntigravity.ralphLoop.sparseCheckoutPaths": {
+                    "type": "array",
+                    "scope": "resource",
+                    "default": [],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "병렬 워크트리 sparse-checkout 경로 목록 — 프로젝트별로 설정 필요. 비어있으면 전체 체크아웃. Unity 프로젝트(Assets/ + ProjectSettings/ 존재)는 Assets/Script, Assets/Scripts, ProjectSettings 경로가 자동 포함됩니다."
+                },
+                "autoAntigravity.updater.autoInstall": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "새 버전 감지 시 확인 없이 자동 설치 (Auto-install updates without confirmation)"
+                },
+                "autoAntigravity.telemetry.pollInterval": {
+                    "type": "number",
+                    "default": 90,
+                    "minimum": 30,
+                    "maximum": 600,
+                    "description": "AI 모델 사용량 조회 간격 (초) — Telemetry polling interval in seconds"
+                },
+                "autoAntigravity.telegram.enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "텔레그램 봇 연동 활성화 — 워크스페이스 루트의 .env 파일에 TELEGRAM_BOT_TOKEN과 TELEGRAM_CHAT_ID를 설정하세요. (Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in the workspace .env file.)"
+                },
+                "autoAntigravity.ralphLoop.enableCodeReview": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "작업 완료 후 Gemini Flash 모델로 변경된 코드를 리뷰합니다. (Enable code review by Gemini Flash after task completion)"
                 }
             }
         }
     },
     "scripts": {
-        "package": "vsce package"
+        "package": "vsce package",
+        "release:patch": "npm version patch && git push origin master --tags",
+        "release:minor": "npm version minor && git push origin master --tags",
+        "release:major": "npm version major && git push origin master --tags"
     },
     "repository": {
         "type": "git",

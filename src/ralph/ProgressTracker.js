@@ -1,10 +1,10 @@
 // AutoAntigravity — Progress Tracker
-// Manages progress.txt (append-only) and git auto-commit
+// Manages progress.txt (append-only)
 
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const cp = require('child_process');
+
 
 class ProgressTracker {
     /**
@@ -62,6 +62,27 @@ class ProgressTracker {
     }
 
     /**
+     * Delete existing progress file (for fresh start from first task)
+     * @returns {boolean} true if file was deleted
+     */
+    resetProgressFile() {
+        const filePath = this.getProgressFilePath();
+        if (!filePath) return false;
+
+        if (fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+                this.log('[Ralph] 🗑 progress 파일 삭제 — 첫 번째 작업부터 시작');
+                return true;
+            } catch (e) {
+                this.log(`[Ralph] progress 파일 삭제 실패: ${e.message}`);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Initialize progress file with header
      */
     initializeProgressFile() {
@@ -92,48 +113,7 @@ class ProgressTracker {
         return isNaN(num) ? 0 : num;
     }
 
-    /**
-     * Auto-commit changes via git
-     * @param {number} iteration - Current iteration number
-     * @param {string} taskText - Task description for commit message
-     * @returns {Promise<boolean>} Whether commit succeeded
-     */
-    async autoCommit(iteration, taskText) {
-        const config = vscode.workspace.getConfiguration('autoAntigravity');
-        if (!config.get('ralphLoop.autoCommit', true)) {
-            this.log('[Ralph] Auto-commit disabled');
-            return false;
-        }
 
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) return false;
-
-        const cwd = workspaceFolders[0].uri.fsPath;
-        const shortTask = taskText.length > 50 ? taskText.substring(0, 47) + '...' : taskText;
-        const commitMsg = `[Ralph Loop #${iteration}] ${shortTask}`;
-
-        return new Promise((resolve) => {
-            cp.exec(
-                `git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
-                { cwd, timeout: 30000, windowsHide: true },
-                (err, stdout, stderr) => {
-                    if (err) {
-                        // "nothing to commit" is not really an error
-                        if (stderr?.includes('nothing to commit') || stdout?.includes('nothing to commit')) {
-                            this.log('[Ralph] Git: nothing to commit');
-                            resolve(true);
-                        } else {
-                            this.log(`[Ralph] Git commit failed: ${err.message}`);
-                            resolve(false);
-                        }
-                    } else {
-                        this.log(`[Ralph] Git committed: ${commitMsg}`);
-                        resolve(true);
-                    }
-                }
-            );
-        });
-    }
 }
 
 module.exports = { ProgressTracker };
