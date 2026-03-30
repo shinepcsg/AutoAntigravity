@@ -1,205 +1,208 @@
+[English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-cn.md) | [繁體中文](README.zh-tw.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [Русский](README.ru.md) | [Português (Brasil)](README.pt-br.md) | [हिन्दी](README.hi.md) | [العربية](README.ar.md)
+
+---
+
 # AutoAntigravity
 
-**Auto Accept** + **Ralph Loop** 기능을 하나로 통합한 Antigravity 확장 플러그인입니다.
+An Antigravity extension that integrates **Auto Accept** and **Ralph Loop** functions into one unified plugin.
 
 ---
 
-## ✨ 주요 기능
+## ✨ Key Features
 
 ### ⚡ Auto Accept
-Antigravity 에이전트가 제안하는 **파일 편집, 터미널 명령, 권한 요청**을 자동으로 수락합니다.
+Automatically accepts **file edits, terminal commands, and permission requests** suggested by the Antigravity agent.
 
-- **CDP(Chrome DevTools Protocol) + MutationObserver**: DOM 변경 즉시 감지 → 버튼 자동 클릭
-- **VS Code Commands API 폴링**: `acceptAgentStep`, `terminalCommand.run` 등 자동 실행
-- **감지 버튼**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
-- **커스텀 버튼 텍스트 추가 가능** (다국어 지원)
+- **CDP (Chrome DevTools Protocol) + MutationObserver**: Detects DOM changes immediately → Clicks buttons automatically
+- **VS Code Commands API Polling**: Automatically executes `acceptAgentStep`, `terminalCommand.run`, etc.
+- **Detected Buttons**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
+- **Custom Button Texts Supported** (Multi-language support)
 
 ### 🔄 Ralph Loop
-PRD.md 기반 **반복적 에이전트 자율 실행** 시스템입니다.
+An **iterative autonomous agent execution** system based on `PRD.md`.
 
-- **작업 파일 기반**: `PRD.md`에서 체크박스 형식(`- [ ]`)으로 작업 관리
-- **병렬 작업 지원**: `#parallel` 태그를 통해 독립적인 git worktree에서 병렬 실행 및 자동 머지
-- **진행 기록**: `progress.txt`에 각 반복의 결과를 append-only로 기록
-- **자동 커밋**: 매 반복마다 Git 자동 커밋
-- **컨텍스트 갱신**: 매 반복마다 새 세션으로 컨텍스트 윈도우 한계 극복
-- **안전장치**: 최대 반복 횟수 제한
+- **Task File Based**: Manages tasks in a checkbox format (`- [ ]`) in `PRD.md`
+- **Parallel Task Support**: Executes tasks independently in parallel using git worktrees via the `#parallel` tag and merges them automatically
+- **Progress Tracking**: Records the result of each iteration using an append-only method in `progress.txt`
+- **Auto Commit**: Automatically commits to Git after each iteration
+- **Context Refresh**: Overcomes context window limits by starting a new session for each iteration
+- **Safety Guards**: Limits the maximum number of iterations
 
-### 📱 텔레그램(Telegram) 봇 연동
-텔레그램 봇을 통해 작업 흐름을 모니터링하고 관리할 수 있습니다.
+### 📱 Telegram Bot Integration
+Monitor and manage workflows through a Telegram bot.
 
-- **간편한 UI 설정**: AutoAntigravity 사이드바 확장 설정 패널에서 봇 토큰 및 Chat ID 등록
-- **안전한 보존**: `.env` 파일을 활용한 봇 설정 유지 및 관리
-- **알림 전송 등**: 에이전트 작업 모니터링 등 주요 확장 기능 기반 마련
+- **Easy UI Setup**: Register Bot Token and Chat ID directly from the AutoAntigravity sidebar settings panel
+- **Secure Storage**: Maintains and manages bot settings securely using the `.env` file
+- **Notifications & More**: Lays the foundation for key extensions like monitoring agent tasks
 
 ---
 
-## 🛠 설치 방법
+## 🛠 Installation
 
-### 1. Debug Mode 활성화 (필수)
-Antigravity 실행 시 다음 플래그를 추가하세요:
+### 1. Enable Debug Mode (Required)
+Add the following flag when launching Antigravity:
 
 ```
 --remote-debugging-port=9559
 ```
 
-**Windows**: 바로가기 → 속성 → 대상에 추가  
+**Windows**: Add to Target in Shortcut → Properties  
 **Mac**: `open -a "Antigravity" --args --remote-debugging-port=9559`  
-**Linux**: `.desktop` 파일의 Exec 라인에 추가
+**Linux**: Add to the Exec line in your `.desktop` file
 
-> 💡 설치 후 첫 실행 시 포트가 닫혀있으면 자동 패치 안내가 표시됩니다.
+> 💡 After installation, if the port is closed on the first run, an auto-patch prompt will be displayed.
 
-### 2. 확장 설치
-Antigravity의 **확장(Extensions) 패널**에서 `AutoAntigravity`를 검색하여 바로 설치할 수 있습니다.
-- [Open VSX Registry: AutoAntigravity 페이지](https://open-vsx.org/extension/shinepcsg/AutoAntigravity)
+### 2. Install Extension
+Search for `AutoAntigravity` in the **Extensions Panel** of Antigravity to install it directly.
+- [Open VSX Registry: AutoAntigravity Page](https://open-vsx.org/extension/shinepcsg/AutoAntigravity)
 
 ---
 
-## 📖 사용법
+## 📖 Usage
 
 ### Auto Accept
-- **토글**: 상태바에서 `⚡ AutoAccept: ON` / `✕ AutoAccept: OFF` 클릭
-- **명령어**: `Ctrl+Shift+P` → `AutoAntigravity: Toggle Auto Accept`
+- **Toggle**: Click `⚡ AutoAccept: ON` / `✕ AutoAccept: OFF` on the status bar
+- **Command**: `Ctrl+Shift+P` → `AutoAntigravity: Toggle Auto Accept`
 
-### 📱 텔레그램 봇 설정
-작업 모니터링 및 알림 수신을 위해 텔레그램 봇을 연동할 수 있습니다.
+### 📱 Telegram Bot Setup
+You can link a Telegram bot to monitor tasks and receive notifications.
 
-1. **봇 생성**: 텔레그램에서 `@BotFather`를 통해 봇을 생성하고 **Bot Token**을 발급받습니다.
-2. **Chat ID 확인**: 봇에 메시지를 보내거나 `@msid_bot` 등을 사용해 본인의 **Chat ID**를 확인합니다.
-3. **설정 등록**: Antigravity 좌측 액티비티 바에서 **AutoAntigravity 아이콘**을 클릭하여 사이드바 패널을 엽니다.
-4. 패널의 **텔레그램 연동 관리** 메뉴에 토큰과 Chat ID를 입력한 뒤 저장합니다.
-   > 💡 *설정된 정보는 워크스페이스 루트의 `.env` 파일에 안전하게 보존됩니다.*
+1. **Create Bot**: Create a bot via `@BotFather` on Telegram and obtain a **Bot Token**.
+2. **Get Chat ID**: Send a message to the bot or use tools like `@msid_bot` to get your **Chat ID**.
+3. **Register Settings**: Open the sidebar panel by clicking the **AutoAntigravity icon** on the left activity bar.
+4. Enter your token and Chat ID in the **Telegram Integration Management** menu of the panel and save.
+   > 💡 *The configured information is securely saved in the `.env` file at the workspace root.*
 
 ### 🔄 Ralph Loop
-1. **작업 파일 준비**: 워크스페이스에 `PRD.md` 생성 (체크박스 형식)
+1. **Prepare Task File**: Create `PRD.md` in your workspace (using checkbox format)
    ```markdown
-   - [ ] API 엔드포인트 구현
-   - [ ] 데이터베이스 스키마 설계
-   - [ ] 단위 테스트 작성
+   - [ ] Implement API endpoint
+   - [ ] Design database schema
+   - [ ] Write unit tests
    ```
-2. **시작**: `Ctrl+Shift+P` → `AutoAntigravity: Start Ralph Loop`
-3. **정지**: `Ctrl+Shift+P` → `AutoAntigravity: Stop Ralph Loop`
+2. **Start**: `Ctrl+Shift+P` → `AutoAntigravity: Start Ralph Loop`
+3. **Stop**: `Ctrl+Shift+P` → `AutoAntigravity: Stop Ralph Loop`
 
+### `/write-prd` Workflow Registration
 
-### `/write-prd` 워크플로우 등록
+Using the `/write-prd` slash command, the AI agent automatically writes a PRD and applies it to the Ralph Loop immediately.  
+To use this workflow, you need to register it as a **Global Workflow** or a **Project Workflow**.
 
-`/write-prd` 슬래시 커맨드를 사용하면 AI 에이전트가 PRD를 자동 작성하여 Ralph Loop에 즉시 적용합니다.  
-이 워크플로우를 사용하려면 **글로벌 워크플로우** 또는 **프로젝트 워크플로우**로 등록해야 합니다.
+#### Method 1: Project Workflow (Use only in the current project)
 
-#### 방법 1: 프로젝트 워크플로우 (해당 프로젝트에서만 사용)
-
-프로젝트 루트에 `.agent/workflows/write-prd.md` 파일을 배치합니다.  
-AutoAntigravity 저장소에 이미 포함되어 있으므로, 다른 프로젝트에서 사용하려면 파일을 복사하세요.
+Place the `.agent/workflows/write-prd.md` file in your project root.  
+Since it is already included in the AutoAntigravity repository, simply copy the file to use it in other projects.
 
 ```
 your-project/
 ├── .agent/
 │   └── workflows/
-│       └── write-prd.md    ← 여기에 배치
+│       └── write-prd.md    ← Place it here
 ├── PRD.md
 └── ...
 ```
 
-> 💡 `.agents/workflows/`, `_agent/workflows/`, `_agents/workflows/` 경로도 지원됩니다.
+> 💡 The paths `.agents/workflows/`, `_agent/workflows/`, and `_agents/workflows/` are also supported.
 
-#### 방법 2: 글로벌 워크플로우 (모든 프로젝트에서 사용)
+#### Method 2: Global Workflow (Use in all projects)
 
-홈 디렉토리의 `.agent/workflows/` 폴더에 파일을 배치하면 모든 프로젝트에서 `/write-prd` 커맨드를 사용할 수 있습니다.
+By placing the file in the `.agent/workflows/` folder of your home directory, you can use the `/write-prd` command in all projects.
 
-**Windows** (프로젝트 루트에서 실행):
+**Windows** (Run in project root):
 ```powershell
-# 글로벌 워크플로우 디렉토리 생성
+# Create global workflow directory
 New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
 
-# write-prd.md 복사
+# Copy write-prd.md
 Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
 ```
 
-**Mac / Linux** (프로젝트 루트에서 실행):
+**Mac / Linux** (Run in project root):
 ```bash
-# 글로벌 워크플로우 디렉토리 생성
+# Create global workflow directory
 mkdir -p ~/.agent/workflows
 
-# write-prd.md 복사
+# Copy write-prd.md
 cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
 ```
 
-등록 후 Antigravity 채팅에서 `/write-prd`를 입력하면 워크플로우가 실행됩니다.
+After registration, typing `/write-prd` in the Antigravity chat will execute the workflow.
 
 ---
 
-### 🔀 병렬 작업 설정
+### 🔀 Parallel Task Configuration
 
-Ralph Loop은 `#parallel` 태그가 붙은 작업을 **독립적인 git worktree**에서 동시에 실행할 수 있습니다.
+Ralph Loop can execute tasks tagged with `#parallel` simultaneously in **independent git worktrees**.
 
-#### 활성화
+#### Activation
 
-병렬 실행은 기본적으로 활성화되어 있습니다. 설정에서 제어할 수 있습니다:
+Parallel execution is enabled by default. It can be controlled in the settings:
 
-| 설정 | 기본값 | 설명 |
+| Setting | Default | Description |
 |---|---|---|
-| `autoAntigravity.ralphLoop.enableParallel` | `true` | 병렬 실행 활성화/비활성화 |
-| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | 동시 실행 가능한 최대 작업 수 (2~8) |
+| `autoAntigravity.ralphLoop.enableParallel` | `true` | Enable/disable parallel execution |
+| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | Maximum number of concurrent tasks (2~8) |
 
-#### PRD에서 병렬 작업 지정
+#### Specifying Parallel Tasks in PRD
 
-작업 항목에 `#parallel` 태그를 추가하면 해당 작업들이 병렬로 실행됩니다:
+Add the `#parallel` tag to task items to execute them in parallel:
 
 ```markdown
-### Step 2: 독립적인 모듈 구현
-- [ ] #parallel 작업 2-1: 사용자 모듈 구현 (src/user.js)
-- [ ] #parallel 작업 2-2: 상품 모듈 구현 (src/product.js)
-- [ ] #parallel 작업 2-3: 주문 모듈 구현 (src/order.js)
-- [ ] 검증 2: 모든 모듈의 단위 테스트 통과 확인
+### Step 2: Implement independent modules
+- [ ] #parallel Task 2-1: Implement user module (src/user.js)
+- [ ] #parallel Task 2-2: Implement product module (src/product.js)
+- [ ] #parallel Task 2-3: Implement order module (src/order.js)
+- [ ] Validation 2: Ensure unit tests pass for all modules
 ```
 
-#### 병렬 작업 규칙
+#### Parallel Task Rules
 
-- **연속된 `#parallel` 항목**이 하나의 병렬 그룹을 형성합니다.
-- 일반 작업이 사이에 끼어있으면 **별개의 병렬 그룹**으로 구분됩니다.
-- **서로 다른 파일을 수정하는 작업**에만 사용하세요 — 같은 파일을 수정하면 머지 충돌이 발생합니다.
-- 이전 작업의 결과물에 의존하는 작업에는 **사용하지 마세요**.
+- **Consecutive `#parallel` items** form a single parallel group.
+- If a regular task is placed in between, they are separated into **distinct parallel groups**.
+- Use only for tasks that **modify different files** — modifying the same file will result in merge conflicts.
+- **Do not use** for tasks that depend on the output of previous tasks in the same group.
 
-#### 동작 방식
+#### How It Works
 
-1. Ralph Loop가 병렬 그룹을 감지하면 각 작업마다 **독립적인 git worktree**를 생성합니다.
-2. 각 worktree에서 별도의 Antigravity 에이전트가 작업을 병렬로 실행합니다.
-3. 모든 병렬 작업이 완료되면 결과를 **메인 브랜치에 자동 머지**합니다.
-4. 머지 충돌 발생 시 AI가 자동으로 해결을 시도합니다.
+1. When Ralph Loop detects a parallel group, it creates an **independent git worktree** for each task.
+2. A separate Antigravity agent executes the task in parallel within each worktree.
+3. Once all parallel tasks are complete, the results are **automatically merged into the main branch**.
+4. If a merge conflict occurs, the AI will try to resolve it automatically.
 
 ---
 
-## ⚙ 설정
+## ⚙ Settings
 
-| 설정 | 기본값 | 설명 |
+| Setting | Default | Description |
 |---|---|---|
-| `autoAntigravity.autoAccept.pollInterval` | `500` | 폴링 간격 (ms) |
-| `autoAntigravity.autoAccept.cdpPort` | `9559` | CDP 디버그 포트 |
-| `autoAntigravity.autoAccept.customButtonTexts` | `[]` | 추가 버튼 텍스트 |
-| `autoAntigravity.ralphLoop.maxIterations` | `50` | 최대 반복 횟수 |
-| `autoAntigravity.ralphLoop.taskFile` | `PRD.md` | 작업 파일명 |
-| `autoAntigravity.ralphLoop.progressFile` | `progress.txt` | 진행 파일명 |
-| `autoAntigravity.ralphLoop.autoCommit` | `true` | Git 작업별 브랜치 & 자동 커밋 |
-| `autoAntigravity.ralphLoop.autoDeleteBranch` | `true` | 머지 후 작업 브랜치 자동 삭제 |
-| `autoAntigravity.ralphLoop.iterationDelayMs` | `1500` | 반복 간 대기 (ms) |
-| `autoAntigravity.ralphLoop.allowPrdModification` | `false` | 에이전트의 PRD 수정 허용 |
-| `autoAntigravity.ralphLoop.autoStart` | `true` | PRD 파일 변경 시 Ralph Loop 자동 시작 |
-| `autoAntigravity.ralphLoop.enableParallel` | `true` | `#parallel` 작업 병렬 실행 활성화 |
-| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | 동시 실행 최대 병렬 작업 수 (2~8) |
+| `autoAntigravity.autoAccept.pollInterval` | `500` | Polling interval (ms) |
+| `autoAntigravity.autoAccept.cdpPort` | `9559` | CDP debug port |
+| `autoAntigravity.autoAccept.customButtonTexts` | `[]` | Additional button texts |
+| `autoAntigravity.ralphLoop.maxIterations` | `50` | Maximum iterations |
+| `autoAntigravity.ralphLoop.taskFile` | `PRD.md` | Task file name |
+| `autoAntigravity.ralphLoop.progressFile` | `progress.txt` | Progress file name |
+| `autoAntigravity.ralphLoop.autoCommit` | `true` | Auto branch & git commit per task |
+| `autoAntigravity.ralphLoop.autoDeleteBranch` | `true` | Auto delete task branch after merge |
+| `autoAntigravity.ralphLoop.iterationDelayMs` | `1500` | Delay between iterations (ms) |
+| `autoAntigravity.ralphLoop.allowPrdModification` | `false` | Allow agent to modify PRD |
+| `autoAntigravity.ralphLoop.autoStart` | `true` | Auto start Ralph Loop when PRD changes |
+| `autoAntigravity.ralphLoop.enableParallel` | `true` | Enable parallel execution for `#parallel` tasks |
+| `autoAntigravity.ralphLoop.maxParallelTasks` | `3` | Maximum concurrent parallel tasks (2~8) |
 
 ---
 
-## 🔒 안전성
+## 🔒 Safety
 
-- Auto Accept은 **Antigravity 에이전트 패널 내부**에서만 동작 (Webview Guard)
-- 외부 웹페이지에서는 클릭하지 않음
-- CDP는 **localhost 전용** — 외부 네트워크 접근 없음
-- Ralph Loop은 최대 반복 횟수 제한으로 무한 루프 방지
+- Auto Accept operates **only inside the Antigravity agent panel** (Webview Guard)
+- It does not click on external web pages
+- CDP is **localhost only** — no external network access
+- Ralph Loop prevents infinite loops by limiting the maximum number of iterations
 
 ---
 
-## 📝 라이선스
+## 📝 License
 
 MIT License — [LICENSE](LICENSE)
 
-## 🙏 크레딧
-박찬선(shinepcs@gmail.com)
+## 🙏 Credits
+Chansun Park (shinepcs@gmail.com)
