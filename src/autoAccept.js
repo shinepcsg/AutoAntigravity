@@ -110,19 +110,14 @@ class AutoAcceptManager {
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
-                // CDP Active Scan이 모든 세션을 커버하므로, CDP 세션이 있으면 명령 폴링 생략
-                const cdpCoversAll = this.connectionManager
-                    && this.connectionManager.getSessionCount() > 0;
-
-                if (!cdpCoversAll) {
-                    // CDP 미연결 시 fallback: VS Code 명령 API로 활성 탭 버튼 클릭
-                    await Promise.allSettled(
-                        ACCEPT_COMMANDS.map(cmd =>
-                            vscode.commands.executeCommand(cmd)
-                                .then(r => ({ cmd, status: 'ok', result: r }))
-                        )
-                    );
-                }
+                // VS Code 명령 API로 활성 탭/네이티브 인라인 버튼 클릭 (CDP와 독립적으로 항상 실행)
+                // 터미널 프롬프트나 에디터 인라인 패널은 CDP 웹뷰 대상이 아니므로 이 폴링이 필수적입니다.
+                await Promise.allSettled(
+                    ACCEPT_COMMANDS.map(cmd =>
+                        vscode.commands.executeCommand(cmd)
+                            .then(r => ({ cmd, status: 'ok', result: r }))
+                    )
+                );
 
                 // Periodic diagnostic logging
                 const now = Date.now();
@@ -132,8 +127,7 @@ class AutoAcceptManager {
                         ? `CDP: port=${this.connectionManager.getActivePort() || 'none'}, sessions=${this.connectionManager.getSessionCount()}`
                         : 'CDP: not initialized';
                     const idleMode = (now - this._lastAcceptTime > this._idleThresholdMs) ? 'idle' : 'active';
-                    const pollMode = cdpCoversAll ? 'cdp-only' : 'cmd-fallback';
-                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}, mode=${idleMode}, poll=${pollMode}`);
+                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}, mode=${idleMode}, poll=cmd-always`);
                 }
             } catch (e) { /* silent */ }
             if (this.isEnabled) {
