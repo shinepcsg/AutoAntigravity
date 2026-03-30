@@ -1,96 +1,96 @@
 ---
-description: PRD(작업 목록) 작성 후 AutoAntigravity Ralph Loop 작업 파일로 자동 적용
+description: Creating PRD (Task List) and automatically applying it to AutoAntigravity Ralph Loop task file
 ---
 
-# PRD 작성 워크플로우
+# Write PRD Workflow
 
-이 워크플로우는 AI 에이전트가 PRD를 작성하여 AutoAntigravity Ralph Loop의 작업 파일로 즉시 적용하는 과정을 안내합니다.
+This workflow guides the AI agent to write a PRD and immediately apply it as a task file for the AutoAntigravity Ralph Loop.
 
-## 사전 조건
+## Prerequisites
 
-- AutoAntigravity 플러그인이 설치되어 있어야 합니다.
-- `autoAntigravity.ralphLoop.autoStart` 설정이 `true`일 경우, PRD 저장 즉시 Ralph Loop가 자동 시작됩니다.
+- AutoAntigravity plugin must be installed.
+- If `autoAntigravity.ralphLoop.autoStart` is set to `true`, Ralph Loop will automatically start as soon as the PRD is saved.
 
-## PRD 작성 규칙
+## PRD Writing Rules
 
-1. **파일 경로**: 워크스페이스 루트의 `PRD.md` (설정에서 변경 가능: `autoAntigravity.ralphLoop.taskFile`)
-2. **체크박스 형식 필수**: Ralph Loop의 `TaskFileManager`는 `- [ ]` / `- [x]` 패턴만 인식합니다.
-3. **작업 분해**: 큰 작업은 적당히 작은 하위 작업으로 분리하세요 (예: Step 3-1, 3-2, ...).
-   - **단일 파일 수정이거나 논리적으로 밀접한 2~3개 변경은 하나의 Step으로 묶을 것** (예: 같은 클래스의 메서드 추가 + 해당 메서드 호출부 수정은 한 Step)
-   - **검증/빌드 등 5분 이내 완료 가능한 작업은 별도 Step으로 분리하지 말고 이전 Step의 검증 항목으로 포함할 것**
-   - **1~5줄 수정만으로 끝나는 작업을 독립 Step으로 만들지 말 것**
-4. **각 Step 끝에 검증 항목**을 포함하세요.
-5. **마지막 줄**에 반드시 다음을 포함하세요:
+1. **File Path**: `PRD.md` at the workspace root (Can be changed in settings: `autoAntigravity.ralphLoop.taskFile`).
+2. **Checkbox Format Required**: `TaskFileManager` of Ralph Loop only recognizes `- [ ]` / `- [x]` patterns.
+3. **Task Decomposition**: Break down large tasks into appropriately small sub-tasks (e.g., Step 3-1, 3-2, ...).
+   - **Group single file modifications or logically coherent 2-3 changes into one Step** (e.g., adding a method to a class + modifying its caller should be one Step).
+   - **Do not separate tasks like verification/builds that can be completed within 5 minutes into a separate Step. Include them as verification items in the previous Step.**
+   - **Do not make tasks that end with just 1-5 lines of code modification into an independent Step.**
+4. **Include a verification item** at the end of each Step.
+5. **Must include the following** on the last line:
    ```
-   ## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.
+   ## If necessary during the work of each step, add or change the contents of the PRD.
    ```
 
-## 병렬 작업 (`[병렬진행]` 태그)
+## Parallel Tasks (`#parallel` tag)
 
-**이전 작업 완료와 무관하게 독립적으로 실행 가능한 작업**에는 `[병렬진행]` 태그를 붙입니다.
-Ralph Loop가 이 태그를 인식하여 독립적인 git worktree에서 동시에 실행합니다.
+Attach the `#parallel` tag to **tasks that can be executed independently, regardless of the completion of previous tasks**.
+Ralph Loop recognizes this tag and executes them concurrently in independent git worktrees.
 
-### 문법
+### Syntax
 
 ```markdown
-- [ ] [병렬진행] 작업 설명
+- [ ] #parallel Task description
 ```
 
-### 규칙
+### Rules
 
-1. **연속된 `[병렬진행]` 항목**이 하나의 병렬 그룹을 형성합니다.
-2. 병렬 그룹 사이에 일반 작업이 끼어 있으면 **별개의 그룹**으로 구분됩니다.
-3. **서로 다른 파일을 수정하는 작업**에 사용하세요 — 같은 파일을 수정하면 머지 충돌이 발생합니다.
+1. **Consecutive `#parallel` items** form a single parallel group.
+2. If a general task is inserted between parallel groups, they are separated into **distinct groups**.
+3. Use for **tasks modifying different files** — modifying the same files will cause merge conflicts.
 
-### AI 판단 기준
+### AI Judgment Criteria
 
-AI가 `[병렬진행]` 태그를 붙일 때 고려할 사항:
-- ✅ 서로 다른 모듈/파일을 수정하는 작업
-- ✅ 서로 의존성이 없는 독립적 작업
-- ❌ 이전 작업의 결과물에 의존하는 작업
-- ❌ 같은 파일을 동시에 수정해야 하는 작업
+Things for AI to consider when attaching the `#parallel` tag:
+- ✅ Tasks modifying different modules/files
+- ✅ Independent tasks with no mutual dependencies
+- ❌ Tasks depending on the results of previous tasks
+- ❌ Tasks requiring simultaneous modification of the same file
 
-## PRD 템플릿
+## PRD Template
 
 ```markdown
-# [프로젝트/기능 이름] PRD
+# [Project/Feature Name] PRD
 
-> **목적**: [이 PRD의 목적을 간략히 설명]
-
----
-
-## 작업 목록
-
-### Step 1: [단계 제목]
-- [ ] 작업 1-1: [구체적인 작업 설명]
-- [ ] 작업 1-2: [구체적인 작업 설명]
-- [ ] 검증 1: [이 단계의 검증 방법]
-
-### Step 2: [독립적 작업들]
-- [ ] [병렬진행] 작업 2-1: [독립적인 작업 A]
-- [ ] [병렬진행] 작업 2-2: [독립적인 작업 B]
-- [ ] [병렬진행] 작업 2-3: [독립적인 작업 C]
-- [ ] 검증 2: [병렬 작업 통합 검증]
-
-### Step 3: [단계 제목]
-- [ ] 작업 3-1: [구체적인 작업 설명]
-- [ ] 검증 3: [이 단계의 검증 방법]
+> **Purpose**: [Briefly describe the purpose of this PRD]
 
 ---
 
-## 각 단계별 작업 중 필요하다면 PRD에 내용을 추가하거나 변경해라.
+## Task List
+
+### Step 1: [Step Title]
+- [ ] Task 1-1: [Specific task description]
+- [ ] Task 1-2: [Specific task description]
+- [ ] Verification 1: [Verification method for this step]
+
+### Step 2: [Independent Tasks]
+- [ ] #parallel Task 2-1: [Independent task A]
+- [ ] #parallel Task 2-2: [Independent task B]
+- [ ] #parallel Task 2-3: [Independent task C]
+- [ ] Verification 2: [Integrated verification of parallel tasks]
+
+### Step 3: [Step Title]
+- [ ] Task 3-1: [Specific task description]
+- [ ] Verification 3: [Verification method for this step]
+
+---
+
+## If necessary during the work of each step, add or change the contents of the PRD.
 ```
 
-## 실행 단계
+## Execution Steps
 
 // turbo-all
 
-1. 사용자의 요구사항을 분석하고 위 템플릿에 따라 PRD를 작성합니다.
-2. 워크스페이스 루트에 `PRD.md`로 저장합니다.
+1. Analyze user requirements and write a PRD according to the template above.
+2. Save it as `PRD.md` in the workspace root.
 
-## 주의사항
+## Cautions
 
-- `- [x]` 완료 마킹은 **직접 하지 마세요** — Ralph Loop가 자동으로 관리합니다.
-- `progress.txt`는 수정하지 마세요 — ProgressTracker가 관리합니다.
-- 이미 완료된 작업은 수정하지 마세요.
-- `[병렬진행]` 태그는 **반드시 서로 독립적인 작업에만** 사용하세요.
+- **Do not manually mark** `- [x]` for completion — Ralph Loop manages it automatically.
+- Do not modify `progress.txt` — it is managed by ProgressTracker.
+- Do not modify already completed tasks.
+- Only use the `#parallel` tag for **strictly independent tasks**.
