@@ -115,81 +115,97 @@ function buildDOMObserverScript(customTexts) {
         return node;
     }
 
-    function findButton(root, text) {
+    function findMatchingButton(root, actionTexts, expandTexts) {
         var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
         var node;
+        var ALL_TEXTS = actionTexts.concat(expandTexts);
+
         while ((node = walker.nextNode())) {
             var nodeTag = (node.tagName || '').toLowerCase();
             
             if (node.shadowRoot) {
-                var result = findButton(node.shadowRoot, text);
+                var result = findMatchingButton(node.shadowRoot, actionTexts, expandTexts);
                 if (result) return result;
             }
             if (nodeTag === 'iframe') {
                 try {
                     if (node.contentDocument && node.contentDocument.body) {
-                        var result = findButton(node.contentDocument.body, text);
-                        if (result) return result;
+                        var iframeResult = findMatchingButton(node.contentDocument.body, actionTexts, expandTexts);
+                        if (iframeResult) return iframeResult;
                     }
                 } catch(e) {}
             }
 
-            // Check data-testid and data-action first (high confidence)
-            var testId = (node.getAttribute('data-testid') || node.getAttribute('data-action') || '').toLowerCase();
-            if (testId.includes('alwaysallow') || testId.includes('always-allow') || testId.includes('allow')) {
-                var btnTag = (node.tagName || '').toLowerCase();
-                if (btnTag === 'button' || btnTag.includes('button') || node.getAttribute('role') === 'button' || btnTag.includes('btn')) {
-                    return node;
-                }
-            }
-
-            // Check visible text, title, and aria-label
             var nodeText = (node.textContent || '').trim().toLowerCase();
             var nodeTitle = (node.getAttribute('title') || '').trim().toLowerCase();
             var nodeAria = (node.getAttribute('aria-label') || '').trim().toLowerCase();
-
-            var tests = [nodeText];
-            if (nodeTitle) tests.push(nodeTitle);
-            if (nodeAria) tests.push(nodeAria);
-
-            var isMatch = tests.some(function(t) {
-                if (!t || t.length > 60) return false;
-                if (t === text) return true;
-                if (t.startsWith(text)) {
-                    // For short keywords (CJK or 'run'), match if next char is non-alphanumeric
-                    if (text.length < 5) {
-                        var nextChar = t[text.length];
-                        return !nextChar || !/[a-zA-Z0-9]/.test(nextChar);
+            
+            // Check data-testid and data-action first (high confidence)
+            var testId = (node.getAttribute('data-testid') || node.getAttribute('data-action') || '').toLowerCase();
+            if (testId.includes('alwaysallow') || testId.includes('always-allow') || testId.includes('allow')) {
+                if (nodeTag === 'button' || nodeTag.includes('button') || node.getAttribute('role') === 'button' || nodeTag.includes('btn')) {
+                    var clickableQuick = closestClickable(node);
+                    if (clickableQuick && !clickableQuick.disabled && clickableQuick.getAttribute('aria-disabled') !== 'true' && !clickableQuick.classList.contains('loading') && !clickableQuick.querySelector('.codicon-loading')) {
+                        return { node: clickableQuick, text: 'allow', isExpand: false };
                     }
-                    // For longer keywords, allow some suffix (e.g. 'always allow this')
-                    return t.length <= text.length * 3;
                 }
-                return false;
-            });
+            }
 
-            if (isMatch) {
+            if (!nodeText && !nodeTitle && !nodeAria) continue;
+
+            var matchFound = null;
+            var isExpandMatch = false;
+
+            for (var i = 0; i < ALL_TEXTS.length; i++) {
+                var text = ALL_TEXTS[i];
+                var tests = [nodeText];
+                if (nodeTitle) tests.push(nodeTitle);
+                if (nodeAria) tests.push(nodeAria);
+
+                var isMatch = tests.some(function(t) {
+                    if (!t || t.length > 60) return false;
+                    if (t === text) return true;
+                    if (t.startsWith(text)) {
+                        // For short keywords (CJK or 'run'), match if next char is non-alphanumeric
+                        if (text.length < 5) {
+                            var nextChar = t[text.length];
+                            return !nextChar || !/[a-zA-Z0-9]/.test(nextChar);
+                        }
+                        // For longer keywords, allow some suffix (e.g. 'always allow this')
+                        return t.length <= text.length * 3;
+                    }
+                    return false;
+                });
+
+                if (isMatch) {
+                    matchFound = text;
+                    isExpandMatch = i >= actionTexts.length;
+                    break;
+                }
+            }
+
+            if (matchFound) {
                 var clickable = closestClickable(node);
                 var tag2 = (clickable.tagName || '').toLowerCase();
                 
                 var isValidButton = tag2 === 'button' || tag2.includes('button') || clickable.getAttribute('role') === 'button' ||
                     tag2.includes('btn') || clickable.classList.contains('cursor-pointer') ||
                     clickable.onclick || clickable.getAttribute('tabindex') === '0' ||
-                    text === 'expand' || text === 'requires input';
+                    matchFound === 'expand' || matchFound === 'requires input';
                 
                 if (isValidButton) {
-                    
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
                         continue;
                     }
                     
                     var btnKey = _domPath(clickable) + ':' + (clickable.textContent || '').trim().toLowerCase().substring(0, 30);
-                    var cooldown = (text === 'expand' || text === 'requires input') ? EXPAND_COOLDOWN_MS : COOLDOWN_MS;
+                    var cooldown = isExpandMatch ? EXPAND_COOLDOWN_MS : COOLDOWN_MS;
                     var lastClick = clickCooldowns[btnKey] || 0;
                     if (lastClick && (Date.now() - lastClick < cooldown)) {
                         continue;
                     }
-                    return clickable;
+                    return { node: clickable, text: matchFound, isExpand: isExpandMatch };
                 }
             }
         }
@@ -214,38 +230,13 @@ function buildDOMObserverScript(customTexts) {
 
     function scanAndClick() {
         pruneCooldowns();
-        var isPanelMsg = isAgentPanel();
-        if (!isPanelMsg) {
-            // Check once if this really is something with buttons
-            for (var t = 0; t < BUTTON_TEXTS.length; t++) {
-                if (findButton(document.body, BUTTON_TEXTS[t])) {
-                    isPanelMsg = 'Force-bypass (found button)';
-                    break;
-                }
-            }
-        }
-
-        if (!isPanelMsg) {
-            return null;
-        }
-
-        for (var t = 0; t < BUTTON_TEXTS.length; t++) {
-            var btn = findButton(document.body, BUTTON_TEXTS[t]);
-            if (btn) {
-                var key = _domPath(btn) + ':' + (btn.textContent || '').trim().toLowerCase().substring(0, 30);
-                clickCooldowns[key] = Date.now();
-                btn.click();
-                return 'clicked:' + BUTTON_TEXTS[t];
-            }
-        }
-        for (var e = 0; e < EXPAND_TEXTS.length; e++) {
-            var expBtn = findButton(document.body, EXPAND_TEXTS[e]);
-            if (expBtn) {
-                var key = _domPath(expBtn) + ':' + (expBtn.textContent || '').trim().toLowerCase().substring(0, 30);
-                clickCooldowns[key] = Date.now();
-                expBtn.click();
-                return 'clicked:' + EXPAND_TEXTS[e];
-            }
+        var match = findMatchingButton(document.body, BUTTON_TEXTS, EXPAND_TEXTS);
+        if (match) {
+            var btn = match.node;
+            var key = _domPath(btn) + ':' + (btn.textContent || '').trim().toLowerCase().substring(0, 30);
+            clickCooldowns[key] = Date.now();
+            btn.click();
+            return 'clicked:' + match.text;
         }
         return null;
     }
@@ -256,21 +247,28 @@ function buildDOMObserverScript(customTexts) {
     // Only run initial scan if this is an agent panel
     if (isAgentPanel()) scanAndClick();
 
-    // Use requestAnimationFrame-based debounce to limit scan rate to display
-    // refresh rate (~60fps max) and avoid overwhelming CPU during rapid DOM changes.
-    // Falls back to microtask if rAF is not available (unlikely in webview).
-    var debounceScheduled = false;
-    var scheduleScan = typeof requestAnimationFrame === 'function'
-        ? function() { requestAnimationFrame(function() { debounceScheduled = false; scanAndClick(); }); }
-        : function() { Promise.resolve().then(function() { debounceScheduled = false; scanAndClick(); }); };
+    // Use a 1-second throttle for DOM mutation scans. 
+    // This prevents massive CPU usage inside workbench.html (main VS Code window)
+    // where mutations happen on every keystroke. 
+    var lastScanTime = 0;
+    var scanTimeout = null;
+    var SCAN_THROTTLE_MS = 1000;
+
+    function queueScan() {
+        if (scanTimeout) return;
+        var now = Date.now();
+        var delay = Math.max(0, SCAN_THROTTLE_MS - (now - lastScanTime));
+        scanTimeout = setTimeout(function() {
+            scanTimeout = null;
+            lastScanTime = Date.now();
+            scanAndClick();
+        }, delay);
+    }
 
     var observer = new MutationObserver(function() {
-        if (debounceScheduled) return;
-        // Skip scan entirely if this is not an agent panel (e.g. code editor)
-        // This prevents expensive DOM traversal on every keystroke in editor tabs.
+        // Only trigger the throttle queue if it matches our panel heuristics.
         if (!isAgentPanel()) return;
-        debounceScheduled = true;
-        scheduleScan();
+        queueScan();
     });
 
     observer.observe(document.body, {
@@ -279,8 +277,7 @@ function buildDOMObserverScript(customTexts) {
     });
 
     // Fallback: periodic scan every 4s using setInterval as a safety net.
-    // Even if setInterval is throttled in background tabs, it still fires
-    // (at reduced rate ~1/sec) unlike setTimeout chains which can stall.
+    // Even if setInterval is throttled in background tabs, it still fires.
     var fallbackTimer = setInterval(function() {
         scanAndClick();
     }, 4000);
