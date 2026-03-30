@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "%ext.displayName%",
     "description": "%ext.description%",
-    "version": "1.8.147",
+    "version": "1.8.148",
     "publisher": "shinepcs",
     "icon": "images/icon.png",
     "engines": {
