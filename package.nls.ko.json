@@ -1,6 +1,6 @@
 {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop — 자동 버튼 수락 및 영구 메모리 기반의 반복 AI 루프 실행.",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop — 자동 버튼 수락 및 영구 메모리 기반의 반복 AI 루프 실행.",
     "cmd.toggleAutoAccept": "AutoAntigravity: Auto Accept 켜기/끄기",
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop 시작",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",

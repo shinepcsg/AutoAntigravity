@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-**Auto Accept** と **Ralph Loop** の機能を一つに統合した Antigravity 拡張プラグインです。
+**Auto Accept**, **Telegram** And **Ralph Loop** の機能を一つに統合した Antigravity 拡張プラグインです。
 
 ---
 

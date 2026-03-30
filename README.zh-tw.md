@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-這是一個將 **Auto Accept** 和 **Ralph Loop** 功能整合為一體的 Antigravity 擴充套件。
+這是一個將 **Auto Accept**, **Telegram** And **Ralph Loop** 功能整合為一體的 Antigravity 擴充套件。
 
 ---
 

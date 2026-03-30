@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-Uma extensão para o Antigravity que integra as funcionalidades **Auto Accept** (Aceite Automático) e **Ralph Loop** em um único plugin.
+Uma extensão para o Antigravity que integra as funcionalidades **Auto Accept**, **Telegram** And **Ralph Loop** em um único plugin.
 
 ---
 

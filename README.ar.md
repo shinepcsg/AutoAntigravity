@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-إضافة لبرنامج Antigravity تدمج بين وظيفتي **Auto Accept** (القبول التلقائي) و **Ralph Loop** (حلقة رالف) في مكون إضافي واحد.
+إضافة لبرنامج Antigravity تدمج بين وظيفتي **Auto Accept**, **Telegram** And **Ralph Loop** (حلقة رالف) في مكون إضافي واحد.
 
 ---
 

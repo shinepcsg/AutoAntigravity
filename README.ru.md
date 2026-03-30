@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-Расширение для Antigravity, которое объединяет функции **Auto Accept (Автопринятие)** и **Ralph Loop (Цикл Рэйфа)** в одном плагине.
+Расширение для Antigravity, которое объединяет функции **Auto Accept**, **Telegram** And **Ralph Loop** в одном плагине.
 
 ---
 

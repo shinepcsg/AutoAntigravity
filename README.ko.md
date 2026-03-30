@@ -4,7 +4,7 @@
 
 # AutoAntigravity
 
-**Auto Accept** + **Ralph Loop** 기능을 하나로 통합한 Antigravity 확장 플러그인입니다.
+**Auto Accept**, **Telegram** And **Ralph Loop** 기능을 하나로 통합한 Antigravity 확장 플러그인입니다.
 
 ---
 

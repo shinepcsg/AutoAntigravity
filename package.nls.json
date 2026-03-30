@@ -1,6 +1,6 @@
 {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
     "cmd.toggleAutoAccept": "AutoAntigravity: Toggle Auto Accept",
     "cmd.startRalphLoop": "AutoAntigravity: Start Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",

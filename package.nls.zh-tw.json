@@ -1,6 +1,6 @@
 {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop — 自動點擊按鈕並執行持續記憶體的迭代 AI 循環。",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop — 自動點擊按鈕並執行持續記憶體的迭代 AI 循環。",
     "cmd.toggleAutoAccept": "AutoAntigravity: 切換自動接受",
     "cmd.startRalphLoop": "AutoAntigravity: 啟動 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",

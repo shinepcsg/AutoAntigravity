@@ -4,7 +4,7 @@ const path = require('path');
 const i18n = {
   "en": {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop for Antigravity — auto-click agent buttons and run iterative AI loops with persistent memory.",
     "cmd.toggleAutoAccept": "AutoAntigravity: Toggle Auto Accept",
     "cmd.startRalphLoop": "AutoAntigravity: Start Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",
@@ -32,7 +32,7 @@ const i18n = {
   },
   "ko": {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop — 자동 버튼 수락 및 영구 메모리 기반의 반복 AI 루프 실행.",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop — 자동 버튼 수락 및 영구 메모리 기반의 반복 AI 루프 실행.",
     "cmd.toggleAutoAccept": "AutoAntigravity: Auto Accept 켜기/끄기",
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop 시작",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",
@@ -88,7 +88,7 @@ const i18n = {
   },
   "zh-cn": {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop — 自动点击按钮并执行持久化内存的迭代AI循环。",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop — 自动点击按钮并执行持久化内存的迭代AI循环。",
     "cmd.toggleAutoAccept": "AutoAntigravity: 切换自动接受",
     "cmd.startRalphLoop": "AutoAntigravity: 启动 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
@@ -116,7 +116,7 @@ const i18n = {
   },
   "zh-tw": {
     "ext.displayName": "AutoAntigravity",
-    "ext.description": "Auto Accept + Ralph Loop — 自動點擊按鈕並執行持續記憶體的迭代 AI 循環。",
+    "ext.description": "Auto Accept, Telegram And Ralph Loop — 自動點擊按鈕並執行持續記憶體的迭代 AI 循環。",
     "cmd.toggleAutoAccept": "AutoAntigravity: 切換自動接受",
     "cmd.startRalphLoop": "AutoAntigravity: 啟動 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
