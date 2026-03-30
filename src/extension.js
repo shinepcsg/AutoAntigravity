@@ -6,7 +6,6 @@ const vscode = require('vscode');
 const { AutoAcceptManager } = require('./autoAccept');
 const { RalphLoopManager, LoopState } = require('./ralph/ralphLoop');
 const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
-const { AutoUpdater } = require('./updater');
 const { TelemetryService } = require('./telemetry/TelemetryService');
 const { TelegramService } = require('./telegram/TelegramService');
 const { scanWorkflows } = require('./telegram/scanWorkflows');
@@ -14,7 +13,6 @@ const { scanWorkflows } = require('./telegram/scanWorkflows');
 let autoAccept = null;
 let ralphLoop = null;
 let sidebarProvider = null;
-let autoUpdater = null;
 let telemetryService = null;
 let telegramService = null;
 let statusBarAutoAccept = null;
@@ -857,22 +855,6 @@ function activate(context) {
         })
     );
 
-    // Manual update check
-    context.subscriptions.push(
-        vscode.commands.registerCommand('autoAntigravity.checkForUpdates', () => {
-            if (autoUpdater) {
-                if (!autoUpdater._authHeader) {
-                    vscode.window.showWarningMessage(
-                        'AutoAntigravity: Git 자격 증명이 없어 업데이트를 확인할 수 없습니다. Git 저장소 접근 권한을 확인하세요.'
-                    );
-                    log('[Updater] checkForUpdates 차단됨 — _authHeader가 null');
-                    return;
-                }
-                autoUpdater.checkForUpdates();
-            }
-        })
-    );
-
     // Git Push Now
     context.subscriptions.push(
         vscode.commands.registerCommand('autoAntigravity.pushNow', async () => {
@@ -904,23 +886,9 @@ function activate(context) {
         updateAutoAcceptStatusBar();
         updateRalphStatusBar();
     });
-
-    // ─── Auto Updater ─────────────────────────────────────────────────
-    autoUpdater = new AutoUpdater(context, log);
-    autoUpdater.setRalphLoop(ralphLoop);
-    sidebarProvider.autoUpdater = autoUpdater;
-
-    // 업데이트 상태 변경 시 사이드바 갱신
-    autoUpdater.onUpdateStateChange = () => {
-        if (sidebarProvider) sidebarProvider.updateState();
-    };
-
-    autoUpdater.start().catch(e => log(`[Updater] start failed: ${e.message}`));
-    context.subscriptions.push({ dispose: () => autoUpdater.dispose() });
 }
 
 function deactivate() {
-    if (autoUpdater) autoUpdater.dispose();
     if (telegramService) telegramService.dispose();
     if (telemetryService) telemetryService.dispose();
     if (autoAccept) autoAccept.dispose();

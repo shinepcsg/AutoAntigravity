@@ -24,7 +24,6 @@ class RalphSidebarProvider {
         this.ralphLoop = null;
         this.autoAccept = null;
         this.telemetryService = null;
-        this.autoUpdater = null;
         this.onToggleAutoAccept = null;
         this.onStartRalph = null;
         this.onStopRalph = null;
@@ -157,43 +156,8 @@ class RalphSidebarProvider {
                         this.telemetryService.refresh();
                     }
                     break;
-                case 'installUpdate':
-                    if (this.autoUpdater) {
-                        this.autoUpdater.installUpdate();
-                    }
-                    break;
-                case 'installSpecificVersion':
-                    if (this.autoUpdater && message.version) {
-                        this.autoUpdater.installSpecificVersion(message.version);
-                    }
-                    break;
-                case 'checkForUpdates':
-                    if (this.autoUpdater) {
-                        this.autoUpdater.checkForUpdates();
-                    }
-                    break;
-                case 'toggleAutoInstall': {
-                    const config = vscode.workspace.getConfiguration('autoAntigravity');
-                    const current = config.get('updater.autoInstall', false);
-                    if (!current) {
-                        // OFF→ON: 경고 다이얼로그 표시
-                        const answer = await vscode.window.showWarningMessage(
-                            '⚠ 자동 업데이트 설치를 활성화하면 새 버전 감지 시 확인 없이 즉시 설치되고 IDE가 자동으로 리로드됩니다. 작업 중인 내용이 손실될 수 있습니다. 활성화하시겠습니까?',
-                            { modal: true },
-                            '활성화'
-                        );
-                        if (answer === '활성화') {
-                            await config.update('updater.autoInstall', true, vscode.ConfigurationTarget.Global);
-                            this._log('[Sidebar] Auto Install: ON');
-                        }
-                    } else {
-                        // ON→OFF: 즉시 비활성화
-                        await config.update('updater.autoInstall', false, vscode.ConfigurationTarget.Global);
-                        this._log('[Sidebar] Auto Install: OFF');
-                    }
-                    this.updateState();
-                    break;
-                }
+
+
                 case 'generateSamplePrd': {
                     const workspaceFolders = vscode.workspace.workspaceFolders;
                     if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -528,10 +492,6 @@ class RalphSidebarProvider {
             prdChanges: this.ralphLoop ? this.ralphLoop.getPrdChanges() : [],
             // 텔레메트리
             quota: this.telemetryService ? this.telemetryService.getData() : { connected: false, models: [] },
-            // 업데이트 정보
-            updateInfo: this.autoUpdater ? this.autoUpdater.getUpdateState() : { available: false, availableVersions: [] },
-            autoInstall: config.get('updater.autoInstall', false),
-            updaterActive: !!(this.autoUpdater && this.autoUpdater.checkTimer != null),
             // 텔레그램 상태
             telegramConnected: !!(this.telegramService && this.telegramService.isConnected && this.telegramService.isConnected()),
             telegramDetailedNotification: !!(this.telegramService && this.telegramService.detailedNotification),

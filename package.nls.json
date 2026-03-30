@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: Start Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Select Task File",
-    "cmd.checkForUpdates": "AutoAntigravity: Check for Updates",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Accept polling interval in milliseconds",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "Enable parallel execution for tasks tagged with [병렬진행]",
     "cfg.maxParallelTasks": "Maximum concurrent parallel tasks",
     "cfg.sparseCheckoutPaths": "Sparse-checkout paths list. Empty means full checkout.",
-    "cfg.autoInstall": "Auto-install updates without confirmation",
     "cfg.telemetryPoll": "Telemetry polling interval in seconds",
     "cfg.telegramEnabled": "Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in workspace .env",
     "cfg.enableCodeReview": "Enable code review by Gemini Flash after task completion"

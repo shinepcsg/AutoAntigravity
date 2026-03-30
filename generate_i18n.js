@@ -9,7 +9,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Start Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Select Task File",
-    "cmd.checkForUpdates": "AutoAntigravity: Check for Updates",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Accept polling interval in milliseconds",
@@ -27,7 +26,6 @@ const i18n = {
     "cfg.enableParallel": "Enable parallel execution for tasks tagged with [병렬진행]",
     "cfg.maxParallelTasks": "Maximum concurrent parallel tasks",
     "cfg.sparseCheckoutPaths": "Sparse-checkout paths list. Empty means full checkout.",
-    "cfg.autoInstall": "Auto-install updates without confirmation",
     "cfg.telemetryPoll": "Telemetry polling interval in seconds",
     "cfg.telegramEnabled": "Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in workspace .env",
     "cfg.enableCodeReview": "Enable code review by Gemini Flash after task completion"
@@ -39,7 +37,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop 시작",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",
     "cmd.selectTaskFile": "AutoAntigravity: 작업 파일(PRD) 선택",
-    "cmd.checkForUpdates": "AutoAntigravity: 업데이트 확인",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Accept 폴링 주기(ms)",
@@ -57,7 +54,6 @@ const i18n = {
     "cfg.enableParallel": "[병렬진행] 태그 작업의 병렬 실행 허용",
     "cfg.maxParallelTasks": "최대 동시 병렬 작업 수",
     "cfg.sparseCheckoutPaths": "병렬 워크트리 sparse-checkout 경로 (비어있으면 전체)",
-    "cfg.autoInstall": "업데이트 감지 시 자동 설치",
     "cfg.telemetryPoll": "AI 모델 사용량 등 텔레메트리 조회 주기(초)",
     "cfg.telegramEnabled": "텔레그램 알림 활성화 (.env 구성 필요)",
     "cfg.enableCodeReview": "작업 완료 후 Gemini Flash 코드 리뷰 활성화"
@@ -69,7 +65,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loopの開始",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loopの停止",
     "cmd.selectTaskFile": "AutoAntigravity: タスクファイルの選択",
-    "cmd.checkForUpdates": "AutoAntigravity: 更新の確認",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Acceptのポーリング間隔（ミリ秒）",
@@ -87,7 +82,6 @@ const i18n = {
     "cfg.enableParallel": "[病列進行]タグ付きタスクの並列実行を有効にする",
     "cfg.maxParallelTasks": "最大同時並列タスク数",
     "cfg.sparseCheckoutPaths": "スパースチェックアウトのパス一覧",
-    "cfg.autoInstall": "確認なしで更新を自動インストール",
     "cfg.telemetryPoll": "テレメトリのポーリング間隔（秒）",
     "cfg.telegramEnabled": "Telegramボットを有効にする（.envで設定）",
     "cfg.enableCodeReview": "Gemini Flashによるコードレビューを有効にする"
@@ -99,7 +93,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: 启动 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: 选择任务文件",
-    "cmd.checkForUpdates": "AutoAntigravity: 检查更新",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "自动接受轮询间隔（毫秒）",
@@ -117,7 +110,6 @@ const i18n = {
     "cfg.enableParallel": "启用标记为[并列进行]的任务并行执行",
     "cfg.maxParallelTasks": "最大并发任务数",
     "cfg.sparseCheckoutPaths": "并行执行的稀疏签出路径列表",
-    "cfg.autoInstall": "自动安装更新（无需确认）",
     "cfg.telemetryPoll": "遥测查询间隔（秒）",
     "cfg.telegramEnabled": "启用 Telegram 通知",
     "cfg.enableCodeReview": "使用 Gemini Flash 进行代码审计"
@@ -129,7 +121,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: 啟動 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: 選擇任務文件",
-    "cmd.checkForUpdates": "AutoAntigravity: 檢查更新",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "自動接受輪詢間隔（毫秒）",
@@ -147,7 +138,6 @@ const i18n = {
     "cfg.enableParallel": "啟用標有[病列進行] 的任務並行執行",
     "cfg.maxParallelTasks": "最大並發任務數",
     "cfg.sparseCheckoutPaths": "並行執行的稀疏簽出路徑列表",
-    "cfg.autoInstall": "自動安裝更新（無需確認）",
     "cfg.telemetryPoll": "遙測查詢間隔（秒）",
     "cfg.telegramEnabled": "啟用 Telegram 通知",
     "cfg.enableCodeReview": "使用 Gemini Flash 進行程式碼審查"
@@ -159,7 +149,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Iniciar bucle Ralph",
     "cmd.stopRalphLoop": "AutoAntigravity: Detener bucle Ralph",
     "cmd.selectTaskFile": "AutoAntigravity: Seleccionar archivo de tareas",
-    "cmd.checkForUpdates": "AutoAntigravity: Buscar actualizaciones",
     "cmd.pushNow": "AutoAntigravity: Empujar a Git",
     "view.ralphLoop": "Bucle Ralph",
     "cfg.pollInterval": "Intervalo de muestreo de autoaceptar (ms)",
@@ -177,7 +166,6 @@ const i18n = {
     "cfg.enableParallel": "Permitir ejecución en paralelo",
     "cfg.maxParallelTasks": "Máximo de tareas en paralelo",
     "cfg.sparseCheckoutPaths": "Rutas de sparse-checkout",
-    "cfg.autoInstall": "Instalar actualizaciones automáticamente",
     "cfg.telemetryPoll": "Intervalo entre telemetría (s)",
     "cfg.telegramEnabled": "Habilitar notificaciones en Telegram",
     "cfg.enableCodeReview": "Habilitar revisión de código de Gemini"
@@ -189,7 +177,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Démarrer Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Arrêter Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Sélectionner le fichier de tâches",
-    "cmd.checkForUpdates": "AutoAntigravity: Vérifier les mises à jour",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Boucle Ralph",
     "cfg.pollInterval": "Intervalle de sondage (ms)",
@@ -207,7 +194,6 @@ const i18n = {
     "cfg.enableParallel": "Exécution parallèle active",
     "cfg.maxParallelTasks": "Tâches parallèles max",
     "cfg.sparseCheckoutPaths": "Chemins sparse-checkout",
-    "cfg.autoInstall": "Installation automatique",
     "cfg.telemetryPoll": "Intervalle télémétrie (s)",
     "cfg.telegramEnabled": "Activer Telegram",
     "cfg.enableCodeReview": "Revue de code active"
@@ -219,7 +205,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop starten",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop stoppen",
     "cmd.selectTaskFile": "AutoAntigravity: Aufgabendatei auswählen",
-    "cmd.checkForUpdates": "AutoAntigravity: Nach Updates suchen",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Schleife",
     "cfg.pollInterval": "Polling-Intervall (ms)",
@@ -237,7 +222,6 @@ const i18n = {
     "cfg.enableParallel": "Parallele Ausführung aktivieren",
     "cfg.maxParallelTasks": "Maximale parallele Tasks",
     "cfg.sparseCheckoutPaths": "Pfadliste für sparse-checkout",
-    "cfg.autoInstall": "Updates ohne Bestätigung installieren",
     "cfg.telemetryPoll": "Abfrageintervall (s)",
     "cfg.telegramEnabled": "Telegram-Benachrichtigungen",
     "cfg.enableCodeReview": "Code-Überprüfung aktivieren"
@@ -249,7 +233,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Запустить цикл Ralph",
     "cmd.stopRalphLoop": "AutoAntigravity: Остановить цикл",
     "cmd.selectTaskFile": "AutoAntigravity: Выбрать файл задач",
-    "cmd.checkForUpdates": "AutoAntigravity: Проверить обновления",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Цикл Ralph",
     "cfg.pollInterval": "Интервал авто-принятия (мс)",
@@ -267,7 +250,6 @@ const i18n = {
     "cfg.enableParallel": "Разрешить параллельное выполнение",
     "cfg.maxParallelTasks": "Макс. параллельных задач",
     "cfg.sparseCheckoutPaths": "Пути sparse-checkout",
-    "cfg.autoInstall": "Автоообновление без запроса",
     "cfg.telemetryPoll": "Интервал телеметрии (сек)",
     "cfg.telegramEnabled": "Уведомления Telegram",
     "cfg.enableCodeReview": "Код ревью включено"
@@ -279,7 +261,6 @@ const i18n = {
     "cmd.startRalphLoop": "AutoAntigravity: Iniciar Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: Parar Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Selecionar arquivo de tarefas",
-    "cmd.checkForUpdates": "AutoAntigravity: Verificar atualizações",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ciclo Ralph",
     "cfg.pollInterval": "Intervalo (ms)",
@@ -297,7 +278,6 @@ const i18n = {
     "cfg.enableParallel": "Execução em paralelo",
     "cfg.maxParallelTasks": "Máximo tarefas simultâneas",
     "cfg.sparseCheckoutPaths": "Caminhos de sparse-checkout",
-    "cfg.autoInstall": "Instalação automática de atualização",
     "cfg.telemetryPoll": "Telemetria (s)",
     "cfg.telegramEnabled": "Notificações de Telegram",
     "cfg.enableCodeReview": "Habilitar code review"
@@ -309,7 +289,6 @@ const i18n = {
     "cmd.startRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप प्रारंभ करें",
     "cmd.stopRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप रोकें",
     "cmd.selectTaskFile": "ऑटोएंटिग्रैविटी: कार्य फ़ाइल का चयन करें",
-    "cmd.checkForUpdates": "ऑटोएंटिग्रैविटी: अद्यतनों की जाँच करें",
     "cmd.pushNow": "ऑटोएंटिग्रैविटी: गिट पुश (Git Push)",
     "view.ralphLoop": "राल्फ लूप",
     "cfg.pollInterval": "स्वचालित मतदान अंतराल (एमएस)",
@@ -327,7 +306,6 @@ const i18n = {
     "cfg.enableParallel": "समानांतर निष्पादन सक्षम करें",
     "cfg.maxParallelTasks": "अधिकतम समानांतर कार्य",
     "cfg.sparseCheckoutPaths": "स्पार्स चेकआउट (Sparse-checkout) पथ",
-    "cfg.autoInstall": "पुष्टि के बिना अपडेट स्वतः इंस्टॉल करें",
     "cfg.telemetryPoll": "टेलीमेट्री मतदान का अंतराल (सेकंड)",
     "cfg.telegramEnabled": "टेलीग्राम सूचनाएँ सक्षम करें",
     "cfg.enableCodeReview": "कोड समीक्षा सक्षम करें"
@@ -339,7 +317,6 @@ const i18n = {
     "cmd.startRalphLoop": "بدء حلقة رالف",
     "cmd.stopRalphLoop": "إيقاف حلقة رالف",
     "cmd.selectTaskFile": "تحديد ملف المهام",
-    "cmd.checkForUpdates": "تحقق من التحديثات",
     "cmd.pushNow": "Git Push دفع لـ",
     "view.ralphLoop": "حلقة رالف (Ralph Loop)",
     "cfg.pollInterval": "الفاصل الزمني بالملي ثانية",
@@ -357,7 +334,6 @@ const i18n = {
     "cfg.enableParallel": "تمكين التنفيذ المتوازي",
     "cfg.maxParallelTasks": "أقصى عدد من المهام المتزامنة",
     "cfg.sparseCheckoutPaths": "قائمة مسارات التنزيل الجزئي",
-    "cfg.autoInstall": "التثبيت التلقائي للتحديثات",
     "cfg.telemetryPoll": "فترة التنبيه للاستخدام (ثانية)",
     "cfg.telegramEnabled": "تفعيل إشعارات تيليجرام",
     "cfg.enableCodeReview": "مراجعة الكود باستخدام جيميني"
@@ -376,7 +352,6 @@ pkg.contributes.commands.forEach(cmd => {
     if (cmd.command === "autoAntigravity.startRalphLoop") cmd.title = "%cmd.startRalphLoop%";
     if (cmd.command === "autoAntigravity.stopRalphLoop") cmd.title = "%cmd.stopRalphLoop%";
     if (cmd.command === "autoAntigravity.selectTaskFile") cmd.title = "%cmd.selectTaskFile%";
-    if (cmd.command === "autoAntigravity.checkForUpdates") cmd.title = "%cmd.checkForUpdates%";
     if (cmd.command === "autoAntigravity.pushNow") cmd.title = "%cmd.pushNow%";
 });
 
@@ -401,7 +376,6 @@ if (props) {
     props["autoAntigravity.ralphLoop.enableParallel"].description = "%cfg.enableParallel%";
     props["autoAntigravity.ralphLoop.maxParallelTasks"].description = "%cfg.maxParallelTasks%";
     props["autoAntigravity.ralphLoop.sparseCheckoutPaths"].description = "%cfg.sparseCheckoutPaths%";
-    props["autoAntigravity.updater.autoInstall"].description = "%cfg.autoInstall%";
     props["autoAntigravity.telemetry.pollInterval"].description = "%cfg.telemetryPoll%";
     props["autoAntigravity.telegram.enabled"].description = "%cfg.telegramEnabled%";
     props["autoAntigravity.ralphLoop.enableCodeReview"].description = "%cfg.enableCodeReview%";

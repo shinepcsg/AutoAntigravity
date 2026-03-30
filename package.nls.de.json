@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop starten",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop stoppen",
     "cmd.selectTaskFile": "AutoAntigravity: Aufgabendatei auswählen",
-    "cmd.checkForUpdates": "AutoAntigravity: Nach Updates suchen",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Schleife",
     "cfg.pollInterval": "Polling-Intervall (ms)",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "Parallele Ausführung aktivieren",
     "cfg.maxParallelTasks": "Maximale parallele Tasks",
     "cfg.sparseCheckoutPaths": "Pfadliste für sparse-checkout",
-    "cfg.autoInstall": "Updates ohne Bestätigung installieren",
     "cfg.telemetryPoll": "Abfrageintervall (s)",
     "cfg.telegramEnabled": "Telegram-Benachrichtigungen",
     "cfg.enableCodeReview": "Code-Überprüfung aktivieren"

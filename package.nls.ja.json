@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loopの開始",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loopの停止",
     "cmd.selectTaskFile": "AutoAntigravity: タスクファイルの選択",
-    "cmd.checkForUpdates": "AutoAntigravity: 更新の確認",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Acceptのポーリング間隔（ミリ秒）",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "[病列進行]タグ付きタスクの並列実行を有効にする",
     "cfg.maxParallelTasks": "最大同時並列タスク数",
     "cfg.sparseCheckoutPaths": "スパースチェックアウトのパス一覧",
-    "cfg.autoInstall": "確認なしで更新を自動インストール",
     "cfg.telemetryPoll": "テレメトリのポーリング間隔（秒）",
     "cfg.telegramEnabled": "Telegramボットを有効にする（.envで設定）",
     "cfg.enableCodeReview": "Gemini Flashによるコードレビューを有効にする"

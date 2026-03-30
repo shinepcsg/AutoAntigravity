@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप प्रारंभ करें",
     "cmd.stopRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप रोकें",
     "cmd.selectTaskFile": "ऑटोएंटिग्रैविटी: कार्य फ़ाइल का चयन करें",
-    "cmd.checkForUpdates": "ऑटोएंटिग्रैविटी: अद्यतनों की जाँच करें",
     "cmd.pushNow": "ऑटोएंटिग्रैविटी: गिट पुश (Git Push)",
     "view.ralphLoop": "राल्फ लूप",
     "cfg.pollInterval": "स्वचालित मतदान अंतराल (एमएस)",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "समानांतर निष्पादन सक्षम करें",
     "cfg.maxParallelTasks": "अधिकतम समानांतर कार्य",
     "cfg.sparseCheckoutPaths": "स्पार्स चेकआउट (Sparse-checkout) पथ",
-    "cfg.autoInstall": "पुष्टि के बिना अपडेट स्वतः इंस्टॉल करें",
     "cfg.telemetryPoll": "टेलीमेट्री मतदान का अंतराल (सेकंड)",
     "cfg.telegramEnabled": "टेलीग्राम सूचनाएँ सक्षम करें",
     "cfg.enableCodeReview": "कोड समीक्षा सक्षम करें"

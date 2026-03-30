@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: Iniciar bucle Ralph",
     "cmd.stopRalphLoop": "AutoAntigravity: Detener bucle Ralph",
     "cmd.selectTaskFile": "AutoAntigravity: Seleccionar archivo de tareas",
-    "cmd.checkForUpdates": "AutoAntigravity: Buscar actualizaciones",
     "cmd.pushNow": "AutoAntigravity: Empujar a Git",
     "view.ralphLoop": "Bucle Ralph",
     "cfg.pollInterval": "Intervalo de muestreo de autoaceptar (ms)",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "Permitir ejecución en paralelo",
     "cfg.maxParallelTasks": "Máximo de tareas en paralelo",
     "cfg.sparseCheckoutPaths": "Rutas de sparse-checkout",
-    "cfg.autoInstall": "Instalar actualizaciones automáticamente",
     "cfg.telemetryPoll": "Intervalo entre telemetría (s)",
     "cfg.telegramEnabled": "Habilitar notificaciones en Telegram",
     "cfg.enableCodeReview": "Habilitar revisión de código de Gemini"

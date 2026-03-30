@@ -1293,11 +1293,7 @@ function getSidebarHtml(webview, langId = 'en') {
 </style>
 </head>
 <body>
-    <!-- ═══ Update Banner ═══ -->
-    <div id="updateBanner" class="update-banner">
-        <div class="update-banner-title">${t('update_available')}</div>
         <div id="updateVersionText" class="update-banner-version"></div>
-        <button id="btnInstallUpdate" class="btn btn-success">${t('update_now')}</button>
     </div>
 
     <!-- ═══ Error Banner ═══ -->
@@ -1452,15 +1448,6 @@ function getSidebarHtml(webview, langId = 'en') {
             ${t('auto_push')}
         </label>
 
-        <div id="autoInstallRow" style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
-            <label id="labelAutoInstall" class="toggle-row" style="flex:1; margin-bottom:0;">
-                <input id="chkAutoInstall" type="checkbox" />
-                ${t('auto_install')}
-            </label>
-            <button id="btnCheckForUpdates" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px; font-size:11px;">${t('check_updates')}</button>
-        </div>
-        <div id="versionButtons" class="version-buttons"></div>
-        <div id="noGitCredMsg" style="display:none; font-size:11px; opacity:0.7; padding:6px 8px; background:rgba(128,128,128,0.1); border-radius:4px; margin-top:6px;">${t('no_git_cred')}</div>
         <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">${t('write_prd_ws')}</button>
         <button id="btnSetWritePrdGlobal" class="btn btn-secondary">${t('write_prd_global')}</button>
     </div>
@@ -1506,9 +1493,6 @@ function getSidebarHtml(webview, langId = 'en') {
     document.getElementById('btnRefreshQuota').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'refreshQuota' });
     });
-    document.getElementById('btnInstallUpdate').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'installUpdate' });
-    });
     document.getElementById('taskFileName').addEventListener('click', () => {
         if (currentTaskFilePath) {
             vscodeApi.postMessage({ command: 'openTaskFile', filePath: currentTaskFilePath });
@@ -1546,13 +1530,6 @@ function getSidebarHtml(webview, langId = 'en') {
         vscodeApi.postMessage({ command: 'toggleEnableCodeReview' });
     });
 
-    document.getElementById('labelAutoInstall').addEventListener('click', (e) => {
-        e.preventDefault();
-        vscodeApi.postMessage({ command: 'toggleAutoInstall' });
-    });
-    document.getElementById('btnCheckForUpdates').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'checkForUpdates' });
-    });
     document.getElementById('btnToggleTelegram').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'toggleTelegram' });
     });
@@ -1702,63 +1679,6 @@ function getSidebarHtml(webview, langId = 'en') {
         // Version
         if (s.version) {
             document.getElementById('versionText').textContent = 'v' + s.version;
-        }
-
-        // Updater Active — hide update UI if no Git credentials
-        const updateBanner = document.getElementById('updateBanner');
-        const updateVersionText = document.getElementById('updateVersionText');
-        const versionBtnContainer = document.getElementById('versionButtons');
-        const noGitCredMsg = document.getElementById('noGitCredMsg');
-        const autoInstallRow = document.getElementById('autoInstallRow');
-
-        if (!s.updaterActive) {
-            // Git 권한 없음: 업데이트 관련 UI 숨기기
-            updateBanner.classList.remove('visible');
-            autoInstallRow.style.display = 'none';
-            versionBtnContainer.style.display = 'none';
-            noGitCredMsg.style.display = '';
-        } else {
-            // 업데이트 활성: UI 표시
-            autoInstallRow.style.display = '';
-            versionBtnContainer.style.display = '';
-            noGitCredMsg.style.display = 'none';
-
-            // Update Banner
-            if (s.updateInfo && s.updateInfo.available && s.updateInfo.version) {
-                updateBanner.classList.add('visible');
-                updateVersionText.textContent = t('update_to', { old: s.version, new: s.updateInfo.version });
-            } else {
-                updateBanner.classList.remove('visible');
-            }
-
-            // Auto Install checkbox
-            document.getElementById('chkAutoInstall').checked = !!s.autoInstall;
-
-            // Version Buttons (available updates)
-            const versions = (s.updateInfo && s.updateInfo.availableVersions) || [];
-            if (versions.length > 0) {
-                let vhtml = '';
-                for (const v of versions) {
-                    vhtml += '<button class="version-btn" data-version="' + escapeHtml(v.version) + '"'
-                        + ' data-asset="' + escapeHtml(v.assetName || '') + '"'
-                        + ' data-tag="' + escapeHtml(v.tagName || '') + '"'
-                        + '>⬆ v' + escapeHtml(v.version) + ' 업데이트</button>';
-                }
-                versionBtnContainer.innerHTML = vhtml;
-                // Attach click handlers
-                versionBtnContainer.querySelectorAll('.version-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        vscodeApi.postMessage({
-                            command: 'installSpecificVersion',
-                            version: btn.getAttribute('data-version'),
-                            assetName: btn.getAttribute('data-asset'),
-                            tagName: btn.getAttribute('data-tag')
-                        });
-                    });
-                });
-            } else {
-                versionBtnContainer.innerHTML = '';
-            }
         }
 
         // ─── Telegram ───

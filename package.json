@@ -34,10 +34,6 @@
                 "title": "%cmd.selectTaskFile%"
             },
             {
-                "command": "autoAntigravity.checkForUpdates",
-                "title": "%cmd.checkForUpdates%"
-            },
-            {
                 "command": "autoAntigravity.pushNow",
                 "title": "%cmd.pushNow%"
             }
@@ -158,11 +154,6 @@
                         "type": "string"
                     },
                     "description": "%cfg.sparseCheckoutPaths%"
-                },
-                "autoAntigravity.updater.autoInstall": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "%cfg.autoInstall%"
                 },
                 "autoAntigravity.telemetry.pollInterval": {
                     "type": "number",

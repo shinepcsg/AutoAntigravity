@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: Ralph Loop 시작",
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",
     "cmd.selectTaskFile": "AutoAntigravity: 작업 파일(PRD) 선택",
-    "cmd.checkForUpdates": "AutoAntigravity: 업데이트 확인",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "Auto Accept 폴링 주기(ms)",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "[병렬진행] 태그 작업의 병렬 실행 허용",
     "cfg.maxParallelTasks": "최대 동시 병렬 작업 수",
     "cfg.sparseCheckoutPaths": "병렬 워크트리 sparse-checkout 경로 (비어있으면 전체)",
-    "cfg.autoInstall": "업데이트 감지 시 자동 설치",
     "cfg.telemetryPoll": "AI 모델 사용량 등 텔레메트리 조회 주기(초)",
     "cfg.telegramEnabled": "텔레그램 알림 활성화 (.env 구성 필요)",
     "cfg.enableCodeReview": "작업 완료 후 Gemini Flash 코드 리뷰 활성화"

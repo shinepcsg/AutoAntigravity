@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: 啟動 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: 選擇任務文件",
-    "cmd.checkForUpdates": "AutoAntigravity: 檢查更新",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "自動接受輪詢間隔（毫秒）",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "啟用標有[病列進行] 的任務並行執行",
     "cfg.maxParallelTasks": "最大並發任務數",
     "cfg.sparseCheckoutPaths": "並行執行的稀疏簽出路徑列表",
-    "cfg.autoInstall": "自動安裝更新（無需確認）",
     "cfg.telemetryPoll": "遙測查詢間隔（秒）",
     "cfg.telegramEnabled": "啟用 Telegram 通知",
     "cfg.enableCodeReview": "使用 Gemini Flash 進行程式碼審查"

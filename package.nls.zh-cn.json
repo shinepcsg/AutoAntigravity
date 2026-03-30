@@ -5,7 +5,6 @@
     "cmd.startRalphLoop": "AutoAntigravity: 启动 Ralph Loop",
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: 选择任务文件",
-    "cmd.checkForUpdates": "AutoAntigravity: 检查更新",
     "cmd.pushNow": "AutoAntigravity: Git Push",
     "view.ralphLoop": "Ralph Loop",
     "cfg.pollInterval": "自动接受轮询间隔（毫秒）",
@@ -23,7 +22,6 @@
     "cfg.enableParallel": "启用标记为[并列进行]的任务并行执行",
     "cfg.maxParallelTasks": "最大并发任务数",
     "cfg.sparseCheckoutPaths": "并行执行的稀疏签出路径列表",
-    "cfg.autoInstall": "自动安装更新（无需确认）",
     "cfg.telemetryPoll": "遥测查询间隔（秒）",
     "cfg.telegramEnabled": "启用 Telegram 通知",
     "cfg.enableCodeReview": "使用 Gemini Flash 进行代码审计"
