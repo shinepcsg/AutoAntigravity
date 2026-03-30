@@ -18,6 +18,13 @@ Akzeptiert automatisch vom Antigravity-Agenten vorgeschlagene **Spezifische Date
 - **Erkannte Schaltflächen (Buttons)**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
 - **Unterstützt benutzerdefinierte Schaltflächentexte** (Mehrsprachigkeit)
 
+### 📱 Telegram Bot-Integration
+Überwachen und verwalten Sie Arbeitsabläufe mit einem Telegram-Bot.
+
+- **Einfache UI-Konfiguration**: Registrieren Sie Bot-Token und Chat-ID direkt über das Seitenleisten-Einstellungsfeld von AutoAntigravity.
+- **Sichere Speicherung**: Verwaltet Bot-Einstellungen sicher über die `.env`-Datei.
+- **Benachrichtigungen & mehr**: Die Grundlage für wichtige Erweiterungsfunktionen wie die Überwachung von Agentenaufgaben.
+
 ### 🔄 Ralph Loop
 Ein **iteratives, autonomes Agentenausführungssystem**, das auf `PRD.md` basiert.
 
@@ -27,13 +34,6 @@ Ein **iteratives, autonomes Agentenausführungssystem**, das auf `PRD.md` basier
 - **Auto Commit**: Automatischer Commit in Git nach jeder Iteration.
 - **Kontext aktualisieren**: Ein neuer Session-Neustart bei jeder Iteration überwindet die Limitierungen des Kontextfensters.
 - **Schutzmechanismen**: Begrenzt die maximale Anzahl der Iterationen.
-
-### 📱 Telegram Bot-Integration
-Überwachen und verwalten Sie Arbeitsabläufe mit einem Telegram-Bot.
-
-- **Einfache UI-Konfiguration**: Registrieren Sie Bot-Token und Chat-ID direkt über das Seitenleisten-Einstellungsfeld von AutoAntigravity.
-- **Sichere Speicherung**: Verwaltet Bot-Einstellungen sicher über die `.env`-Datei.
-- **Benachrichtigungen & mehr**: Die Grundlage für wichtige Erweiterungsfunktionen wie die Überwachung von Agentenaufgaben.
 
 ---
 

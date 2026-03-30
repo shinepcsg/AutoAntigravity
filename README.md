@@ -18,6 +18,13 @@ Automatically accepts **file edits, terminal commands, and permission requests**
 - **Detected Buttons**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
 - **Custom Button Texts Supported** (Multi-language support)
 
+### 📱 Telegram Bot Integration
+Monitor and manage workflows through a Telegram bot.
+
+- **Easy UI Setup**: Register Bot Token and Chat ID directly from the AutoAntigravity sidebar settings panel
+- **Secure Storage**: Maintains and manages bot settings securely using the `.env` file
+- **Notifications & More**: Lays the foundation for key extensions like monitoring agent tasks
+
 ### 🔄 Ralph Loop
 An **iterative autonomous agent execution** system based on `PRD.md`.
 
@@ -27,13 +34,6 @@ An **iterative autonomous agent execution** system based on `PRD.md`.
 - **Auto Commit**: Automatically commits to Git after each iteration
 - **Context Refresh**: Overcomes context window limits by starting a new session for each iteration
 - **Safety Guards**: Limits the maximum number of iterations
-
-### 📱 Telegram Bot Integration
-Monitor and manage workflows through a Telegram bot.
-
-- **Easy UI Setup**: Register Bot Token and Chat ID directly from the AutoAntigravity sidebar settings panel
-- **Secure Storage**: Maintains and manages bot settings securely using the `.env` file
-- **Notifications & More**: Lays the foundation for key extensions like monitoring agent tasks
 
 ---
 

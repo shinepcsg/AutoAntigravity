@@ -18,6 +18,13 @@ Accepte automatiquement les **modifications de fichiers, les commandes de termin
 - **Boutons Détectés** : `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
 - **Textes de boutons personnalisés pris en charge** (Support multilingue)
 
+### 📱 Intégration d'un Bot Telegram
+Surveillez et gérez les flux de travail via un robot Telegram.
+
+- **Configuration de l'interface utilisateur simple** : Enregistrez le jeton du bot (Bot Token) et le numéro de chat (Chat ID) directement à partir du panneau de l'extension AutoAntigravity.
+- **Stockage Sécurisé** : Conserve et gère les configurations en toute sécurité en utilisant le fichier `.env`.
+- **Notifications & Plus** : Pose les bases d'extensions clés, telles que la surveillance du travail des agents.
+
 ### 🔄 Ralph Loop
 Un système d'**exécution d'agent autonome itératif** basé sur un fichier `PRD.md`.
 
@@ -27,13 +34,6 @@ Un système d'**exécution d'agent autonome itératif** basé sur un fichier `PR
 - **Auto Commit** : S'engage automatiquement sur Git après chaque itération.
 - **Actualisation du Contexte** : Surmonte les limites de la fenêtre de contexte en démarrant une nouvelle session à chaque itération.
 - **Sécurité** : Limite le nombre maximum d'itérations.
-
-### 📱 Intégration d'un Bot Telegram
-Surveillez et gérez les flux de travail via un robot Telegram.
-
-- **Configuration de l'interface utilisateur simple** : Enregistrez le jeton du bot (Bot Token) et le numéro de chat (Chat ID) directement à partir du panneau de l'extension AutoAntigravity.
-- **Stockage Sécurisé** : Conserve et gère les configurations en toute sécurité en utilisant le fichier `.env`.
-- **Notifications & Plus** : Pose les bases d'extensions clés, telles que la surveillance du travail des agents.
 
 ---
 

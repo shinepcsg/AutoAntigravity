@@ -18,6 +18,13 @@ Acepta automáticamente **ediciones de archivos, comandos de terminal y solicitu
 - **Botones detectados**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
 - **Soporte para textos de botones personalizados** (Soporte multilingüe).
 
+### 📱 Integración con Bot de Telegram
+Monitoree y gestione los flujos de trabajo a través de un bot de Telegram.
+
+- **Configuración sencilla desde la UI**: Registre el Bot Token y el Chat ID directamente desde el panel de extensiones de AutoAntigravity en la barra lateral.
+- **Almacenamiento Seguro**: Mantiene y gestiona la configuración del bot de forma segura utilizando el archivo `.env`.
+- **Notificaciones y más**: Sienta las bases para funciones clave como la monitorización del trabajo del agente.
+
 ### 🔄 Bucle Ralph (Ralph Loop)
 Un sistema de **ejecución iterativa de agentes autónomos** basado en `PRD.md`.
 
@@ -27,13 +34,6 @@ Un sistema de **ejecución iterativa de agentes autónomos** basado en `PRD.md`.
 - **Commits Automáticos**: Realiza commits automáticamente en Git después de cada iteración.
 - **Actualización de contexto**: Supera los límites de la ventana de contexto iniciando una nueva sesión para cada iteración.
 - **Medidas de Seguridad**: Limita el número máximo de iteraciones.
-
-### 📱 Integración con Bot de Telegram
-Monitoree y gestione los flujos de trabajo a través de un bot de Telegram.
-
-- **Configuración sencilla desde la UI**: Registre el Bot Token y el Chat ID directamente desde el panel de extensiones de AutoAntigravity en la barra lateral.
-- **Almacenamiento Seguro**: Mantiene y gestiona la configuración del bot de forma segura utilizando el archivo `.env`.
-- **Notificaciones y más**: Sienta las bases para funciones clave como la monitorización del trabajo del agente.
 
 ---
 

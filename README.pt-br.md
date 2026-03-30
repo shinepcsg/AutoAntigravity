@@ -18,6 +18,13 @@ Aceita automaticamente **edições de arquivos, comandos no terminal e solicita�
 - **Botões Detectados**: `Run`, `Accept`, `Always Allow`, `Allow`, `Retry`, `Continue`
 - **Suporte para Adicionar Textos Personalizados aos Botões** (suporte multilíngue integrado)
 
+### 📱 Integração do Robô (Bot) no Telegram
+Visualize ativamente como as instruções decorrem por meio do Telegram.
+
+- **Fácil Ajuste pela Interface Visual**: Ajuste, acoplando tokens do bot (Bot Tokens) juntamente à Chat ID acessando diretamente pelo Antigravity sem muito esforço.
+- **Segurança Fidedigna**: Toda organização, credenciamento, manutenção das partes chaves ficam armazenadas muito seguramente guardadas na base raiz sob nomeação num arquivo de extensão `.env`.
+- **Avisos em Notificações & Mais Recursos Extraordinários**: Monta um patamar gigantesco pra recursos, tal qual o controle, averiguação, auditoria dos passos executivos das obrigações.
+
 ### 🔄 Ralph Loop
 É um sistema de **execução autônoma iterativa de agente** que é norteada pelo `PRD.md`.
 
@@ -27,13 +34,6 @@ Aceita automaticamente **edições de arquivos, comandos no terminal e solicita�
 - **Auto Commit**: Transfere tudo no Git depois da execução de cada iteração.
 - **Atualização do Contexto**: Supre os limites da janela de visualização e do ambiente de código em torno por meio de uma nova reiniciação em vez de se arrastar no mesmo session a cada iterada.
 - **Limites de Segurança Controlados**: Previne loops imprevistos de funcionamento com quantificação limítrofe das iterações máximas perante o sistema.
-
-### 📱 Integração do Robô (Bot) no Telegram
-Visualize ativamente como as instruções decorrem por meio do Telegram.
-
-- **Fácil Ajuste pela Interface Visual**: Ajuste, acoplando tokens do bot (Bot Tokens) juntamente à Chat ID acessando diretamente pelo Antigravity sem muito esforço.
-- **Segurança Fidedigna**: Toda organização, credenciamento, manutenção das partes chaves ficam armazenadas muito seguramente guardadas na base raiz sob nomeação num arquivo de extensão `.env`.
-- **Avisos em Notificações & Mais Recursos Extraordinários**: Monta um patamar gigantesco pra recursos, tal qual o controle, averiguação, auditoria dos passos executivos das obrigações.
 
 ---
 
