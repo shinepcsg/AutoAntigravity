@@ -33,6 +33,11 @@ class RalphSidebarProvider {
         this.telegramService = null;
         this._showTelegramCredForm = false;
         this._taskQueue = [];
+
+        // Performance: debounce updateState calls and cache fs checks
+        this._updateDebounceTimer = null;
+        this._fsCache = new Map(); // key -> { value, expiry }
+        this._fsCacheTtl = 5000; // 5 seconds
     }
 
     /**
@@ -451,9 +456,30 @@ class RalphSidebarProvider {
     }
 
     /**
-     * Send the current state to the webview
+     * Send the current state to the webview (debounced)
      */
     updateState() {
+        if (!this._view || !this._view.visible) return;
+        // Debounce: coalesce rapid-fire calls into one update
+        if (this._updateDebounceTimer) return;
+        this._updateDebounceTimer = setTimeout(() => {
+            this._updateDebounceTimer = null;
+            this._sendState();
+        }, 300);
+    }
+
+    /** Cached fs.existsSync with TTL */
+    _cachedExistsSync(filePath) {
+        if (!filePath) return false;
+        const cached = this._fsCache.get(filePath);
+        if (cached && Date.now() < cached.expiry) return cached.value;
+        const result = fs.existsSync(filePath);
+        this._fsCache.set(filePath, { value: result, expiry: Date.now() + this._fsCacheTtl });
+        return result;
+    }
+
+    /** Actually send the current state to the webview */
+    _sendState() {
         if (!this._view || !this._view.visible) return;
 
         const config = vscode.workspace.getConfiguration('autoAntigravity');
@@ -479,8 +505,7 @@ class RalphSidebarProvider {
                 const tf = this.ralphLoop && this.ralphLoop.taskManager
                     ? this.ralphLoop.taskManager.getTaskFile()
                     : null;
-                if (!tf) return false;
-                return fs.existsSync(tf);
+                return this._cachedExistsSync(tf);
             })(),
             progress: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getProgress()
@@ -502,9 +527,9 @@ class RalphSidebarProvider {
             hasWritePrdWorkspace: (() => {
                 const folders = vscode.workspace.workspaceFolders;
                 if (!folders || folders.length === 0) return false;
-                return fs.existsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
+                return this._cachedExistsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
             })(),
-            hasWritePrdGlobal: fs.existsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md')),
+            hasWritePrdGlobal: this._cachedExistsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md')),
             // 작업 큐
             taskQueue: this._taskQueue.slice()
         };

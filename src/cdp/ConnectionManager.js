@@ -225,6 +225,11 @@ class ConnectionManager {
         this.reconnectTimer = null;
         this.heartbeatTimer = null;
         this.activeScanTimer = null;
+
+        // Performance: only run active scanning when AutoAccept is enabled
+        this.autoAcceptActive = false;
+        // Reconnect backoff
+        this._reconnectAttempts = 0;
     }
 
     // ─── Public API ───────────────────────────────────────────────────
@@ -257,6 +262,28 @@ class ConnectionManager {
 
     getActivePort() {
         return this.activeCdpPort;
+    }
+
+    /** Pause active scanning and heartbeat (when AutoAccept is OFF) */
+    pauseActiveScanning() {
+        this.autoAcceptActive = false;
+        clearInterval(this.activeScanTimer);
+        this.activeScanTimer = null;
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+    }
+
+    /** Resume active scanning and heartbeat (when AutoAccept is ON) */
+    resumeActiveScanning() {
+        this.autoAcceptActive = true;
+        if (this.ws && this.ws.readyState === MiniWebSocket.OPEN) {
+            if (!this.heartbeatTimer) {
+                this.heartbeatTimer = setInterval(() => this._heartbeat(), 30000);
+            }
+            if (!this.activeScanTimer) {
+                this.activeScanTimer = setInterval(() => this._activeScanAll(), 5000);
+            }
+        }
     }
 
     // ─── Connection Lifecycle ─────────────────────────────────────────
@@ -303,10 +330,12 @@ class ConnectionManager {
 
                 try {
                     await this._initializeTargetDiscovery();
-                    this.heartbeatTimer = setInterval(() => this._heartbeat(), 30000);
-                    // Active scan: force scanAndClick() on all sessions every 3s
-                    // This bypasses inactive tab setTimeout throttling
-                    this.activeScanTimer = setInterval(() => this._activeScanAll(), 3000);
+                    this._reconnectAttempts = 0; // Reset backoff on successful connection
+                    // Only start active scanning if AutoAccept is enabled
+                    if (this.autoAcceptActive) {
+                        this.heartbeatTimer = setInterval(() => this._heartbeat(), 30000);
+                        this.activeScanTimer = setInterval(() => this._activeScanAll(), 5000);
+                    }
                     resolve();
                 } catch (e) {
                     this.log(`[CDP] Initialization error: ${e.message}`);
@@ -523,11 +552,15 @@ class ConnectionManager {
 
     _scheduleReconnect() {
         if (this.reconnectTimer || !this.isRunning) return;
-        this.log('[CDP] Reconnecting in 3s...');
+        // Exponential backoff: 3s, 10s, 30s, 60s max
+        const delays = [3000, 10000, 30000, 60000];
+        const delay = delays[Math.min(this._reconnectAttempts, delays.length - 1)];
+        this._reconnectAttempts++;
+        this.log(`[CDP] Reconnecting in ${delay / 1000}s... (attempt ${this._reconnectAttempts})`);
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             if (this.isRunning) this.connect();
-        }, 3000);
+        }, delay);
     }
 
     async _heartbeat() {
@@ -590,11 +623,11 @@ class ConnectionManager {
         }
 
         // Electron sometimes opens the debug port on a different port than requested.
-        // Scan a range around the configured port to find the actual CDP endpoint.
-        const scanRange = 100;
+        // Scan a small range around the configured port to find the actual CDP endpoint.
+        const scanRange = 20;
         const startPort = Math.max(1024, configPort - scanRange);
         const endPort = Math.min(65535, configPort + scanRange);
-        const batchSize = 20;
+        const batchSize = 10;
 
         for (let base = startPort; base <= endPort; base += batchSize) {
             const ports = [];

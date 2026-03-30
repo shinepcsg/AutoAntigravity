@@ -13,10 +13,15 @@ class TelemetryService {
     constructor(log) {
         this._log = log || (() => { });
         this._uplink = { connected: false, port: null, token: null };
+        this._cachedBeacon = null; // { pid, token } — cached after first successful discovery
         this._models = [];
         this._pollTimer = null;
         this._listeners = [];
         this._isConnecting = false;
+        // Exponential backoff for connection failures
+        this._baseIntervalSec = 90;
+        this._consecutiveFailures = 0;
+        this._maxBackoffSec = 600; // 10 minutes max
     }
 
     // ─── Public API ──────────────────────────────────────────────────
@@ -40,18 +45,30 @@ class TelemetryService {
     /** Start periodic polling */
     startPolling(intervalSec = 90) {
         this.stopPolling();
+        this._baseIntervalSec = intervalSec;
+        this._consecutiveFailures = 0;
         this._log('[Telemetry] Polling started (every ' + intervalSec + 's)');
-        // Initial fetch
-        this._connectAndFetch();
-        this._pollTimer = setInterval(() => this._connectAndFetch(), intervalSec * 1000);
+        // Initial fetch after a short delay to not block activation
+        this._pollTimer = setTimeout(() => this._pollCycle(), 3000);
     }
 
     /** Stop periodic polling */
     stopPolling() {
         if (this._pollTimer) {
-            clearInterval(this._pollTimer);
+            clearTimeout(this._pollTimer);
             this._pollTimer = null;
         }
+    }
+
+    /** Internal poll cycle with adaptive interval */
+    async _pollCycle() {
+        this._pollTimer = null;
+        await this._connectAndFetch();
+        // Adaptive interval: backoff on failures, reset on success
+        const interval = this._uplink.connected
+            ? this._baseIntervalSec
+            : Math.min(this._baseIntervalSec * Math.pow(2, this._consecutiveFailures), this._maxBackoffSec);
+        this._pollTimer = setTimeout(() => this._pollCycle(), interval * 1000);
     }
 
     /** Manual refresh */
@@ -75,6 +92,7 @@ class TelemetryService {
             if (!this._uplink.connected) {
                 const ok = await this._establishUplink();
                 if (!ok) {
+                    this._consecutiveFailures++;
                     this._emit();
                     return;
                 }
@@ -84,14 +102,17 @@ class TelemetryService {
             if (data) {
                 this._models = this._parseModels(data);
                 this._uplink.connected = true;
+                this._consecutiveFailures = 0; // Reset backoff on success
             } else {
                 // Connection lost, try to re-establish next time
                 this._uplink.connected = false;
+                this._consecutiveFailures++;
             }
             this._emit();
         } catch (err) {
             this._log('[Telemetry] Error: ' + err.message);
             this._uplink.connected = false;
+            this._consecutiveFailures++;
             this._emit();
         } finally {
             this._isConnecting = false;
@@ -105,9 +126,36 @@ class TelemetryService {
         }
     }
 
-    /** Find language_server process and extract CSRF token */
+    /** Find language_server process and extract CSRF token (with caching) */
     async _establishUplink() {
         try {
+            // Try cached beacon first (skip expensive PowerShell WMI query)
+            if (this._cachedBeacon) {
+                const { pid, token } = this._cachedBeacon;
+                // Lightweight check: is the cached port still responding?
+                if (this._uplink.port) {
+                    const stillAlive = await this._probePort(this._uplink.port, token);
+                    if (stillAlive) {
+                        this._uplink = { connected: true, port: this._uplink.port, token };
+                        return true;
+                    }
+                }
+                // Cached port failed, re-scan ports for cached PID
+                const ports = await this._getListeningPorts(pid);
+                for (const port of ports) {
+                    const ok = await this._probePort(port, token);
+                    if (ok) {
+                        this._log('[Telemetry] Reconnected on port ' + port + ' (cached PID)');
+                        this._uplink = { connected: true, port, token };
+                        return true;
+                    }
+                }
+                // Cached PID is stale, clear cache and do full discovery
+                this._log('[Telemetry] Cached beacon stale, re-discovering...');
+                this._cachedBeacon = null;
+            }
+
+            // Full discovery (expensive PowerShell WMI query)
             const beacon = await this._findBeacon();
             if (!beacon) {
                 this._log('[Telemetry] language_server not found');
@@ -128,6 +176,7 @@ class TelemetryService {
                 if (ok) {
                     this._log('[Telemetry] Connected on port ' + port);
                     this._uplink = { connected: true, port, token: beacon.token };
+                    this._cachedBeacon = beacon; // Cache for future reconnects
                     return true;
                 }
             }

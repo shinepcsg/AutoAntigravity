@@ -20,6 +20,9 @@ class AutoAcceptManager {
         this.isEnabled = false;
         this.pollIntervalId = null;
         this.connectionManager = null;
+        // Idle mode: slow down polling when no buttons have been clicked recently
+        this._lastAcceptTime = 0;
+        this._idleThresholdMs = 30000; // 30 seconds
     }
 
     initialize() {
@@ -81,6 +84,9 @@ class AutoAcceptManager {
         if (!this.isEnabled) {
             this.isEnabled = true;
             this._startPolling();
+            if (this.connectionManager) {
+                this.connectionManager.resumeActiveScanning();
+            }
         }
     }
 
@@ -88,6 +94,9 @@ class AutoAcceptManager {
         if (this.isEnabled) {
             this.isEnabled = false;
             this._stopPolling();
+            if (this.connectionManager) {
+                this.connectionManager.pauseActiveScanning();
+            }
         }
     }
 
@@ -105,8 +114,8 @@ class AutoAcceptManager {
         if (this.pollIntervalId) return;
 
         const config = vscode.workspace.getConfiguration('autoAntigravity');
-        const interval = config.get('autoAccept.pollInterval', 500);
-        this.log(`[AutoAccept] Polling started (every ${interval}ms, ${ACCEPT_COMMANDS.length} commands)`);
+        const baseInterval = config.get('autoAccept.pollInterval', 1000);
+        this.log(`[AutoAccept] Polling started (every ${baseInterval}ms, ${ACCEPT_COMMANDS.length} commands)`);
 
         let lastDiagLog = 0;
         const DIAG_INTERVAL = 30000; // Log diagnostics every 30s
@@ -128,16 +137,21 @@ class AutoAcceptManager {
                     const cdpStatus = this.connectionManager
                         ? `CDP: port=${this.connectionManager.getActivePort() || 'none'}, sessions=${this.connectionManager.getSessionCount()}`
                         : 'CDP: not initialized';
-                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}`);
+                    const idleMode = (now - this._lastAcceptTime > this._idleThresholdMs) ? 'idle' : 'active';
+                    this.log(`[AutoAccept] Heartbeat — ${cdpStatus}, mode=${idleMode}`);
                 }
             } catch (e) { /* silent */ }
             if (this.isEnabled) {
+                // Adaptive interval: slower when idle (no recent button clicks)
+                const isIdle = (Date.now() - this._lastAcceptTime) > this._idleThresholdMs;
+                const interval = isIdle ? baseInterval * 2 : baseInterval;
                 this.pollIntervalId = setTimeout(pollCycle, interval);
             }
         };
-        this.pollIntervalId = setTimeout(pollCycle, interval);
+        this.pollIntervalId = setTimeout(pollCycle, baseInterval);
 
         if (this.connectionManager) {
+            this.connectionManager.resumeActiveScanning();
             this.connectionManager.start();
         }
     }
@@ -148,6 +162,7 @@ class AutoAcceptManager {
             this.pollIntervalId = null;
         }
         if (this.connectionManager) {
+            this.connectionManager.pauseActiveScanning();
             this.connectionManager.stop();
         }
         this.log('[AutoAccept] Polling stopped');

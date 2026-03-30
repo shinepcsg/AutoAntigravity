@@ -16,10 +16,6 @@ function buildDOMObserverScript(customTexts) {
         'allow', '허용', '許可', '允许',
         'retry', '재시도', '再試行', '重试',
         'continue', '계속', '続行', '继续',
-        'ok', '확인', 'OK',
-        'confirm', '승인', '확인',
-        'approve', '승인',
-        'yes', '예', 'はい', '是',
         ...customTexts
     ];
     const expandTexts = [
@@ -35,9 +31,7 @@ function buildDOMObserverScript(customTexts) {
     function isAgentPanel() {
         return !!(document.querySelector('.react-app-container') ||
             document.querySelector('[class*="agent"]') ||
-            document.querySelector('[class*="webview"]') ||
-            document.querySelector('[data-vscode-context]') ||
-            document.body.classList.contains('vscode-body'));
+            document.querySelector('[data-vscode-context]'));
     }
 
     var BUTTON_TEXTS = ${JSON.stringify(allTexts)};
@@ -85,40 +79,18 @@ function buildDOMObserverScript(customTexts) {
                 var result = findButton(node.shadowRoot, text);
                 if (result) return result;
             }
-
-            // Check data-testid and data-action first (high confidence)
             var testId = (node.getAttribute('data-testid') || node.getAttribute('data-action') || '').toLowerCase();
             if (testId.includes('alwaysallow') || testId.includes('always-allow') || testId.includes('allow')) {
-                var btnTag = (node.tagName || '').toLowerCase();
-                if (btnTag === 'button' || btnTag.includes('button') || node.getAttribute('role') === 'button' || btnTag.includes('btn')) {
+                var tag1 = (node.tagName || '').toLowerCase();
+                if (tag1 === 'button' || tag1.includes('button') || node.getAttribute('role') === 'button' || tag1.includes('btn')) {
                     return node;
                 }
             }
-
-            // Check visible text, title, and aria-label
             var nodeText = (node.textContent || '').trim().toLowerCase();
-            var nodeTitle = (node.getAttribute('title') || '').trim().toLowerCase();
-            var nodeAria = (node.getAttribute('aria-label') || '').trim().toLowerCase();
-            
-            var tests = [nodeText];
-            if (nodeTitle) tests.push(nodeTitle);
-            if (nodeAria) tests.push(nodeAria);
-
-            var isMatch = tests.some(function(t) {
-                if (!t || t.length > 60) return false;
-                if (t === text) return true;
-                if (t.startsWith(text)) {
-                    // For short keywords (CJK or 'run'), match if next char is non-alphanumeric
-                    if (text.length < 5) {
-                        var nextChar = t[text.length];
-                        return !nextChar || !/[a-zA-Z0-9]/.test(nextChar);
-                    }
-                    // For longer keywords, allow some suffix (e.g. 'always allow this')
-                    return t.length <= text.length * 3;
-                }
-                return false;
-            });
-
+            if (nodeText.length > 50) continue;
+            var isMatch = nodeText === text ||
+                (text.length >= 5 && nodeText.startsWith(text) && nodeText.length <= text.length * 3) ||
+                (nodeText.startsWith(text + ' ') && nodeText.length <= text.length * 5);
             if (isMatch) {
                 var clickable = closestClickable(node);
                 var tag2 = (clickable.tagName || '').toLowerCase();
@@ -126,12 +98,10 @@ function buildDOMObserverScript(customTexts) {
                     tag2.includes('btn') || clickable.classList.contains('cursor-pointer') ||
                     clickable.onclick || clickable.getAttribute('tabindex') === '0' ||
                     text === 'expand' || text === 'requires input') {
-                    
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
                         continue;
                     }
-                    
                     var btnKey = _domPath(clickable) + ':' + (clickable.textContent || '').trim().toLowerCase().substring(0, 30);
                     var cooldown = (text === 'expand' || text === 'requires input') ? EXPAND_COOLDOWN_MS : COOLDOWN_MS;
                     var lastClick = clickCooldowns[btnKey] || 0;
@@ -191,18 +161,16 @@ function buildDOMObserverScript(customTexts) {
 
     scanAndClick();
 
-    // Use requestAnimationFrame-based debounce to limit scan rate to display
-    // refresh rate (~60fps max) and avoid overwhelming CPU during rapid DOM changes.
-    // Falls back to microtask if rAF is not available (unlikely in webview).
+    // Use microtask-based debounce instead of setTimeout to avoid
+    // inactive tab throttling (setTimeout is clamped to >=1s in background tabs)
     var debounceScheduled = false;
-    var scheduleScan = typeof requestAnimationFrame === 'function'
-        ? function() { requestAnimationFrame(function() { debounceScheduled = false; scanAndClick(); }); }
-        : function() { Promise.resolve().then(function() { debounceScheduled = false; scanAndClick(); }); };
-
     var observer = new MutationObserver(function() {
         if (debounceScheduled) return;
         debounceScheduled = true;
-        scheduleScan();
+        Promise.resolve().then(function() {
+            debounceScheduled = false;
+            scanAndClick();
+        });
     });
 
     observer.observe(document.body, {
@@ -210,12 +178,12 @@ function buildDOMObserverScript(customTexts) {
         subtree: true
     });
 
-    // Fallback: periodic scan every 4s using setInterval as a safety net.
+    // Fallback: periodic scan every 2s using setInterval as a safety net.
     // Even if setInterval is throttled in background tabs, it still fires
     // (at reduced rate ~1/sec) unlike setTimeout chains which can stall.
     setInterval(function() {
         scanAndClick();
-    }, 4000);
+    }, 2000);
 
     return 'observer-installed';
 })()

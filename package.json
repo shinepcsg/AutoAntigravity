@@ -12,7 +12,7 @@
         "Other"
     ],
     "activationEvents": [
-        "*"
+        "onStartupFinished"
     ],
     "main": "./src/extension.js",
     "contributes": {
@@ -73,7 +73,7 @@
             "properties": {
                 "autoAntigravity.autoAccept.pollInterval": {
                     "type": "number",
-                    "default": 500,
+                    "default": 1000,
                     "description": "%cfg.pollInterval%"
                 },
                 "autoAntigravity.autoAccept.customButtonTexts": {
