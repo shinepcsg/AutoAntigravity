@@ -10,14 +10,10 @@ const { ConnectionManager } = require('./cdp/ConnectionManager');
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
     'antigravity.terminalCommand.accept',
-    'antigravity.terminalCommand.run',
-    'antigravity.terminalCommand.runAll',
     'antigravity.command.accept',
     'antigravity.command.runAll',
     'workbench.action.chat.acceptInput',
     'workbench.action.chat.submit',
-    'workbench.action.terminal.chat.runCommand',
-    'workbench.action.terminal.chat.runFirstCommand',
     'chatEditing.acceptAllFiles',
     'notification.acceptPrimaryAction'
 ];
@@ -130,11 +126,13 @@ class AutoAcceptManager {
             try {
                 // VS Code 명령 API로 활성 탭/네이티브 인라인 버튼 클릭 (CDP와 독립적으로 항상 실행)
                 // 터미널 프롬프트나 에디터 인라인 패널은 CDP 웹뷰 대상이 아니므로 이 폴링이 필수적입니다.
-                await Promise.allSettled(
-                    ACCEPT_COMMANDS.map(cmd =>
-                        vscode.commands.executeCommand(cmd)
-                            .then(r => ({ cmd, status: 'ok', result: r }))
-                    )
+                // NOTE: 터미널 실행 명령(run/runAll/runCommand/runFirstCommand)은 의도적으로 제외됨
+                //       → 매 폴링마다 에이전트의 터미널 명령 제안을 반복 실행하는 버그 방지
+                const results = await Promise.allSettled(
+                    ACCEPT_COMMANDS.map(async cmd => {
+                        const r = await vscode.commands.executeCommand(cmd);
+                        return { cmd, status: 'ok', result: r };
+                    })
                 );
 
                 // Periodic diagnostic logging
