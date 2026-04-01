@@ -4,6 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const {
+    t
+} = require('../i18n');
 
 /**
  * Scan a single directory for workflow .md files, parse YAML frontmatter description.
@@ -25,7 +28,7 @@ function _scanDir(dirPath) {
             if (!cmdName) continue;
 
             // Read YAML frontmatter description
-            let description = `📂 워크플로우: ${name}`;
+            let description = t('wf.default_desc', { name });
             try {
                 const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
                 const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);

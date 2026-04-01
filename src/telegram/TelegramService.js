@@ -4,6 +4,7 @@
 const https = require('https');
 const fs = require('fs');
 const { scanWorkflows } = require('./scanWorkflows');
+const { t } = require('../i18n');
 
 class TelegramService {
     constructor(log) {
@@ -55,7 +56,7 @@ class TelegramService {
         this._polling = true;
 
         await this.setMyCommands(workspaceRoot);
-        await this.sendMessage('🤖 AutoAntigravity 텔레그램 봇 연결됨');
+        await this.sendMessage(t('tg.connected'));
         this._poll();
         this._log('[Telegram] 봇 서비스 시작됨');
     }
@@ -216,11 +217,11 @@ class TelegramService {
         const bar = '█'.repeat(Math.round(percent / 10)) + '░'.repeat(10 - Math.round(percent / 10));
 
         const message = [
-            `✅ *작업 완료*`,
+            t('tg.task_completed'),
             ``,
-            `📌 *작업:* ${taskText}`,
-            `🔄 *반복:* ${iteration}회차`,
-            `📊 *진행률:* ${completed}/${total} (${percent}%)`,
+            `${t('tg.task_label')} ${taskText}`,
+            `${t('tg.iteration_label')} ${iteration}${t('tg.iteration_suffix')}`,
+            `${t('tg.progress_label')} ${completed}/${total} (${percent}%)`,
             `[${bar}]`,
         ].join('\n');
 
@@ -249,12 +250,12 @@ class TelegramService {
         });
 
         const message = [
-            `🎉 *세션 완료:* ${sessionLabel || '알 수 없음'}`,
+            `${t('tg.session_completed')} ${sessionLabel || t('tg.unknown')}`,
             ``,
-            `📋 *작업 결과:*`,
+            t('tg.task_results'),
             ...taskLines,
             ``,
-            `🔄 *총 반복:* ${totalIterations}회`,
+            `${t('tg.total_iterations')} ${totalIterations}${t('tg.total_iterations_suffix')}`,
         ].join('\n');
 
         await this.sendMessage(message);
@@ -350,7 +351,7 @@ class TelegramService {
             // /prd 명령: 뒤의 텍스트를 onPrdRequest 콜백으로 전달 (write-prd 워크플로우)
             const prdText = text.replace(/^\/prd\s*/, '').trim();
             if (!prdText) {
-                this.sendMessage('사용법: `/prd [작업 내용]`\n예: `/prd 로그인 페이지에 소셜 로그인 추가`');
+                this.sendMessage(t('tg.prd_usage'));
             } else if (this.onPrdRequest) {
                 this.onPrdRequest(prdText);
             }
@@ -358,7 +359,7 @@ class TelegramService {
             // /task 명령: 뒤의 텍스트를 onTaskRequest 콜백으로 직접 전달 (대화 형식)
             const taskText = text.replace(/^\/task\s*/, '').trim();
             if (!taskText) {
-                this.sendMessage('사용법: `/task [작업 내용]`\n예: `/task 로그인 페이지 버그 수정`');
+                this.sendMessage(t('tg.task_usage'));
             } else if (this.onTaskRequest) {
                 this.onTaskRequest(taskText);
             }
@@ -499,15 +500,15 @@ class TelegramService {
         try {
             // 1) 기존 하드코딩 명령어
             const builtInCommands = [
-                { command: 'help', description: '📖 사용 가능한 명령어 목록' },
-                { command: 'status', description: '📊 현재 상태 및 AI 사용량 조회' },
-                { command: 'start', description: '🚀 Ralph Loop 시작' },
-                { command: 'stop', description: '⏹ Ralph Loop 정지' },
-                { command: 'autoaccept', description: '⚡ AutoAccept ON/OFF 토글' },
-                { command: 'config', description: '⚙️ 현재 설정값 조회' },
-                { command: 'queue', description: '📋 작업 큐 목록 조회' },
-                { command: 'task', description: '📝 작업 요청 (대화로 직접 실행)' },
-                { command: 'prd', description: '📋 PRD 작성 요청 (write-prd 워크플로우)' }
+                { command: 'help', description: t('tg.cmd_help') },
+                { command: 'status', description: t('tg.cmd_status') },
+                { command: 'start', description: t('tg.cmd_start') },
+                { command: 'stop', description: t('tg.cmd_stop') },
+                { command: 'autoaccept', description: t('tg.cmd_autoaccept') },
+                { command: 'config', description: t('tg.cmd_config') },
+                { command: 'queue', description: t('tg.cmd_queue') },
+                { command: 'task', description: t('tg.cmd_task') },
+                { command: 'prd', description: t('tg.cmd_prd') }
             ];
 
             // 2) 동적 워크플로우 명령어 스캔 (공유 헬퍼 사용)
@@ -538,7 +539,7 @@ class TelegramService {
         // detailedNotification=true: 기존 모든 마커 유지
         // detailedNotification=false(기본): 시작/완료/에러만 전달
         const importantMarkers = this.detailedNotification
-            ? ['═══', '✅ 작업 완료', '✅ 모든 작업', '❌', '🚀', '⏹', '🎉']
+            ? ['═══', t('tg.marker_task_completed'), t('tg.marker_all_tasks'), '❌', '🚀', '⏹', '🎉']
             : ['🚀', '🎉', '❌'];
 
         const isImportant = level === 'error' || importantMarkers.some(marker => msg && msg.includes(marker));

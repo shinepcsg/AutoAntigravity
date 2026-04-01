@@ -9,6 +9,7 @@ const { RalphSidebarProvider } = require('./ralph/RalphSidebarProvider');
 const { TelemetryService } = require('./telemetry/TelemetryService');
 const { TelegramService } = require('./telegram/TelegramService');
 const { scanWorkflows } = require('./telegram/scanWorkflows');
+const { t } = require('./i18n');
 
 let autoAccept = null;
 let ralphLoop = null;
@@ -176,23 +177,23 @@ function connectTelegram(context) {
             try {
                 log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(text, []);
-                telegramService.sendMessage(`🚀 즉시 실행 중: ${text.substring(0, 80)}`);
+                telegramService.sendMessage(`${t('tg.executing_now')} ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
 
                 // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
                 _waitAndSendImages(imagesBefore);
             } catch (err) {
                 log(`[Telegram] ❌ 즉시 실행 프롬프트 전송 실패: ${err.message}`);
-                telegramService.sendMessage(`❌ 즉시 실행 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.execute_failed')} ${err.message}`);
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가 (text 그대로 저장)
             sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'task' });
             sidebarProvider.updateState();
-            telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            telegramService.sendMessage(`${t('tg.queued')} (${sidebarProvider._taskQueue.length}): ${text.substring(0, 80)}`);
             log('[Telegram] 작업 큐에 추가: ' + text.substring(0, 80));
         } else {
-            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+            telegramService.sendMessage(t('tg.sidebar_not_init'));
         }
     };
 
@@ -209,20 +210,20 @@ function connectTelegram(context) {
             try {
                 log(`[Telegram] 📤 PRD 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, []);
-                telegramService.sendMessage(`🚀 PRD 작성 즉시 실행 중: ${text.substring(0, 80)}`);
+                telegramService.sendMessage(`${t('tg.prd_executing')} ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ PRD 즉시 실행 프롬프트 전송 완료`);
             } catch (err) {
                 log(`[Telegram] ❌ PRD 즉시 실행 프롬프트 전송 실패: ${err.message}`);
-                telegramService.sendMessage(`❌ PRD 즉시 실행 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.prd_execute_failed')} ${err.message}`);
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가 (type: 'prd'로 저장)
             sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'prd' });
             sidebarProvider.updateState();
-            telegramService.sendMessage(`📥 PRD 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            telegramService.sendMessage(`${t('tg.prd_queued')} (${sidebarProvider._taskQueue.length}): ${text.substring(0, 80)}`);
             log('[Telegram] PRD 작업 큐에 추가: ' + text.substring(0, 80));
         } else {
-            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+            telegramService.sendMessage(t('tg.sidebar_not_init'));
         }
     };
 
@@ -237,7 +238,7 @@ function connectTelegram(context) {
             try {
                 log(`[Telegram] 💬 일반 대화 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(text, []);
-                telegramService.sendMessage(`💬 대화 처리 중...`);
+                telegramService.sendMessage(t('tg.chat_processing'));
                 log(`[Telegram] ✅ 일반 대화 프롬프트 전송 완료`);
 
                 // 에이전트 완료 대기 후 응답 추출
@@ -250,36 +251,36 @@ function connectTelegram(context) {
                     telegramService.sendMessage(`🤖 ${response}`);
                     log(`[Telegram] 📤 대화 응답 텔레그램 전송 완료 (${response.length}자)`);
                 } else {
-                    telegramService.sendMessage(`✅ 대화 처리 완료 (응답 추출 실패 — VS Code에서 확인하세요)`);
+                    telegramService.sendMessage(t('tg.chat_extract_fail'));
                     log(`[Telegram] ⚠ 대화 응답 추출 실패`);
                 }
             } catch (err) {
                 log(`[Telegram] ❌ 일반 대화 처리 실패: ${err.message}`);
-                telegramService.sendMessage(`❌ 대화 처리 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.chat_failed')} ${err.message}`);
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가 (type: 'chat')
             sidebarProvider._taskQueue.push({ text, mediaPaths: [], type: 'chat' });
             sidebarProvider.updateState();
-            telegramService.sendMessage(`📥 대화 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${text.substring(0, 80)}`);
+            telegramService.sendMessage(`${t('tg.chat_queued')} (${sidebarProvider._taskQueue.length}): ${text.substring(0, 80)}`);
             log('[Telegram] 대화 큐에 추가: ' + text.substring(0, 80));
         } else {
-            telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+            telegramService.sendMessage(t('tg.sidebar_not_init'));
         }
     };
 
     // 텔레그램 → 플러그인: 도움말
     telegramService.onHelpRequest = () => {
         const lines = [
-            `📖 *AutoAntigravity 명령어 목록*`,
+            t('tg.help_title'),
             ``,
-            `/help — 📖 사용 가능한 명령어 목록`,
-            `/status — 📊 현재 상태 및 AI 사용량 조회`,
-            `/start — 🚀 Ralph Loop 시작`,
-            `/stop — ⏹ Ralph Loop 정지`,
-            `/autoaccept — ⚡ AutoAccept ON/OFF 토글`,
-            `/config — ⚙️ 현재 설정값 조회`,
-            `/queue — 📋 작업 큐 목록 조회`,
+            `/help — ${t('tg.cmd_help')}`,
+            `/status — ${t('tg.cmd_status')}`,
+            `/start — ${t('tg.cmd_start')}`,
+            `/stop — ${t('tg.cmd_stop')}`,
+            `/autoaccept — ${t('tg.cmd_autoaccept')}`,
+            `/config — ${t('tg.cmd_config')}`,
+            `/queue — ${t('tg.cmd_queue')}`,
         ];
 
         // 동적 워크플로우 명령어 추가
@@ -288,18 +289,18 @@ function connectTelegram(context) {
         const workflows = scanWorkflows(wsRoot).filter(w => !builtInNames.has(w.command));
         if (workflows.length > 0) {
             lines.push(``);
-            lines.push(`🔧 *워크플로우 명령어*`);
+            lines.push(t('tg.help_workflow_section'));
             for (const wf of workflows) {
                 lines.push(`/${wf.command} — ${wf.description}`);
             }
         }
 
         lines.push(``);
-        lines.push(`💡 *작업 요청*`);
-        lines.push(`/task [내용] — 💬 작업 요청 (대화로 직접 전달)`);
-        lines.push(`/prd [내용] — 📋 PRD 작성 요청 (write-prd 워크플로우)`);
+        lines.push(t('tg.help_task_section'));
+        lines.push(t('tg.help_task_desc'));
+        lines.push(t('tg.help_prd_desc'));
         lines.push(``);
-        lines.push(`💡 명령어 없이 메시지를 보내면 일반 AI 대화로 처리됩니다.`);
+        lines.push(t('tg.help_general_msg'));
 
         telegramService.sendMessage(lines.join('\n'));
     };
@@ -312,13 +313,13 @@ function connectTelegram(context) {
         const queueCount = sidebarProvider ? sidebarProvider._taskQueue.length : 0;
 
         const lines = [
-            `📊 *AutoAntigravity 상태*`,
+            t('tg.status_title'),
             ``,
-            `🔄 *Ralph Loop*: ${state}`,
-            `📋 *진행*: ${progress.completed}/${progress.total} (남은: ${progress.remaining})`,
-            `🔁 *반복*: ${ralphLoop.currentIteration}회차`,
-            `⚡ *AutoAccept*: ${autoAcceptState}`,
-            `📬 *작업 큐*: ${queueCount}개`,
+            `${t('tg.status_ralph')} ${state}`,
+            `${t('tg.status_progress')} ${progress.completed}/${progress.total} (${t('tg.status_remaining')} ${progress.remaining})`,
+            `${t('tg.status_iteration')} ${ralphLoop.currentIteration}`,
+            `${t('tg.status_autoaccept')} ${autoAcceptState}`,
+            `${t('tg.status_queue')} ${queueCount}${t('tg.status_items')}`,
         ];
 
         // AI 사용량 정보 추가
@@ -326,7 +327,7 @@ function connectTelegram(context) {
             const quota = telemetryService.getData();
             if (quota && quota.connected && quota.models && quota.models.length > 0) {
                 lines.push(``);
-                lines.push(`🤖 *AI 사용량*`);
+                lines.push(t('tg.status_ai_usage'));
                 for (const m of quota.models) {
                     const pct = m.limit > 0 ? Math.round((m.usage / m.limit) * 100) : 0;
                     const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10));
@@ -342,13 +343,13 @@ function connectTelegram(context) {
     telegramService.onStartRequest = () => {
         const state = ralphLoop.getState();
         if (state === LoopState.RUNNING) {
-            telegramService.sendMessage('⚠️ Ralph Loop가 이미 실행 중입니다.');
+            telegramService.sendMessage(t('tg.already_running'));
         } else {
             ralphLoop.start().then(() => {
                 updateRalphStatusBar();
-                telegramService.sendMessage('🚀 Ralph Loop 시작됨');
+                telegramService.sendMessage(t('tg.loop_started'));
             }).catch(err => {
-                telegramService.sendMessage(`❌ Ralph Loop 시작 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.loop_start_failed')} ${err.message}`);
             });
         }
     };
@@ -357,7 +358,7 @@ function connectTelegram(context) {
     telegramService.onStopRequest = async () => {
         await ralphLoop.stop();
         updateRalphStatusBar();
-        telegramService.sendMessage('⏹ Ralph Loop 정지 완료');
+        telegramService.sendMessage(t('tg.loop_stopped'));
     };
 
     // 텔레그램 → 플러그인: AutoAccept 토글
@@ -371,7 +372,7 @@ function connectTelegram(context) {
     telegramService.onConfigRequest = () => {
         const config = vscode.workspace.getConfiguration('autoAntigravity');
         const configMsg = [
-            `⚙️ *현재 설정*`,
+            t('tg.config_title'),
             ``,
             `🔄 *Max Iterations*: ${config.get('ralphLoop.maxIterations', 50)}`,
             `⏱ *Iteration Delay*: ${config.get('ralphLoop.iterationDelayMs', 1500)}ms`,
@@ -388,11 +389,11 @@ function connectTelegram(context) {
     // 텔레그램 → 플러그인: 작업 큐 조회
     telegramService.onQueueRequest = () => {
         if (!sidebarProvider || sidebarProvider._taskQueue.length === 0) {
-            telegramService.sendMessage('📋 작업 큐가 비어있습니다.');
+            telegramService.sendMessage(t('tg.queue_empty'));
             return;
         }
         const items = sidebarProvider._taskQueue.map((t, i) => `${i + 1}. ${t.text.substring(0, 60)}${t.mediaPaths.length > 0 ? ` 📎${t.mediaPaths.length}` : ''}`);
-        const msg = [`📋 *작업 큐* (${sidebarProvider._taskQueue.length}개)`, ``, ...items].join('\n');
+        const msg = [`${t('tg.queue_title')} (${sidebarProvider._taskQueue.length})`, ``, ...items].join('\n');
         telegramService.sendMessage(msg);
     };
 
@@ -409,21 +410,21 @@ function connectTelegram(context) {
             try {
                 log(`[Telegram] 📤 워크플로우 프롬프트 전송: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, []);
-                telegramService.sendMessage(`🚀 워크플로우 실행 중: /${workflowName}`);
+                telegramService.sendMessage(`${t('tg.workflow_executing')} /${workflowName}`);
                 log(`[Telegram] ✅ 워크플로우 프롬프트 전송 완료`);
             } catch (err) {
                 log(`[Telegram] ❌ 워크플로우 프롬프트 전송 실패: ${err.message}`);
-                telegramService.sendMessage(`❌ 워크플로우 실행 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.workflow_failed')} ${err.message}`);
             }
         } else {
             // Ralph Loop가 실행 중이면 작업 큐에 추가
             if (sidebarProvider) {
                 sidebarProvider._taskQueue.push({ text: prompt, mediaPaths: [] });
                 sidebarProvider.updateState();
-                telegramService.sendMessage(`📥 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개): ${prompt.substring(0, 80)}`);
+                telegramService.sendMessage(`${t('tg.workflow_queued')} (${sidebarProvider._taskQueue.length}): ${prompt.substring(0, 80)}`);
                 log(`[Telegram] 작업 큐에 워크플로우 추가: ${prompt.substring(0, 80)}`);
             } else {
-                telegramService.sendMessage(`❌ 사이드바가 초기화되지 않았습니다.`);
+                telegramService.sendMessage(t('tg.sidebar_not_init'));
             }
         }
     };
@@ -437,7 +438,7 @@ function connectTelegram(context) {
         const wsRoot = workspaceFolders && workspaceFolders.length > 0
             ? workspaceFolders[0].uri.fsPath : null;
         if (!wsRoot) {
-            telegramService.sendMessage('❌ 워크스페이스가 열려있지 않습니다.');
+            telegramService.sendMessage(t('tg.media_no_workspace'));
             return;
         }
 
@@ -469,7 +470,7 @@ function connectTelegram(context) {
         }
 
         if (downloadedPaths.length === 0) {
-            telegramService.sendMessage('❌ 미디어 파일 다운로드에 모두 실패했습니다.');
+            telegramService.sendMessage(t('tg.media_download_all_fail'));
             return;
         }
 
@@ -477,14 +478,14 @@ function connectTelegram(context) {
         const captionText = text || '';
         const mediaRefs = downloadedPaths.map(p => `@${p}`).join(' ');
         const prompt = captionText
-            ? `${captionText}\n\n첨부 미디어:\n${mediaRefs}`
-            : `첨부된 미디어 파일을 분석해주세요.\n\n첨부 미디어:\n${mediaRefs}`;
+            ? `${captionText}\n\n${t('tg.media_attach_label')}\n${mediaRefs}`
+            : `${t('tg.media_analyze')}\n\n${t('tg.media_attach_label')}\n${mediaRefs}`;
 
         const state = ralphLoop.getState();
 
         if (state === LoopState.IDLE) {
             // Git 세션 초기화 (미디어 작업도 세션 브랜치에서 진행)
-            _initGitSessionIfIdle(captionText || '미디어-첨부-작업');
+            _initGitSessionIfIdle(captionText || t('tg.media_session_label'));
 
             // 이미지 스냅샷 (실행 전)
             const imagesBefore = ralphLoop._snapshotImageFiles();
@@ -493,24 +494,24 @@ function connectTelegram(context) {
             try {
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, downloadedPaths);
-                telegramService.sendMessage(`🚀 미디어 포함 즉시 실행 중 (파일 ${downloadedPaths.length}개): ${captionText.substring(0, 60) || '(캡션 없음)'}`);
+                telegramService.sendMessage(`${t('tg.media_executing')} (${downloadedPaths.length}): ${captionText.substring(0, 60) || t('tg.media_no_caption')}`);
                 log(`[Telegram] ✅ 미디어 포함 즉시 실행 완료`);
 
                 // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
                 _waitAndSendImages(imagesBefore);
             } catch (err) {
                 log(`[Telegram] ❌ 미디어 포함 즉시 실행 실패: ${err.message}`);
-                telegramService.sendMessage(`❌ 미디어 실행 실패: ${err.message}`);
+                telegramService.sendMessage(`${t('tg.media_failed')} ${err.message}`);
             }
         } else if (sidebarProvider) {
             // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로, type: 'task')
-            const queueText = captionText || '미디어 첨부 작업';
+            const queueText = captionText || t('tg.media_attach_task');
             sidebarProvider._taskQueue.push({ text: queueText, mediaPaths: downloadedPaths, type: 'task' });
             sidebarProvider.updateState();
-            telegramService.sendMessage(`📥 미디어 작업 큐에 추가됨 (${sidebarProvider._taskQueue.length}개, 파일 ${downloadedPaths.length}개): ${queueText.substring(0, 60)}`);
+            telegramService.sendMessage(`${t('tg.media_queued')} (${sidebarProvider._taskQueue.length}, ${downloadedPaths.length}): ${queueText.substring(0, 60)}`);
             log(`[Telegram] 미디어 작업 큐에 추가: ${queueText.substring(0, 80)}`);
         } else {
-            telegramService.sendMessage('❌ 사이드바가 초기화되지 않았습니다.');
+            telegramService.sendMessage(t('tg.sidebar_not_init'));
         }
     };
 
@@ -536,14 +537,14 @@ function connectTelegram(context) {
     // 플러그인 → 텔레그램: 쿼터 초과 알림
     ralphLoop.onQuotaExhaustedCallback = (info) => {
         if (info.resumed) {
-            telegramService.sendMessage(`▶️ 모델 할당량 갱신 완료 — Ralph Loop 재개됩니다.`);
+            telegramService.sendMessage(t('tg.quota_resumed'));
         } else {
             telegramService.sendMessage(
-                `⏸️ *모델 할당량 초과 (Quota Exhausted)*\n\n` +
-                `Ralph Loop가 일시정지되었습니다.\n` +
-                `할당량 리셋: ${info.refreshTime}\n` +
-                `예상 재개: ${info.resumeTime} (약 ${info.waitMinutes}분 후)\n\n` +
-                `ℹ️ 리셋 시간이 지나면 자동으로 재개됩니다.`
+                `${t('tg.quota_exhausted_title')}\n\n` +
+                `${t('tg.quota_exhausted_body')}\n` +
+                `${t('tg.quota_exhausted_reset')} ${info.refreshTime}\n` +
+                `${t('tg.quota_exhausted_resume')} ${info.resumeTime} (${t('tg.quota_exhausted_wait', { minutes: info.waitMinutes })})\n\n` +
+                t('tg.quota_exhausted_info')
             );
         }
     };
@@ -657,7 +658,7 @@ function activate(context) {
 
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
                     const emoji = itemType === 'chat' ? '💬' : itemType === 'task' ? '💬' : '📬';
-                    telegramService.sendMessage(`${emoji} 큐 작업 자동 실행: ${nextTask.substring(0, 80)}`);
+                    telegramService.sendMessage(`${emoji} ${t('tg.queue_auto_exec')} ${nextTask.substring(0, 80)}`);
                 }
 
                 // chat 타입: 에이전트 완료 대기 후 응답 추출 → 텔레그램 전송
@@ -669,7 +670,7 @@ function activate(context) {
                             telegramService.sendMessage(`🤖 ${response}`);
                             log(`[Queue] 📤 대화 응답 텔레그램 전송 완료`);
                         } else if (telegramService) {
-                            telegramService.sendMessage(`✅ 대화 처리 완료 (응답 추출 실패 — VS Code에서 확인하세요)`);
+                            telegramService.sendMessage(t('tg.chat_extract_fail'));
                         }
                     } catch (chatErr) {
                         log(`[Queue] ⚠ 대화 응답 추출 실패: ${chatErr.message}`);
@@ -679,7 +680,7 @@ function activate(context) {
                 log(`[Queue] ❌ ${promptLabel} 전송 실패: ${err.message}`);
                 ralphLoop._forceNextAutoStart = false; // 전송 실패 시 플래그 리셋
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
-                    telegramService.sendMessage(`❌ 큐 작업 전송 실패: ${err.message}`);
+                    telegramService.sendMessage(`${t('tg.queue_exec_failed')} ${err.message}`);
                 }
             }
         }

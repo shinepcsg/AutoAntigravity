@@ -11,6 +11,7 @@ const { ProgressTracker } = require('./ProgressTracker');
 const { GitManager } = require('./GitManager');
 const { AgentSessionLock } = require('./AgentSessionLock');
 const { ParallelTaskRunner } = require('./ParallelTaskRunner');
+const { t } = require('../i18n');
 
 /**
  * Ralph Loop states
@@ -1465,7 +1466,7 @@ class RalphLoopManager {
         const waitMinutes = (waitMs / 60000).toFixed(1);
         const resumeTimeStr = new Date(Date.now() + waitMs).toLocaleTimeString();
         this._addLog(`[Ralph] ⏸ 할당량 초과 감지. 루프 일시정지 → ${resumeTimeStr} (약 ${waitMinutes}분 후) 자동 재개`, 'warn');
-        vscode.window.showWarningMessage(`Ralph Loop: 모델 할당량 초과. 약 ${waitMinutes}분 후 자동 재개됩니다.`);
+        vscode.window.showWarningMessage(t('ralph.quota_warn', { minutes: waitMinutes }));
 
         // 텔레그램 알림
         if (this.onQuotaExhaustedCallback) {
