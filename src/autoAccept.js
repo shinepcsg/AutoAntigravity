@@ -6,24 +6,26 @@ const cp = require('child_process');
 const http = require('http');
 const { ConnectionManager } = require('./cdp/ConnectionManager');
 
-// Antigravity-specific accept commands
-// NOTE: Terminal execution commands (terminalCommand.accept, command.accept,
-//       command.runAll) are intentionally EXCLUDED from polling.
-//       Polling these every cycle causes the IDE to auto-accept ANY pending
-//       terminal command prompt ("Run command?"), which leads to unintended
-//       execution of Python files and other scripts.
-//       Terminal command acceptance is handled solely by CDP DOMObserver
-//       which has cooldown logic and only clicks within agent chat panels.
-// NOTE: 'notification.acceptPrimaryAction' is intentionally EXCLUDED.
-//       It auto-clicks the primary button on ALL notifications (not just agent ones),
-//       causing infinite dismiss/re-show loops when the extension itself shows
-//       notifications (e.g. "Restart Now" after shortcut patching).
+// Antigravity-specific accept commands (always polled every cycle)
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
     'workbench.action.chat.acceptInput',
     'workbench.action.chat.submit',
     'chatEditing.acceptAllFiles'
 ];
+
+// Terminal command acceptance commands — polled with cooldown protection.
+// These were previously excluded because polling them every cycle caused
+// infinite execution loops (auto-accepting the same command repeatedly).
+// With cooldown, they fire once then wait before firing again, preventing loops.
+// NOTE: 'notification.acceptPrimaryAction' is still EXCLUDED —
+//       it auto-clicks ALL notification buttons causing dismiss/re-show loops.
+const TERMINAL_ACCEPT_COMMANDS = [
+    'antigravity.accept',
+    'antigravity.command.accept',
+    'antigravity.terminalCommand.accept'
+];
+const TERMINAL_ACCEPT_COOLDOWN_MS = 5000; // 5s cooldown after each acceptance
 
 class AutoAcceptManager {
     constructor(log) {
@@ -144,23 +146,48 @@ class AutoAcceptManager {
 
         let lastDiagLog = 0;
         const DIAG_INTERVAL = 30000; // Log diagnostics every 30s
+        let lastTerminalAcceptTime = 0;
 
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
                 // VS Code 명령 API로 활성 탭/네이티브 인라인 버튼 클릭 (CDP와 독립적으로 항상 실행)
                 // 터미널 프롬프트나 에디터 인라인 패널은 CDP 웹뷰 대상이 아니므로 이 폴링이 필수적입니다.
-                // NOTE: 터미널 실행 명령(run/runAll/runCommand/runFirstCommand)은 의도적으로 제외됨
-                //       → 매 폴링마다 에이전트의 터미널 명령 제안을 반복 실행하는 버그 방지
-                const results = await Promise.allSettled(
+                await Promise.allSettled(
                     ACCEPT_COMMANDS.map(async cmd => {
                         const r = await vscode.commands.executeCommand(cmd);
                         return { cmd, status: 'ok', result: r };
                     })
                 );
 
-                // Periodic diagnostic logging
+                // Terminal command acceptance — fire only after cooldown period.
+                // This prevents the infinite execution loop that occurred when
+                // these commands were polled every cycle (they would re-accept
+                // the command run they just triggered, causing endless loops).
                 const now = Date.now();
+                if (now - lastTerminalAcceptTime >= TERMINAL_ACCEPT_COOLDOWN_MS) {
+                    const termResults = await Promise.allSettled(
+                        TERMINAL_ACCEPT_COMMANDS.map(async cmd => {
+                            try {
+                                const r = await vscode.commands.executeCommand(cmd);
+                                return { cmd, status: 'ok', result: r };
+                            } catch (e) {
+                                return { cmd, status: 'error' };
+                            }
+                        })
+                    );
+                    // Check if any command actually did something (non-undefined result)
+                    const didAccept = termResults.some(r =>
+                        r.status === 'fulfilled' && r.value?.result !== undefined
+                    );
+                    if (didAccept) {
+                        lastTerminalAcceptTime = now;
+                        this._lastAcceptTime = now;
+                        this.log('[AutoAccept] Terminal command accepted (cooldown started)');
+                    }
+                }
+
+                // Periodic diagnostic logging
                 if (now - lastDiagLog > DIAG_INTERVAL) {
                     lastDiagLog = now;
                     const cdpStatus = this.connectionManager
@@ -284,10 +311,10 @@ else { Write-Output "NOT_FOUND" }
                     }
                     vscode.window.showInformationMessage(
                         `✅ Shortcut ready! Restart Antigravity to activate AutoAccept.`,
-                        'Restart Now'
+                        'Reload Window'
                     ).then(action => {
-                        if (action === 'Restart Now') {
-                            vscode.commands.executeCommand('workbench.action.quit');
+                        if (action === 'Reload Window') {
+                            vscode.commands.executeCommand('workbench.action.reloadWindow');
                         }
                     });
                 } else if (out.includes('ALREADY_PATCHED|')) {
