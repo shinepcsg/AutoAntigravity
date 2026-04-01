@@ -187,6 +187,31 @@ function buildDOMObserverScript(customTexts) {
             if (matchFound) {
                 var clickable = closestClickable(node);
                 var tag2 = (clickable.tagName || '').toLowerCase();
+
+                // Safety filter: skip 'run'/'실행' matches inside terminal/editor containers.
+                // These short keywords are too aggressive and can match the IDE's
+                // "Run" button in terminal command prompts or editor toolbar,
+                // causing unintended Python file execution.
+                var RUN_KEYWORDS = ['run', '실행', '実行', '运行'];
+                if (RUN_KEYWORDS.indexOf(matchFound) !== -1) {
+                    var ancestor = clickable;
+                    var inTerminalOrEditor = false;
+                    for (var depth = 0; depth < 15 && ancestor && ancestor !== document.body; depth++) {
+                        var cls = (ancestor.className || '').toLowerCase();
+                        var id = (ancestor.id || '').toLowerCase();
+                        if (cls.includes('terminal') || cls.includes('run-command') ||
+                            cls.includes('editor-toolbar') || cls.includes('editor-actions') ||
+                            cls.includes('title-actions') || cls.includes('menubar') ||
+                            id.includes('terminal') || id.includes('workbench.parts.editor')) {
+                            inTerminalOrEditor = true;
+                            break;
+                        }
+                        ancestor = ancestor.parentElement;
+                    }
+                    if (inTerminalOrEditor) {
+                        continue;
+                    }
+                }
                 
                 var isValidButton = tag2 === 'button' || tag2.includes('button') || clickable.getAttribute('role') === 'button' ||
                     tag2.includes('btn') || clickable.classList.contains('cursor-pointer') ||

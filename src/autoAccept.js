@@ -7,11 +7,15 @@ const http = require('http');
 const { ConnectionManager } = require('./cdp/ConnectionManager');
 
 // Antigravity-specific accept commands
+// NOTE: Terminal execution commands (terminalCommand.accept, command.accept,
+//       command.runAll) are intentionally EXCLUDED from polling.
+//       Polling these every cycle causes the IDE to auto-accept ANY pending
+//       terminal command prompt ("Run command?"), which leads to unintended
+//       execution of Python files and other scripts.
+//       Terminal command acceptance is handled solely by CDP DOMObserver
+//       which has cooldown logic and only clicks within agent chat panels.
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
-    'antigravity.terminalCommand.accept',
-    'antigravity.command.accept',
-    'antigravity.command.runAll',
     'workbench.action.chat.acceptInput',
     'workbench.action.chat.submit',
     'chatEditing.acceptAllFiles',
