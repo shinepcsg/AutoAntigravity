@@ -85,48 +85,12 @@ Vous pouvez lier un bot Telegram pour surveiller les tâches et recevoir des not
 
 ### Inscription du flux de travail `/write-prd`
 
-En utilisant la commande oblique `/write-prd`, l'agent d'IA rédige automatiquement un PRD et l'applique instantanément à Ralph Loop.  
-Pour utiliser ce flux de travail, vous devez l'enregistrer en tant que **Flux de travail global** ou **Flux de travail de projet**.
+En utilisant la commande oblique `/write-prd`, l'agent d'IA rédige automatiquement un PRD et l'applique instantanément à Ralph Loop.
 
-#### Méthode 1 : Flux de travail de projet (Utiliser uniquement dans le projet actuel)
+Ouvrez le panneau latéral en cliquant sur l'**icône AutoAntigravity** dans la barre d'activités à gauche,  
+puis cliquez sur le bouton **📋 write-prd (Workspace)** dans la section des paramètres pour installer automatiquement le flux de travail dans le projet actuel.
 
-Placez le fichier `.agent/workflows/write-prd.md` à la racine de votre projet.  
-Le fichier est déjà inclus dans le référentiel AutoAntigravity, il suffit de le copier pour l'utiliser dans d'autres projets.
-
-```
-votre-projet/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← Placez-le ici
-├── PRD.md
-└── ...
-```
-
-> 💡 Les chemins `.agents/workflows/`, `_agent/workflows/`, et `_agents/workflows/` sont également pris en charge.
-
-#### Méthode 2 : Flux de travail global (Utiliser dans tous les projets)
-
-En plaçant le fichier dans le dossier `.agent/workflows/` de votre répertoire personnel, vous pourrez utiliser la commande `/write-prd` dans tous les projets.
-
-**Windows** (exécuter à la racine du projet) :
-```powershell
-# Créer le répertoire de flux de travail global
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# Copier write-prd.md
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (exécuter à la racine du projet) :
-```bash
-# Créer le répertoire de flux de travail global
-mkdir -p ~/.agent/workflows
-
-# Copier write-prd.md
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-Après l'enregistrement, tapez `/write-prd` dans la discussion d'Antigravity pour exécuter le flux.
+Après l'installation, tapez `/write-prd` dans la discussion d'Antigravity pour exécuter le flux.
 
 ---
 

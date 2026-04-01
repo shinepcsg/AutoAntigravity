@@ -51,7 +51,6 @@ const translations = {
         check_updates: "🔍 Check Updates",
         no_git_cred: "⚠ No Git Credentials - auto update disabled.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (Consecutive %cnt)",
         tasks_progress: "%completed / %total tasks (%pct%)",
         update_to: "v%old -> v%new",
@@ -110,7 +109,6 @@ const translations = {
         check_updates: "🔍 업데이트 확인",
         no_git_cred: "⚠ Git 권한 없음 — 자동 업데이트 비활성화",
         write_prd_ws: "📋 write-prd (워크스페이스)",
-        write_prd_global: "📋 write-prd (전역)",
         consecutive_errors: "%err (연속 %cnt회)",
         tasks_progress: "%completed / %total 작업 (%pct%)",
         update_to: "v%old → v%new",
@@ -169,7 +167,6 @@ const translations = {
         check_updates: "🔍 アップデート確認",
         no_git_cred: "⚠ Git権限なし — 自動アップデート無効",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (連続%cnt回)",
         tasks_progress: "%completed / %total タスク (%pct%)",
         update_to: "v%old → v%new",
@@ -228,7 +225,6 @@ const translations = {
         check_updates: "🔍 检查更新",
         no_git_cred: "⚠ 无 Git 凭证 — 自动更新已禁用。",
         write_prd_ws: "📋 write-prd (工作区)",
-        write_prd_global: "📋 write-prd (全局)",
         consecutive_errors: "%err (连续 %cnt 次)",
         tasks_progress: "%completed / %total 任务 (%pct%)",
         update_to: "v%old → v%new",
@@ -287,7 +283,6 @@ const translations = {
         check_updates: "🔍 檢查更新",
         no_git_cred: "⚠ 無 Git 憑證 — 自動更新已停用。",
         write_prd_ws: "📋 write-prd (工作區)",
-        write_prd_global: "📋 write-prd (全域)",
         consecutive_errors: "%err (連續 %cnt 次)",
         tasks_progress: "%completed / %total 任務 (%pct%)",
         update_to: "v%old → v%new",
@@ -346,7 +341,6 @@ const translations = {
         check_updates: "🔍 Buscar Actualizaciones",
         no_git_cred: "⚠ Sin credenciales de Git.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (Consecutivos %cnt)",
         tasks_progress: "%completed / %total tareas (%pct%)",
         update_to: "v%old -> v%new",
@@ -405,7 +399,6 @@ const translations = {
         check_updates: "🔍 Vérifier MAJ",
         no_git_cred: "⚠ Pas de Git.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (%cnt consécutives)",
         tasks_progress: "%completed / %total (%pct%)",
         update_to: "v%old -> v%new",
@@ -464,7 +457,6 @@ const translations = {
         check_updates: "🔍 Updates prüfen",
         no_git_cred: "⚠ Keine Git-Rechte.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (%cnt Mal)",
         tasks_progress: "%completed / %total (%pct%)",
         update_to: "v%old -> v%new",
@@ -523,7 +515,6 @@ const translations = {
         check_updates: "🔍 Проверить",
         no_git_cred: "⚠ Нет доступов Git.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (Подряд %cnt)",
         tasks_progress: "%completed / %total (%pct%)",
         update_to: "v%old -> v%new",
@@ -582,7 +573,6 @@ const translations = {
         check_updates: "🔍 Checar updates",
         no_git_cred: "⚠ Sem credenciais Git.",
         write_prd_ws: "📋 write-prd (Workspace)",
-        write_prd_global: "📋 write-prd (Global)",
         consecutive_errors: "%err (%cnt seguidos)",
         tasks_progress: "%completed / %total (%pct%)",
         update_to: "v%old -> v%new",
@@ -641,7 +631,6 @@ const translations = {
         check_updates: "🔍 अपडेट जांचें",
         no_git_cred: "⚠ गिट क्रेडेंशियल्स नहीं हैं।",
         write_prd_ws: "📋 write-prd (कार्यस्थान)",
-        write_prd_global: "📋 write-prd (ग्लोबल)",
         consecutive_errors: "%err (%cnt बार)",
         tasks_progress: "%completed / %total कार्य (%pct%)",
         update_to: "v%old -> v%new",
@@ -700,7 +689,6 @@ const translations = {
         check_updates: "التحقق من التحديثات 🔍",
         no_git_cred: ".أذونات جيت مفقودة ⚠",
         write_prd_ws: "(المسار) write-prd 📋",
-        write_prd_global: "(عام) write-prd 📋",
         consecutive_errors: "(متتالي %cnt) %err",
         tasks_progress: "(%pct%) %total / %completed",
         update_to: "v%new <- v%old",
@@ -1449,7 +1437,6 @@ function getSidebarHtml(webview, langId = 'en') {
         </label>
 
         <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">${t('write_prd_ws')}</button>
-        <button id="btnSetWritePrdGlobal" class="btn btn-secondary">${t('write_prd_global')}</button>
     </div>
 
     <!-- ═══ Version Footer ═══ -->
@@ -1545,9 +1532,7 @@ function getSidebarHtml(webview, langId = 'en') {
     document.getElementById('btnSetWritePrdWorkspace').addEventListener('click', () => {
         vscodeApi.postMessage({ command: 'setWritePrdWorkspace' });
     });
-    document.getElementById('btnSetWritePrdGlobal').addEventListener('click', () => {
-        vscodeApi.postMessage({ command: 'setWritePrdGlobal' });
-    });
+
     document.getElementById('btnEnqueueTask').addEventListener('click', () => {
         const text = document.getElementById('inputTaskQueue').value.trim();
         if (text) {
@@ -1700,7 +1685,6 @@ function getSidebarHtml(webview, langId = 'en') {
 
         // write-prd 버튼 표시/숨김
         document.getElementById('btnSetWritePrdWorkspace').style.display = s.hasWritePrdWorkspace ? 'none' : '';
-        document.getElementById('btnSetWritePrdGlobal').style.display = s.hasWritePrdGlobal ? 'none' : '';
 
         // ─── Task Queue ───
         const queueList = document.getElementById('taskQueueList');

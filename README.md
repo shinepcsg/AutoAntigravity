@@ -85,48 +85,12 @@ You can link a Telegram bot to monitor tasks and receive notifications.
 
 ### `/write-prd` Workflow Registration
 
-Using the `/write-prd` slash command, the AI agent automatically writes a PRD and applies it to the Ralph Loop immediately.  
-To use this workflow, you need to register it as a **Global Workflow** or a **Project Workflow**.
+Using the `/write-prd` slash command, the AI agent automatically writes a PRD and applies it to the Ralph Loop immediately.
 
-#### Method 1: Project Workflow (Use only in the current project)
+Open the sidebar panel by clicking the **AutoAntigravity icon** on the left activity bar,  
+then click the **📋 write-prd (Workspace)** button in the settings section to automatically install the workflow in the current project.
 
-Place the `.agent/workflows/write-prd.md` file in your project root.  
-Since it is already included in the AutoAntigravity repository, simply copy the file to use it in other projects.
-
-```
-your-project/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← Place it here
-├── PRD.md
-└── ...
-```
-
-> 💡 The paths `.agents/workflows/`, `_agent/workflows/`, and `_agents/workflows/` are also supported.
-
-#### Method 2: Global Workflow (Use in all projects)
-
-By placing the file in the `.agent/workflows/` folder of your home directory, you can use the `/write-prd` command in all projects.
-
-**Windows** (Run in project root):
-```powershell
-# Create global workflow directory
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# Copy write-prd.md
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (Run in project root):
-```bash
-# Create global workflow directory
-mkdir -p ~/.agent/workflows
-
-# Copy write-prd.md
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-After registration, typing `/write-prd` in the Antigravity chat will execute the workflow.
+After installation, typing `/write-prd` in the Antigravity chat will execute the workflow.
 
 ---
 

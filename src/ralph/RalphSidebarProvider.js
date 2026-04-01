@@ -6,7 +6,7 @@ const { getSidebarHtml } = require('./RalphSidebarHtml');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+
 
 class RalphSidebarProvider {
     static viewType = 'autoAntigravity.ralphSidebar';
@@ -264,20 +264,13 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
-                case 'setWritePrdWorkspace':
-                case 'setWritePrdGlobal': {
-                    const isGlobal = message.command === 'setWritePrdGlobal';
-                    let targetDir;
-                    if (isGlobal) {
-                        targetDir = path.join(os.homedir(), '.agent', 'workflows');
-                    } else {
-                        const folders = vscode.workspace.workspaceFolders;
-                        if (!folders || folders.length === 0) {
-                            vscode.window.showWarningMessage('워크스페이스가 열려있지 않습니다.');
-                            break;
-                        }
-                        targetDir = path.join(folders[0].uri.fsPath, '.agent', 'workflows');
+                case 'setWritePrdWorkspace': {
+                    const folders = vscode.workspace.workspaceFolders;
+                    if (!folders || folders.length === 0) {
+                        vscode.window.showWarningMessage('워크스페이스가 열려있지 않습니다.');
+                        break;
                     }
+                    const targetDir = path.join(folders[0].uri.fsPath, '.agent', 'workflows');
                     const targetPath = path.join(targetDir, 'write-prd.md');
 
                     const templateContent = [
@@ -529,7 +522,6 @@ class RalphSidebarProvider {
                 if (!folders || folders.length === 0) return false;
                 return this._cachedExistsSync(path.join(folders[0].uri.fsPath, '.agent', 'workflows', 'write-prd.md'));
             })(),
-            hasWritePrdGlobal: this._cachedExistsSync(path.join(os.homedir(), '.agent', 'workflows', 'write-prd.md')),
             // 작업 큐
             taskQueue: this._taskQueue.slice()
         };

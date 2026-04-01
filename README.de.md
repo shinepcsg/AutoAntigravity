@@ -85,48 +85,12 @@ Nutzen Sie den Telegram-Bot zur Erfassung und Überwachung.
 
 ### `/write-prd` Workflow-Registrierung
 
-Mit dem Slash-Befehl `/write-prd` erstellt der KI-Agent automatisch eine PRD und wendet sie sofort auf den Ralph Loop an.  
-Um diesen Workflow nutzen zu können, müssen Sie ihn als **Globalen Workflow** oder **Projekt-Workflow** registrieren.
+Mit dem Slash-Befehl `/write-prd` erstellt der KI-Agent automatisch eine PRD und wendet sie sofort auf den Ralph Loop an.
 
-#### Methode 1: Projekt-Workflow (Nur im aktuellen Projekt verwenden)
+Klicken Sie auf das **AutoAntigravity-Symbol** in der linken Aktivitätsleiste, um das Seitenpaneel zu öffnen,  
+und klicken Sie dann auf die Schaltfläche **📋 write-prd (Workspace)** im Einstellungsbereich, um den Workflow automatisch im aktuellen Projekt zu installieren.
 
-Platzieren Sie die Datei `.agent/workflows/write-prd.md` in das Stammverzeichnis Ihres Projekts.  
-Das AutoAntigravity-Repository enthält diese bereits, kopieren Sie diese in andere Projekte.
-
-```
-Ihr-Projekt/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← Hier einfügen
-├── PRD.md
-└── ...
-```
-
-> 💡 Folgende Pfade werden auch unterstützt: `.agents/workflows/`, `_agent/workflows/`, `_agents/workflows/`
-
-#### Methode 2: Globaler Workflow (In allen Projekten verwenden)
-
-Indem Sie die Datei in den Ordner `.agent/workflows/` Ihres Home-Verzeichnisses legen, lässt sich der `/write-prd` Befehl in allen Projekten verwenden.
-
-**Windows** (Im Projektverzeichnis ausführen):
-```powershell
-# Globales Workflow-Verzeichnis erstellen
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# write-prd.md kopieren
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (Im Projektverzeichnis ausführen):
-```bash
-# Globales Workflow-Verzeichnis erstellen
-mkdir -p ~/.agent/workflows
-
-# write-prd.md kopieren
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-Geben Sie nach der Registrierung im Chat den Befehl `/write-prd` ein.
+Geben Sie nach der Installation im Chat den Befehl `/write-prd` ein.
 
 ---
 

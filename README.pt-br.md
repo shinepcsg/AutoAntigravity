@@ -83,50 +83,14 @@ Bote as garras pelo braço mecânico da tecnologia do lado de fora se munindo e 
 2. **O Passe De Início do Funcionamento Base da Ação Principal de Ignição ao Despertar no Coração Principal Desse Agente Tão Fantástico**: Comece logo isso com agilidade de apenas tocar teclado pelo comando por intermédio encíclico rotacional simultâneo atrelando `Ctrl+Shift+P` pra visualizar assim de fato os chamamos, selecionando da vasta lista suspensa que no menu flutuando logo lhe disporá visualização a guia no e encadeamento expresso como assim digitado proferido da sintaxe da linguagem a frente para prosseguir executando perante comando contido: `AutoAntigravity: Start Ralph Loop` 
 3. **Pausando e Acabando com Qualquer Desvio Fora De Parâmetro ao Lançar Paralisando em Forma Segura De Pare De Acabar E Feche De Paragem Desse Movimentar Da Vida Cíclica Do Ralph No Agente Da Forma Do Ciclo Por Final Enxergado E Realizado Enfim**: Encerre esse ato como anteriormente o foi apenas o substituindo digitando pra paragem via teclado se repetindo pelo tal de fato conhecido meio por: `Ctrl+Shift+P` invocando para aparecer de súbito flutuante listagem das diretrizes a digitar logo por fim selecionando enfim o comando proferido listando o fim executório: `AutoAntigravity: Stop Ralph Loop`  
 
-### Comandos pra Encaixar com Destreza Workflow e Tarefas Pra Facilitar pelo Encadeamento Original de Uma Ação em Cascatas Automáticas Diretamente por Uso Da Linha Slash: `/write-prd`
+### Registro do workflow `/write-prd`
 
-Buscando ativamente nas conversas o envio desse pedido pelo meio da digitação a enviar e digitar à frente grafando contido em via do comando sendo barra dita do idioma listado pelo traçar obliquo do modelo slash-command que seria `/write-prd`, tudo irá gerar um automatizado script construindo pela inteligência não natural artificial chamada e batizada global em si pelo chamado como AI de maneira base de redigir montando esquemas textuais num visualizando como PRD e aplicando por ventura num encadeamento nativo e automático logo lá no meio visualizado internamente processado internamente em base raiz pelo projeto a dentro vislumbrando como dito pelo funcionamento batizado da execução engrenada com nomeação engajada da chamada por vias diretas da execução central executante central do Loop engrenado a qual roda na base central rodadora cíclica iterada pelo codinome encíclico de batismo já apresentado a ti encenada aqui grafado da nomenclatura de nome e visual Ralph Loop por si tão falado pelo visual aqui tão amado nesse dia.
-Em virtude disso e por fins executórios de rodagem pelo comando ao meio desse processo se dará sendo engrenado devidamente encartado as ordens listada da nomenclatura e modelo sendo assim uma diretriz do âmbito da esfera Global dita batizando como uma representação universal (Global Workflow) bem aí sim na via e visão ou sendo estendida especificadamente para as frentes fechadas restritamente ali listada dentro isolado para da execução unificada focada por ali só pelo modelo representativo restrito chamado do campo listando unicamente em prol sendo só por Projeto restrito só ali isolado de modelar de fato (Project Workflow).
+Usando o comando `/write-prd`, o agente de IA gera automaticamente um PRD e o aplica ao Ralph Loop imediatamente.
 
-#### Método N°1: Fluxograma e Caminhos Estruturais das Orquestração Operante Só Limitada Unicamente na Fronteira Visual Dentro Para Aquela Especifica Do Atual Isolamento da Passada de Fronteira no Atual e Visado Unicamente Listado Chamado Na Estrutura Batizado do Presente Cujo Campo e Operatividade Se Chama Como Sendo o Tal Visão E Foco Da Presente Atividade Do Famoso O Projeto Central Original no Campo de Visão Local Daí Fechado e Contido Apenas em Foco Sendo O Atual Só Somente Só O Projeto:  
+Abra o painel lateral clicando no **ícone do AutoAntigravity** na barra de atividades à esquerda,  
+depois clique no botão **📋 write-prd (Workspace)** na seção de configurações para instalar automaticamente o workflow no projeto atual.
 
-Deixe e bote na raiz inicial contida na modelar que aloca as raízes principais visual central e global onde roda todas sub pastagens chamadas do local a qual todos nascem, e chame o arquivo de nomenclatura do PRD.md mas salve-o em visual de forma encoberta ou de encarte a chamar como a visualização restrita ou em raiz de projeto a por vias de diretórios nomeando a caminho `votar`/`.agent`/`workflows`/`write-prd.md` ao botar ele na via.
-Visto e por conta disto já tá posto no auto reposicionamento por si da estrutura da própria AutoAntigravity desde do instalar.  
-
-```
-seu-local-da-obra-e-suas-artes-de-criação-a-conter-em-raiz-chamado-em-projeto-cujo-nome-da-modelada-é-em-geral-your-project/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← Bote na bota visual por si do projeto fechado na forma pra de cá.
-├── PRD.md
-└── ...
-```
-
-> 💡 Se liga, caminhos que trazem de maneira encartada tal vias listadas contendo visual de ser representadas contidas com a `.agents/workflows/`, o mesmo visual como o `_agent/workflows/` além ainda da `_agents/workflows/` serão engolidos visualizados pelo parse se encaixando e sendo devidamente acoplados servindo lindamente na representação nativa das suas funções aí de perca do medo para tal do ato contínuo suportado pelo mesmo.  
-
-#### Caminho 2 de Como Chegar Lá Em Via Pra Tudo E Acima A Toda Direcional Listando Diretamente Como Uma Representação de Um Escopo Extenso Dito Pela Via de Abrangência Pela Visão e Titulação Batizado Do Fluxo e Ações Direcionais Visualizado Listados Como Sendo O Fluxo Do Mundo Focado Para O Global No Qual Encaixado Pra Geral No Ambiente Dito De Forma Irrestrita Em Forma Universal Com Escopo Titulado Por (Global Workflow)
-
-Pondo o listamento de representatividade num âmbito focado a ir numa camada a botar no env ou em volta restritivo ali só focado da área globalizada no ponto listado de nome restritivo a dita visão do tal como o visual usuário da casa da base que sustenta em nível de máquina o (home) e bote no meio da `/.agent/workflows/` da encartada listando via em `.agent/workflows/...`. E logo, seja livre a utilizar os famosos como as representações textuais na slash listando aí do uso chamando à vida de digitar como um passe o `/write-prd` por via universal englobando tudo num modo sem barreiras.    
-
-**Do Windows Listado No Seu Caminho Por Si a Ser Feito Na Visão Visual Só No Lado Executado Dando Por Via de Dentro Exato do PRD Ali No Ponto Focado Restritivo Do Visual No Seu Próprio Lado Da Base Inicial (Para Execução Em Powershell)**:
-```powershell
-# Bote a gerar no Powershell a criação fidedigna da sua mais do que bela global pasta diretório que a comporta tal base na diretriz de uma vez 
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# Crie e execute em comando logo de cópia que transpõe visual num estalar o write-prd.md
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Para Usuários de Apelo Pelas Partes do Linux ou MacOS a se usar em bash visual a botar (executar logando de visual pelo ponto de visada ao local restritivo visual local originado e encartado fechado num projeto da raiz principal base visual)**:
-```bash
-# Gere numa digitação rápida um diretório novo a ser listando em vias ao qual é criado nas instâncias como da esfera dita puramente da base na ação global
-mkdir -p ~/.agent/workflows
-
-# Use a parte visada copiando num lance o bendito local arquivo para por fim lá write-prd.md
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-Pronto após isso, seja livre digitando e use listando do visual contido com a invocação ao `/write-prd` que isso aí operará e começará no agente fazendo e se operando o fluxograma original dele sendo executado como fluxo das águas fluentes!  
+Após a instalação, digite `/write-prd` no chat do Antigravity para executar o workflow.
 
 ---
 

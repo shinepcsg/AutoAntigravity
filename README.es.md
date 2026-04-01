@@ -85,48 +85,13 @@ Puede conectar un bot de Telegram para monitorear tareas y recibir notificacione
 
 ### Registro del flujo de trabajo `/write-prd`
 
-Al usar el comando `/write-prd`, el agente de IA redacta automáticamente un documento PRD y lo aplica al Ralph Loop instantáneamente.  
-Para utilizar este flujo de trabajo, debe registrarlo como un **Flujo de trabajo global** o un **Flujo de trabajo del proyecto**.
+Al usar el comando `/write-prd`, el agente de IA redacta automáticamente un documento PRD y lo aplica al Ralph Loop instantáneamente.
 
-#### Método 1: Flujo de trabajo del proyecto (Usar solo en el proyecto actual)
+Abra el panel lateral haciendo clic en el **icono de AutoAntigravity** en la barra de actividad izquierda,  
+luego haga clic en el botón **📋 write-prd (Workspace)** en la sección de configuración para instalar automáticamente el flujo de trabajo en el proyecto actual.
 
-Coloque el archivo `.agent/workflows/write-prd.md` en la raíz de su proyecto.  
-El archivo ya está incluido en el repositorio de AutoAntigravity, simplemente cópielo para usarlo en otros proyectos.
+Después de la instalación, escriba `/write-prd` en el chat de Antigravity para ejecutar el flujo de trabajo.
 
-```
-su-proyecto/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← Colóquelo aquí
-├── PRD.md
-└── ...
-```
-
-> 💡 También se admiten las rutas `.agents/workflows/`, `_agent/workflows/` y `_agents/workflows/`.
-
-#### Método 2: Flujo de trabajo global (Usar en todos los proyectos)
-
-Colocando el archivo en la carpeta `.agent/workflows/` de su directorio de inicio, podrá utilizar el comando `/write-prd` en todos los proyectos.
-
-**Windows** (Ejecutar en la raíz del proyecto):
-```powershell
-# Crear el directorio de flujo de trabajo global
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# Copiar write-prd.md
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (Ejecutar en la raíz del proyecto):
-```bash
-# Crear el directorio de flujo de trabajo global
-mkdir -p ~/.agent/workflows
-
-# Copiar write-prd.md
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-Después de registrarlo, escriba `/write-prd` en el chat de Antigravity para ejecutar el flujo de trabajo.
 
 ---
 

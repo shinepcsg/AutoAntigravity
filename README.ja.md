@@ -85,46 +85,10 @@ Antigravity の **拡張機能 (Extensions) パネル** で `AutoAntigravity` �
 
 ### `/write-prd` ワークフローの登録
 
-`/write-prd` スラッシュコマンドを使用すると、AI エージェントが自動的に PRD を作成し、Ralph Loop に即座に適用します。  
-このワークフローを使用するには、**グローバルワークフロー** または **プロジェクトワークフロー** として登録する必要があります。
+`/write-prd` スラッシュコマンドを使用すると、AI エージェントが自動的に PRD を作成し、Ralph Loop に即座に適用します。
 
-#### 方法 1: プロジェクトワークフロー (現在のプロジェクトでのみ使用)
-
-プロジェクトルートに `.agent/workflows/write-prd.md` ファイルを配置します。  
-AutoAntigravity リポジトリにすでに含まれているため、他のプロジェクトで使用する場合はファイルをコピーしてください。
-
-```
-your-project/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← ここに配置
-├── PRD.md
-└── ...
-```
-
-> 💡 `.agents/workflows/`, `_agent/workflows/`, `_agents/workflows/` のパスもサポートされています。
-
-#### 方法 2: グローバルワークフロー (すべてのプロジェクトで使用)
-
-ホームディレクトリの `.agent/workflows/` フォルダにファイルを配置すると、すべてのプロジェクトで `/write-prd` コマンドが使用できるようになります。
-
-**Windows** (プロジェクトルートで実行):
-```powershell
-# グローバルワークフローディレクトリの作成
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# write-prd.md のコピー
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (プロジェクトルートで実行):
-```bash
-# グローバルワークフローディレクトリの作成
-mkdir -p ~/.agent/workflows
-
-# write-prd.md のコピー
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
+Antigravity の左側アクティビティバーにある **AutoAntigravity アイコン**をクリックしてサイドバーパネルを開き、  
+設定セクションの **📋 write-prd (Workspace)** ボタンをクリックすると、現在のプロジェクトにワークフローが自動インストールされます。
 
 登録後、Antigravity のチャットで `/write-prd` と入力するとワークフローが実行されます。
 

@@ -85,48 +85,12 @@
 
 ### `/write-prd` 工作流注册
 
-使用 `/write-prd` 斜杠命令后，AI 代理会自动生成 PRD 并立即将其应用于 Ralph Loop。  
-要使用此工作流，您需要将其注册为 **全局工作流** 或 **项目工作流**。
+使用 `/write-prd` 斜杠命令后，AI 代理会自动生成 PRD 并立即将其应用于 Ralph Loop。
 
-#### 方法 1: 项目工作流 (仅在当前项目中使用)
+点击 Antigravity 左侧活动栏的 **AutoAntigravity 图标**打开侧边栏面板，  
+然后点击设置区域的 **📋 write-prd (工作区)** 按钮，即可在当前项目中自动安装该工作流。
 
-将 `.agent/workflows/write-prd.md` 文件放置在项目根目录中。  
-AutoAntigravity 仓库中已包含该文件，只需将文件复制到您的项目中即可使用。
-
-```
-your-project/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← 放置于此
-├── PRD.md
-└── ...
-```
-
-> 💡 也支持以下路径: `.agents/workflows/`, `_agent/workflows/`, `_agents/workflows/`
-
-#### 方法 2: 全局工作流 (在所有项目中使用)
-
-将文件放置于用户主目录下的 `.agent/workflows/` 文件夹内，即可在任何项目中使用 `/write-prd` 命令。
-
-**Windows** (在项目根目录执行):
-```powershell
-# 创建全局工作流目录
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# 复制 write-prd.md
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (在项目根目录执行):
-```bash
-# 创建全局工作流目录
-mkdir -p ~/.agent/workflows
-
-# 复制 write-prd.md
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-完成注册后，只需在 Antigravity 聊天窗口中输入 `/write-prd` 即可执行该工作流。
+安装完成后，在 Antigravity 聊天窗口中输入 `/write-prd` 即可执行该工作流。
 
 ---
 

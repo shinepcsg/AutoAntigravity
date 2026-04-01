@@ -85,48 +85,12 @@ Antigravity शुरू करते समय यह फ़्लैग जो
 
 ### `/write-prd` कार्यप्रवाह (Workflow) को पंजीकृत करना
 
-स्लैश कमांड `/write-prd` का उपयोग करने पर, AI एजेंट स्वचालित रूप से एक PRD तैयार करता है और इसे तुरंत Ralph Loop में लागू कर देता है।  
-इस कार्यप्रवाह का उपयोग करने के लिए, आपको इसे एक **वैश्विक कार्यप्रवाह (Global Workflow)** या **परियोजना कार्यप्रवाह (Project Workflow)** के रूप में पंजीकृत करना होगा।
+स्लैश कमांड `/write-prd` का उपयोग करने पर, AI एजेंट स्वचालित रूप से एक PRD तैयार करता है और इसे तुरंत Ralph Loop में लागू कर देता है।
 
-#### विधि 1: परियोजना कार्यप्रवाह (केवल वर्तमान परियोजना के लिए)
+बाईं ओर गतिविधि पट्टी में स्थित **AutoAntigravity आइकन** को दबा कर साइडबार पैनल खोलें,  
+फिर सेटिंग्स अनुभाग में **📋 write-prd (कार्यस्थान)** बटन पर क्लिक करें, जिससे वर्तमान प्रोजेक्ट में कार्यप्रवाह स्वचालित रूप से स्थापित हो जाएगा।
 
-`.agent/workflows/write-prd.md` फ़ाइल को अपने प्रोजेक्ट की मुख्य डायरेक्ट्री (Root) में रखें।  
-यह AutoAntigravity रिपॉजिटरी में पहले से मौजूद है, अन्य प्रोजेक्ट्स में इसका उपयोग करने के लिए बस फ़ाइल की प्रतिलिपि (Copy) बनाएँ।
-
-```
-your-project/
-├── .agent/
-│   └── workflows/
-│       └── write-prd.md    ← यहाँ रखें
-├── PRD.md
-└── ...
-```
-
-> 💡 इन पथों (paths) का भी समर्थन किया जाता है: `.agents/workflows/`, `_agent/workflows/`, और `_agents/workflows/`
-
-#### विधि 2: वैश्विक कार्यप्रवाह (सभी परियोजनाओं के लिए)
-
-अपने होम डायरेक्टरी के `.agent/workflows/` फ़ोल्डर में फ़ाइल रखकर, आप `/write-prd` कमांड का उपयोग सभी परियोजनाओं में कर सकते हैं।
-
-**Windows** (प्रोजेक्ट के मूल में चलाएं):
-```powershell
-# वैश्विक कार्यप्रवाह निर्देशिका बनाएँ
-New-Item -ItemType Directory -Path "$env:USERPROFILE\.agent\workflows" -Force
-
-# write-prd.md को कॉपी करें
-Copy-Item ".\.agent\workflows\write-prd.md" "$env:USERPROFILE\.agent\workflows\write-prd.md"
-```
-
-**Mac / Linux** (प्रोजेक्ट के मूल में चलाएं):
-```bash
-# वैश्विक कार्यप्रवाह निर्देशिका बनाएँ
-mkdir -p ~/.agent/workflows
-
-# write-prd.md को कॉपी करें
-cp ./.agent/workflows/write-prd.md ~/.agent/workflows/write-prd.md
-```
-
-पंजीकरण (Registration) के बाद, कार्यप्रवाह चलाने के लिए Antigravity चैट में `/write-prd` दर्ज करें।
+स्थापना के बाद, कार्यप्रवाह चलाने के लिए Antigravity चैट में `/write-prd` दर्ज करें।
 
 ---
 
