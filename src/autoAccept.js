@@ -14,12 +14,15 @@ const { ConnectionManager } = require('./cdp/ConnectionManager');
 //       execution of Python files and other scripts.
 //       Terminal command acceptance is handled solely by CDP DOMObserver
 //       which has cooldown logic and only clicks within agent chat panels.
+// NOTE: 'notification.acceptPrimaryAction' is intentionally EXCLUDED.
+//       It auto-clicks the primary button on ALL notifications (not just agent ones),
+//       causing infinite dismiss/re-show loops when the extension itself shows
+//       notifications (e.g. "Restart Now" after shortcut patching).
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
     'workbench.action.chat.acceptInput',
     'workbench.action.chat.submit',
-    'chatEditing.acceptAllFiles',
-    'notification.acceptPrimaryAction'
+    'chatEditing.acceptAllFiles'
 ];
 
 class AutoAcceptManager {
@@ -28,12 +31,14 @@ class AutoAcceptManager {
         this.isEnabled = false;
         this.pollIntervalId = null;
         this.connectionManager = null;
+        this._extensionContext = null;
         // Idle mode: slow down polling when no buttons have been clicked recently
         this._lastAcceptTime = 0;
         this._idleThresholdMs = 30000; // 30 seconds
     }
 
-    initialize() {
+    initialize(context) {
+        this._extensionContext = context || null;
         this.connectionManager = new ConnectionManager({
             log: this.log,
             getPort: () => this._getConfiguredPort(),
@@ -48,6 +53,10 @@ class AutoAcceptManager {
         if (await this._pingPort(configPort)) {
             this.log(`[CDP] Debug port ${configPort} active ✓`);
             this.cdpAvailable = true;
+            // CDP가 정상 작동하면 패치 기록 초기화 (다음에 포트가 안 열리면 다시 알림 가능)
+            if (this._extensionContext) {
+                this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', false);
+            }
             return true;
         }
 
@@ -65,6 +74,9 @@ class AutoAcceptManager {
         if (found) {
             this.log(`[CDP] ✓ Auto-discovered CDP on port ${found.p}`);
             this.cdpAvailable = true;
+            if (this._extensionContext) {
+                this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', false);
+            }
             return true;
         }
 
@@ -74,8 +86,16 @@ class AutoAcceptManager {
         
         // 윈도우 환경에서 CDP 포트가 안 열려있으면 단축키 자동 패치를 시도합니다.
         // F5 디버깅 환경(ExtensionMode.Development === 2)에서는 단축키 기반이 아니므로 패치를 스킵.
+        // 이미 패치를 완료했다면 반복 알림을 방지합니다.
         if (extensionMode !== 2) {
-            this._applyWindowsPatch(configPort);
+            const alreadyPatched = this._extensionContext
+                ? this._extensionContext.globalState.get('autoAntigravity.shortcutPatched', false)
+                : false;
+            if (alreadyPatched) {
+                this.log(`[CDP] Shortcut already patched in a previous session — skipping patch & notification`);
+            } else {
+                this._applyWindowsPatch(configPort);
+            }
         }
 
         return true;
@@ -258,6 +278,10 @@ else { Write-Output "NOT_FOUND" }
                 } else if (out.includes('PATCHED|')) {
                     const lnkPath = out.split('PATCHED|')[1].trim();
                     this.log(`[CDP] ✓ Shortcut patched: ${lnkPath}`);
+                    // 패치 완료 기록 — 다음 세션에서 반복 알림 방지
+                    if (this._extensionContext) {
+                        this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', true);
+                    }
                     vscode.window.showInformationMessage(
                         `✅ Shortcut ready! Restart Antigravity to activate AutoAccept.`,
                         'Restart Now'
@@ -269,6 +293,10 @@ else { Write-Output "NOT_FOUND" }
                 } else if (out.includes('ALREADY_PATCHED|')) {
                     const lnkPath = out.split('ALREADY_PATCHED|')[1].trim();
                     this.log(`[CDP] ✓ Shortcut already has the correct port: ${lnkPath}`);
+                    // 이미 패치됨 기록 — 다음 세션에서 반복 알림 방지
+                    if (this._extensionContext) {
+                        this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', true);
+                    }
                 } else {
                     this.log('[CDP] No matching shortcuts found');
                     vscode.window.showWarningMessage(

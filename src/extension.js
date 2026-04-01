@@ -597,7 +597,7 @@ function activate(context) {
 
     // ─── Initialize Auto Accept ───────────────────────────────────────
     autoAccept = new AutoAcceptManager(log);
-    autoAccept.initialize();
+    autoAccept.initialize(context);
 
     // ─── Initialize Ralph Loop ────────────────────────────────────────
     ralphLoop = new RalphLoopManager(log);
