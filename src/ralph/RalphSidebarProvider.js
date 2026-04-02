@@ -145,6 +145,13 @@ class RalphSidebarProvider {
                     this.updateState();
                     break;
                 }
+                case 'setCodeReviewModel': {
+                    const config = vscode.workspace.getConfiguration('autoAntigravity');
+                    await config.update('codeReview.model', message.value, vscode.ConfigurationTarget.Global);
+                    this._log(`[Sidebar] Code Review Model: ${message.value}`);
+                    this.updateState();
+                    break;
+                }
                 case 'runCodeReviewNow': {
                     if (this.ralphLoop) {
                         const taskText = message.taskText || '마지막 작업 리뷰';
@@ -490,6 +497,7 @@ class RalphSidebarProvider {
             autoCommit: config.get('ralphLoop.autoCommit', true),
             autoDeleteBranch: config.get('ralphLoop.autoDeleteBranch', true),
             enableCodeReview: config.get('ralphLoop.enableCodeReview', false),
+            codeReviewModel: config.get('codeReview.model', 'flash'),
             autoPush: config.get('ralphLoop.autoPush', false),
             taskFile: this.ralphLoop && this.ralphLoop.taskManager
                 ? this.ralphLoop.taskManager.getTaskFile()

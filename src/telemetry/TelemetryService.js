@@ -382,6 +382,10 @@ class TelemetryService {
 
     /** Parse API response into simple model array */
     _parseModels(raw) {
+        if (!this._resetTimeCache) {
+            this._resetTimeCache = new Map();
+        }
+
         const configs = raw?.userStatus?.cascadeModelConfigData?.clientModelConfigs;
         if (!Array.isArray(configs)) return [];
 
@@ -400,6 +404,16 @@ class TelemetryService {
                 }
                 if (typeof cfg.quotaInfo.resetTime === 'string') {
                     resetTime = cfg.quotaInfo.resetTime;
+                    this._resetTimeCache.set(label, resetTime);
+                }
+            }
+
+            if (!resetTime && this._resetTimeCache.has(label)) {
+                const cachedTime = this._resetTimeCache.get(label);
+                if (new Date(cachedTime).getTime() > Date.now()) {
+                    resetTime = cachedTime;
+                } else {
+                    this._resetTimeCache.delete(label);
                 }
             }
 

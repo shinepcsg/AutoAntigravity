@@ -1503,10 +1503,6 @@ function getSidebarHtml(webview, langId = 'en') {
                 <input id="chkAutoDeleteBranch" type="checkbox" />
                 ${t('auto_del_branch')}
             </label>
-            <label id="labelEnableCodeReview" class="toggle-row">
-                <input id="chkEnableCodeReview" type="checkbox" />
-                ${t('code_review')}
-            </label>
 
             <label id="labelAutoPush" class="toggle-row">
                 <input id="chkAutoPush" type="checkbox" />
@@ -1518,6 +1514,34 @@ function getSidebarHtml(webview, langId = 'en') {
 
         </div><!-- end collapsible-body -->
     </div><!-- end Ralph Loop collapsible section -->
+
+    <!-- ═══ Code Review Collapsible Section ═══ -->
+    <div class="section" style="padding-bottom:0;">
+        <div id="codeReviewCollapsibleHeader" class="collapsible-header">
+            <div class="section-title">${t('code_review_section')}</div>
+            <span class="collapsible-chevron">▶</span>
+        </div>
+        <div id="codeReviewCollapsibleBody" class="collapsible-body">
+            <div style="padding-bottom:8px;">
+                <label id="labelEnableCodeReview" class="toggle-row">
+                    <input id="chkEnableCodeReview" type="checkbox" />
+                    ${t('code_review')}
+                </label>
+
+                <div class="form-row" id="codeReviewModelRow">
+                    <label>${t('code_review_model_label')}</label>
+                    <select id="selectCodeReviewModel" style="width:100%;padding:4px 8px;background:var(--input-bg);color:var(--input-fg);border:1px solid var(--input-border);border-radius:4px;font-family:inherit;font-size:12px;">
+                        <option value="flash">Gemini Flash</option>
+                        <option value="gemini pro">Gemini Pro</option>
+                        <option value="gemini pro high">Gemini Pro (High)</option>
+                        <option value="opus">Claude Opus</option>
+                        <option value="sonnet">Claude Sonnet</option>
+                        <option value="gpt">GPT</option>
+                    </select>
+                </div>
+            </div>
+        </div><!-- end code review collapsible-body -->
+    </div><!-- end Code Review collapsible section -->
 
     <!-- ═══ Version Footer ═══ -->
     <div class="version-footer">
@@ -1554,6 +1578,14 @@ function getSidebarHtml(webview, langId = 'en') {
             _ralphBody.classList.add('open');
         }
     }
+
+    // ─── Collapsible Code Review Section ─────
+    const _crHeader = document.getElementById('codeReviewCollapsibleHeader');
+    const _crBody = document.getElementById('codeReviewCollapsibleBody');
+    _crHeader.addEventListener('click', () => {
+        _crHeader.classList.toggle('open');
+        _crBody.classList.toggle('open');
+    });
 
     // ─── Event Bindings (CSP-safe, no inline onclick) ─────
     document.getElementById('btnToggleAutoAccept').addEventListener('click', () => {
@@ -1609,6 +1641,9 @@ function getSidebarHtml(webview, langId = 'en') {
     document.getElementById('labelEnableCodeReview').addEventListener('click', (e) => {
         e.preventDefault();
         vscodeApi.postMessage({ command: 'toggleEnableCodeReview' });
+    });
+    document.getElementById('selectCodeReviewModel').addEventListener('change', (e) => {
+        vscodeApi.postMessage({ command: 'setCodeReviewModel', value: e.target.value });
     });
 
     document.getElementById('btnToggleTelegram').addEventListener('click', () => {
@@ -1755,6 +1790,9 @@ function getSidebarHtml(webview, langId = 'en') {
         document.getElementById('chkAutoDeleteBranch').checked = !!s.autoDeleteBranch;
         document.getElementById('chkAutoPush').checked = !!s.autoPush;
         document.getElementById('chkEnableCodeReview').checked = !!s.enableCodeReview;
+        document.getElementById('selectCodeReviewModel').value = s.codeReviewModel || 'flash';
+        // Show/hide model row based on code review enabled
+        document.getElementById('codeReviewModelRow').style.display = s.enableCodeReview ? '' : 'none';
 
         // Version
         if (s.version) {
@@ -1951,7 +1989,8 @@ function getSidebarHtml(webview, langId = 'en') {
 
     function updateResetCountdowns() {
         if (quotaCountdownTimer) clearInterval(quotaCountdownTimer);
-        quotaCountdownTimer = setInterval(() => {
+        
+        const tick = () => {
             const els = document.querySelectorAll('.quota-reset[data-reset]');
             if (els.length === 0) { clearInterval(quotaCountdownTimer); return; }
             const now = Date.now();
@@ -1967,7 +2006,10 @@ function getSidebarHtml(webview, langId = 'en') {
                     el.textContent = t('reset_eta', { h: h, m: m });
                 }
             });
-        }, 60000);
+        };
+
+        tick(); // immediate update
+        quotaCountdownTimer = setInterval(tick, 60000);
     }
 
     // Request initial state

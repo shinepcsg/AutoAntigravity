@@ -2385,7 +2385,7 @@ class RalphLoopManager {
     }
 
     /**
-     * Run code review stage using Gemini Flash model.
+     * Run code review stage using the configured model.
      * Can be called independently (from sidebar) or from Ralph Loop.
      *
      * 항상 이전 대화 내용을 기반으로 리뷰를 수행한다.
@@ -2428,11 +2428,12 @@ class RalphLoopManager {
         const originalModel = await this._getCurrentModel();
         this._addLog(`[Ralph] 📌 현재 모델: ${originalModel || '알 수 없음'}`);
 
-        // 2. Switch to Gemini Flash for code review
-        this._addLog('[Ralph] 🔄 코드 리뷰 모델: Gemini Flash');
-        const switched = await this._switchModel('flash');
+        // 2. Switch to configured model for code review
+        const codeReviewModel = vscode.workspace.getConfiguration('autoAntigravity').get('codeReview.model', 'flash');
+        this._addLog(`[Ralph] 🔄 코드 리뷰 모델: ${codeReviewModel}`);
+        const switched = await this._switchModel(codeReviewModel);
         if (!switched) {
-            this._addLog('[Ralph] ⚠ Flash 모델 전환 실패 — 현재 모델로 리뷰 진행', 'warn');
+            this._addLog(`[Ralph] ⚠ ${codeReviewModel} 모델 전환 실패 — 현재 모델로 리뷰 진행`, 'warn');
         }
 
         await delay(1000);
