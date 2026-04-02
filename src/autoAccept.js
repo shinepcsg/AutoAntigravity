@@ -6,13 +6,25 @@ const cp = require('child_process');
 const http = require('http');
 const { ConnectionManager } = require('./cdp/ConnectionManager');
 
-// Antigravity-specific accept commands (always polled every cycle)
+// Antigravity-specific accept commands (always polled every cycle).
+// NOTE: chat.acceptInput and chat.submit were REMOVED from this list
+// because polling them every cycle re-submits the last chat input endlessly,
+// causing the "last command keeps executing" bug. See the detailed`n// exclusion comment below for the full rationale.
 const ACCEPT_COMMANDS = [
     'antigravity.agent.acceptAgentStep',
-    'workbench.action.chat.acceptInput',
-    'workbench.action.chat.submit',
     'chatEditing.acceptAllFiles'
 ];
+
+// NOTE: 'workbench.action.chat.acceptInput' and 'workbench.action.chat.submit'
+// are intentionally NOT included in ANY polling list. They are "user input
+// submission" commands (equivalent to pressing Enter in the chat input box),
+// NOT "agent accept" commands. Polling them causes the last chat message to be
+// re-submitted endlessly, which is the root cause of the "last command keeps
+// executing" bug. Agent acceptance is fully covered by:
+//   - antigravity.agent.acceptAgentStep (agent step accept)
+//   - chatEditing.acceptAllFiles (file edit accept)
+//   - TERMINAL_ACCEPT_COMMANDS (terminal command accept)
+//   - CDP DOMObserver (DOM button auto-click)
 
 // Terminal command acceptance commands — polled with cooldown protection.
 // These were previously excluded because polling them every cycle caused
@@ -26,6 +38,16 @@ const TERMINAL_ACCEPT_COMMANDS = [
     'antigravity.terminalCommand.accept'
 ];
 const TERMINAL_ACCEPT_COOLDOWN_MS = 5000; // 5s cooldown after each acceptance
+
+// Context keys used to detect modal UI overlays (Quick Pick, Command Palette, etc.)
+// When any of these are true, polling is paused to prevent interference.
+const MODAL_CONTEXT_KEYS = [
+    'inQuickOpen',           // Quick Pick / Command Palette is open
+    'suggestWidgetVisible',  // Autocomplete suggest widget
+    'renameInputVisible',    // Rename input box
+    'findWidgetVisible',     // Find/Replace widget
+    'parameterHintsVisible'  // Parameter hints popup
+];
 
 class AutoAcceptManager {
     constructor(log) {
@@ -137,6 +159,24 @@ class AutoAcceptManager {
         return vscode.workspace.getConfiguration('autoAntigravity').get('autoAccept.cdpPort', 9559);
     }
 
+    /**
+     * Check if a modal UI overlay is currently visible (Quick Pick, Command Palette, etc.).
+     * When true, polling should be paused to prevent commands from interfering
+     * with modal interactions (e.g., auto-accepting a debug launch config).
+     */
+    async _isModalUIActive() {
+        for (const key of MODAL_CONTEXT_KEYS) {
+            try {
+                // executeCommand returns true if the context key is active
+                const isActive = await vscode.commands.executeCommand(
+                    'getContext', key
+                );
+                if (isActive) return key;
+            } catch (e) { /* context key may not exist */ }
+        }
+        return false;
+    }
+
     _startPolling() {
         if (this.pollIntervalId) return;
 
@@ -148,9 +188,24 @@ class AutoAcceptManager {
         const DIAG_INTERVAL = 30000; // Log diagnostics every 30s
         let lastTerminalAcceptTime = 0;
 
+
         const pollCycle = async () => {
             if (!this.isEnabled) return;
             try {
+                // ── Modal UI Guard ─────────────────────────────────────────
+                // If a modal overlay is active (Quick Pick, Command Palette, etc.),
+                // skip the entire poll cycle to prevent interference.
+                // This fixes the bug where F5 debug launch config selection was
+                // being auto-accepted by the polling commands.
+                const modalKey = await this._isModalUIActive();
+                if (modalKey) {
+                    // Reschedule and skip this cycle
+                    if (this.isEnabled) {
+                        this.pollIntervalId = setTimeout(pollCycle, baseInterval);
+                    }
+                    return;
+                }
+
                 // VS Code 명령 API로 활성 탭/네이티브 인라인 버튼 클릭 (CDP와 독립적으로 항상 실행)
                 // 터미널 프롬프트나 에디터 인라인 패널은 CDP 웹뷰 대상이 아니므로 이 폴링이 필수적입니다.
                 await Promise.allSettled(
@@ -160,11 +215,12 @@ class AutoAcceptManager {
                     })
                 );
 
+                const now = Date.now();
+
                 // Terminal command acceptance — fire only after cooldown period.
                 // This prevents the infinite execution loop that occurred when
                 // these commands were polled every cycle (they would re-accept
                 // the command run they just triggered, causing endless loops).
-                const now = Date.now();
                 if (now - lastTerminalAcceptTime >= TERMINAL_ACCEPT_COOLDOWN_MS) {
                     const termResults = await Promise.allSettled(
                         TERMINAL_ACCEPT_COMMANDS.map(async cmd => {

@@ -45,7 +45,7 @@ const translations = {
         auto_start: "🚀 Auto-start on PRD change",
         auto_commit: "🌿 Git Auto Commit (branch & merge)",
         auto_del_branch: "🗑 Auto Delete Branch (after merge)",
-        code_review: "📝 Code Review (Gemini Flash)",
+        code_review: "📝 Enable Code Review",
         auto_push: "🚀 Auto Push (on session end)",
         auto_install: "⬆ Auto Install Updates",
         check_updates: "🔍 Check Updates",
@@ -59,7 +59,9 @@ const translations = {
         iteration_log: "Iteration %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Code Review",
+        code_review_model_label: "Review Model"
     },
     ko: {
         update_available: "🆕 업데이트 가능",
@@ -104,7 +106,7 @@ const translations = {
         auto_start: "🚀 PRD 수정 시 자동 시작",
         auto_commit: "🌿 Git 자동 커밋 (브랜치 및 병합)",
         auto_del_branch: "🗑 자동 브랜치 삭제 (병합 후)",
-        code_review: "📝 코드 리뷰 (Gemini Flash)",
+        code_review: "📝 코드 리뷰 활성화",
         auto_push: "🚀 자동 Push (세션 종료 시)",
         auto_install: "⬆ 자동 업데이트 설치",
         check_updates: "🔍 업데이트 확인",
@@ -118,7 +120,9 @@ const translations = {
         iteration_log: "반복 %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 코드 리뷰",
+        code_review_model_label: "리뷰 모델"
     },
     ja: {
         update_available: "🆕 アップデート利用可能",
@@ -163,7 +167,7 @@ const translations = {
         auto_start: "🚀 PRD変更時に自動開始",
         auto_commit: "🌿 Git 自動コミット",
         auto_del_branch: "🗑 自動ブランチ削除",
-        code_review: "📝 コードレビュー (Gemini Flash)",
+        code_review: "📝 コードレビュー",
         auto_push: "🚀 自動Push (セッション終了時)",
         auto_install: "⬆ 自動アップデートインストール",
         check_updates: "🔍 アップデート確認",
@@ -177,7 +181,9 @@ const translations = {
         iteration_log: "反復 %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 コードレビュー",
+        code_review_model_label: "レビューモデル"
     },
     "zh-cn": {
         update_available: "🆕 有可用更新",
@@ -222,7 +228,7 @@ const translations = {
         auto_start: "🚀 PRD 修改时自动启动",
         auto_commit: "🌿 自动 Git 提交",
         auto_del_branch: "🗑 自动删除分支",
-        code_review: "📝 代码审核 (Gemini Flash)",
+        code_review: "📝 代码审核",
         auto_push: "🚀 会话结束时自动 Push",
         auto_install: "⬆ 自动安装更新",
         check_updates: "🔍 检查更新",
@@ -236,7 +242,9 @@ const translations = {
         iteration_log: "迭代 %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 代码审核",
+        code_review_model_label: "审核模型"
     },
     "zh-tw": {
         update_available: "🆕 有可用更新",
@@ -281,7 +289,7 @@ const translations = {
         auto_start: "🚀 PRD 修改時自動啟動",
         auto_commit: "🌿 自動 Git 提交",
         auto_del_branch: "🗑 自動刪除分支",
-        code_review: "📝 程式碼審查 (Gemini Flash)",
+        code_review: "📝 程式碼審查",
         auto_push: "🚀 會話結束時自動 Push",
         auto_install: "⬆ 自動安裝更新",
         check_updates: "🔍 檢查更新",
@@ -295,7 +303,9 @@ const translations = {
         iteration_log: "迭代 %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 程式碼審查",
+        code_review_model_label: "審查模型"
     },
     es: {
         update_available: "🆕 Actualización Disponible",
@@ -354,7 +364,9 @@ const translations = {
         iteration_log: "Iteración %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Revisión de Código",
+        code_review_model_label: "Modelo de Revisión"
     },
     fr: {
         update_available: "🆕 Mise à jour disponible",
@@ -413,7 +425,9 @@ const translations = {
         iteration_log: "Itération %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Revue de Code",
+        code_review_model_label: "Modèle de Revue"
     },
     de: {
         update_available: "🆕 Update verfügbar",
@@ -472,7 +486,9 @@ const translations = {
         iteration_log: "Iteration %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Code Review",
+        code_review_model_label: "Review-Modell"
     },
     ru: {
         update_available: "🆕 Доступно обновление",
@@ -531,7 +547,9 @@ const translations = {
         iteration_log: "Итерация %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Ревью кода",
+        code_review_model_label: "Модель ревью"
     },
     "pt-br": {
         update_available: "🆕 Atualização Disponível",
@@ -590,7 +608,9 @@ const translations = {
         iteration_log: "Iteração %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 Verificação de Código",
+        code_review_model_label: "Modelo de Verificação"
     },
     hi: {
         update_available: "🆕 अपडेट उपलब्ध",
@@ -649,7 +669,9 @@ const translations = {
         iteration_log: "पुनरावृत्ति %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 कोड समीक्षा",
+        code_review_model_label: "समीक्षा मॉडल"
     },
     ar: {
         update_available: "تحديث متاح 🆕",
@@ -708,7 +730,9 @@ const translations = {
         iteration_log: "التكرار %iter",
         added_log: "+%add",
         removed_log: "-%rem",
-        ralph_loop_section: "🔄 Ralph Loop"
+        ralph_loop_section: "🔄 Ralph Loop",
+        code_review_section: "📝 مراجعة الكود",
+        code_review_model_label: "نموذج المراجعة"
     }
 };
 

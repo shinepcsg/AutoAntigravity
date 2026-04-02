@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "병렬 워크트리 sparse-checkout 경로 (비어있으면 전체)",
     "cfg.telemetryPoll": "AI 모델 사용량 등 텔레메트리 조회 주기(초)",
     "cfg.telegramEnabled": "텔레그램 알림 활성화 (.env 구성 필요)",
-    "cfg.enableCodeReview": "작업 완료 후 Gemini Flash 코드 리뷰 활성화"
+    "cfg.enableCodeReview": "작업 완료 후 코드 리뷰 활성화",
+    "cfg.codeReviewModel": "코드 리뷰에 사용할 AI 모델 (예: flash, opus, sonnet)"
 }

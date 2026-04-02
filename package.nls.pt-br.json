@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "Caminhos de sparse-checkout",
     "cfg.telemetryPoll": "Telemetria (s)",
     "cfg.telegramEnabled": "Notificações de Telegram",
-    "cfg.enableCodeReview": "Habilitar code review"
+    "cfg.enableCodeReview": "Habilitar code review",
+    "cfg.codeReviewModel": "Modelo de IA para code review"
 }

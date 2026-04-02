@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "قائمة مسارات التنزيل الجزئي",
     "cfg.telemetryPoll": "فترة التنبيه للاستخدام (ثانية)",
     "cfg.telegramEnabled": "تفعيل إشعارات تيليجرام",
-    "cfg.enableCodeReview": "مراجعة الكود باستخدام جيميني"
+    "cfg.enableCodeReview": "تفعيل مراجعة الكود",
+    "cfg.codeReviewModel": "نموذج الذكاء الاصطناعي لمراجعة الكود"
 }

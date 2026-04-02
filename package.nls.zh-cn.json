@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "并行执行的稀疏签出路径列表",
     "cfg.telemetryPoll": "遥测查询间隔（秒）",
     "cfg.telegramEnabled": "启用 Telegram 通知",
-    "cfg.enableCodeReview": "使用 Gemini Flash 进行代码审计"
+    "cfg.enableCodeReview": "任务完成后启用代码审查",
+    "cfg.codeReviewModel": "代码审查使用的AI模型"
 }

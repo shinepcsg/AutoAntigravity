@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "Sparse-checkout paths list. Empty means full checkout.",
     "cfg.telemetryPoll": "Telemetry polling interval in seconds",
     "cfg.telegramEnabled": "Enable Telegram bot. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in workspace .env",
-    "cfg.enableCodeReview": "Enable code review by Gemini Flash after task completion"
+    "cfg.enableCodeReview": "Enable code review after task completion",
+    "cfg.codeReviewModel": "AI model to use for code review (e.g. flash, opus, sonnet)"
 }

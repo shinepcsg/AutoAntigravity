@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "स्पार्स चेकआउट (Sparse-checkout) पथ",
     "cfg.telemetryPoll": "टेलीमेट्री मतदान का अंतराल (सेकंड)",
     "cfg.telegramEnabled": "टेलीग्राम सूचनाएँ सक्षम करें",
-    "cfg.enableCodeReview": "कोड समीक्षा सक्षम करें"
+    "cfg.enableCodeReview": "कोड समीक्षा सक्षम करें",
+    "cfg.codeReviewModel": "कोड समीक्षा के लिए AI मॉडल"
 }

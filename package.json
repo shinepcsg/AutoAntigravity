@@ -171,6 +171,20 @@
                     "type": "boolean",
                     "default": false,
                     "description": "%cfg.enableCodeReview%"
+                },
+                "autoAntigravity.codeReview.model": {
+                    "type": "string",
+                    "default": "flash",
+                    "enum": ["flash", "gemini pro", "gemini pro high", "opus", "sonnet", "gpt"],
+                    "enumDescriptions": [
+                        "Gemini Flash",
+                        "Gemini Pro",
+                        "Gemini Pro (High)",
+                        "Claude Opus",
+                        "Claude Sonnet",
+                        "GPT"
+                    ],
+                    "description": "%cfg.codeReviewModel%"
                 }
             }
         }

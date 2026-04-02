@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "Pfadliste für sparse-checkout",
     "cfg.telemetryPoll": "Abfrageintervall (s)",
     "cfg.telegramEnabled": "Telegram-Benachrichtigungen",
-    "cfg.enableCodeReview": "Code-Überprüfung aktivieren"
+    "cfg.enableCodeReview": "Code-Überprüfung aktivieren",
+    "cfg.codeReviewModel": "AI-Modell für Code-Überprüfung"
 }

@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "スパースチェックアウトのパス一覧",
     "cfg.telemetryPoll": "テレメトリのポーリング間隔（秒）",
     "cfg.telegramEnabled": "Telegramボットを有効にする（.envで設定）",
-    "cfg.enableCodeReview": "Gemini Flashによるコードレビューを有効にする"
+    "cfg.enableCodeReview": "タスク完了後にコードレビューを有効にする",
+    "cfg.codeReviewModel": "コードレビューに使用するAIモデル"
 }

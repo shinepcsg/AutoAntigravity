@@ -24,5 +24,6 @@
     "cfg.sparseCheckoutPaths": "Rutas de sparse-checkout",
     "cfg.telemetryPoll": "Intervalo entre telemetría (s)",
     "cfg.telegramEnabled": "Habilitar notificaciones en Telegram",
-    "cfg.enableCodeReview": "Habilitar revisión de código de Gemini"
+    "cfg.enableCodeReview": "Habilitar revisión de código",
+    "cfg.codeReviewModel": "Modelo de IA para revisión de código"
 }
