@@ -115,6 +115,28 @@ function buildDOMObserverScript(customTexts) {
         return node;
     }
 
+    function isVisible(el) {
+        if (!el) return false;
+        try {
+            var style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                return false;
+            }
+            
+            // Allow background/inactive webview targets to pass visibility check 
+            // so parallel tasks can continue to click buttons even when the tab is hidden.
+            var href = window.location.href || '';
+            if (href.indexOf('webview') !== -1 || href.indexOf('agent') !== -1 || href.indexOf('jetski') !== -1) {
+                return true;
+            }
+
+            var rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function findMatchingButton(root, actionTexts, expandTexts) {
         var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
         var node;
@@ -198,11 +220,15 @@ function buildDOMObserverScript(customTexts) {
                     var cls = (ancestor.className || '').toLowerCase();
                     var id = (ancestor.id || '').toLowerCase();
                     
-                    // Global exclusion: NEVER auto-click anything in Quick Pick, Debug Toolbar, or Debug Sidebar
+                    // Global exclusion: NEVER auto-click anything in Quick Pick, Debug Toolbar, Debug Sidebar, or Status Bar
                     // This fixes unintended periodic debugging (e.g. clicking "Run Extension" in Quick Pick or "Continue" in debug toolbar)
                     if (cls.includes('quick-input-widget') || 
                         cls.includes('debug-toolbar') || 
-                        cls.includes('debug-viewlet')) {
+                        cls.includes('debug-viewlet') ||
+                        cls.includes('debug-action') ||
+                        id.includes('workbench.parts.debug') ||
+                        id.includes('workbench.view.debug') ||
+                        id.includes('workbench.parts.statusbar')) {
                         shouldExclude = true;
                         break;
                     }
@@ -232,6 +258,10 @@ function buildDOMObserverScript(customTexts) {
                 if (isValidButton) {
                     if (clickable.disabled || clickable.getAttribute('aria-disabled') === 'true' ||
                         clickable.classList.contains('loading') || clickable.querySelector('.codicon-loading')) {
+                        continue;
+                    }
+
+                    if (!isVisible(clickable)) {
                         continue;
                     }
                     
