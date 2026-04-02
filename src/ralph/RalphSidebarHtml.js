@@ -1395,6 +1395,9 @@ function getSidebarHtml(webview, langId = 'en') {
         </div>
         <div id="ralphCollapsibleBody" class="collapsible-body">
 
+        <!-- Write PRD Installer -->
+        <button id="btnSetWritePrdWorkspace" class="btn btn-primary" style="margin-bottom:14px;">${t('write_prd_ws')}</button>
+
         <!-- Ralph Loop Status & Controls -->
         <div style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
             <!-- Status -->
@@ -1419,13 +1422,6 @@ function getSidebarHtml(webview, langId = 'en') {
                 <div id="progressText" class="progress-text">0 / 0 tasks</div>
             </div>
 
-            <!-- Controls -->
-            <button id="btnStartRalph" class="btn btn-success">
-                ${t('start')}
-            </button>
-            <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
-                ${t('stop')}
-            </button>
         </div>
 
         <!-- Task Queue -->
@@ -1443,8 +1439,21 @@ function getSidebarHtml(webview, langId = 'en') {
                 <div id="taskFileName" class="task-file-name" style="flex:1; margin-bottom:0;">${t('not_selected')}</div>
                 <button id="btnSelectTaskFile" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px;">📂</button>
             </div>
-            <button id="btnGenerateSamplePrd" class="btn btn-secondary">
+            <button id="btnGenerateSamplePrd" class="btn btn-secondary" style="margin-bottom:8px;">
                 ${t('sample_prd')}
+            </button>
+
+            <!-- Moved Controls -->
+            <label id="labelAutoStart" class="toggle-row" style="margin-bottom:8px;">
+                <input id="chkAutoStart" type="checkbox" />
+                ${t('auto_start')}
+            </label>
+
+            <button id="btnStartRalph" class="btn btn-success">
+                ${t('start')}
+            </button>
+            <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
+                ${t('stop')}
             </button>
         </div>
 
@@ -1472,10 +1481,7 @@ function getSidebarHtml(webview, langId = 'en') {
                 ${t('allow_prd_mod')}
             </label>
 
-            <label id="labelAutoStart" class="toggle-row">
-                <input id="chkAutoStart" type="checkbox" />
-                ${t('auto_start')}
-            </label>
+
             <label id="labelAutoCommit" class="toggle-row">
                 <input id="chkAutoCommit" type="checkbox" />
                 ${t('auto_commit')}
@@ -1490,7 +1496,6 @@ function getSidebarHtml(webview, langId = 'en') {
                 ${t('auto_push')}
             </label>
 
-            <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">${t('write_prd_ws')}</button>
         </div>
 
         </div><!-- end collapsible-body -->
@@ -1747,7 +1752,7 @@ function getSidebarHtml(webview, langId = 'en') {
                 statusText.textContent = t('idle');
                 iterArea.style.display = 'none';
                 progressArea.style.display = 'none';
-                btnStart.style.display = '';
+                btnStart.style.display = (s.taskFile && s.taskFileExists && !s.autoStart) ? '' : 'none';
                 btnStop.style.display = 'none';
         }
 
