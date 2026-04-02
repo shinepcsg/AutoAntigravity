@@ -1387,6 +1387,18 @@ function getSidebarHtml(webview, langId = 'en') {
         </label>
     </div>
 
+    <!-- ═══ AI Quota Section ═══ -->
+    <div class="section" id="quotaSection">
+        <div class="quota-header">
+            <div class="section-title">${t('ai_quota')}</div>
+            <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
+        </div>
+        <div id="quotaStatus" class="quota-status">${t('connecting')}</div>
+        <div id="quotaList" class="quota-list">
+            <div class="quota-empty">${t('loading_data')}</div>
+        </div>
+    </div>
+
     <!-- ═══ Ralph Loop Collapsible Section ═══ -->
     <div class="section" style="padding-bottom:0;">
         <div id="ralphCollapsibleHeader" class="collapsible-header">
@@ -1462,17 +1474,6 @@ function getSidebarHtml(webview, langId = 'en') {
             </div>
         </div>
 
-        <!-- AI Quota -->
-        <div id="quotaSection" style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
-            <div class="quota-header">
-                <div class="section-title">${t('ai_quota')}</div>
-                <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
-            </div>
-            <div id="quotaStatus" class="quota-status">${t('connecting')}</div>
-            <div id="quotaList" class="quota-list">
-                <div class="quota-empty">${t('loading_data')}</div>
-            </div>
-        </div>
 
         <!-- Settings -->
         <div style="padding-bottom:8px;">

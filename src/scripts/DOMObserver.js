@@ -188,29 +188,40 @@ function buildDOMObserverScript(customTexts) {
                 var clickable = closestClickable(node);
                 var tag2 = (clickable.tagName || '').toLowerCase();
 
-                // Safety filter: skip 'run'/'실행' matches inside terminal/editor containers.
-                // These short keywords are too aggressive and can match the IDE's
-                // "Run" button in terminal command prompts or editor toolbar,
-                // causing unintended Python file execution.
+                // Safety filter to prevent unintended IDE interactions
                 var RUN_KEYWORDS = ['run', '실행', '実行', '运行'];
-                if (RUN_KEYWORDS.indexOf(matchFound) !== -1) {
-                    var ancestor = clickable;
-                    var inTerminalOrEditor = false;
-                    for (var depth = 0; depth < 15 && ancestor && ancestor !== document.body; depth++) {
-                        var cls = (ancestor.className || '').toLowerCase();
-                        var id = (ancestor.id || '').toLowerCase();
+                var isRunKeyword = RUN_KEYWORDS.indexOf(matchFound) !== -1;
+                var ancestor = clickable;
+                var shouldExclude = false;
+                
+                for (var depth = 0; depth < 15 && ancestor && ancestor !== document.body; depth++) {
+                    var cls = (ancestor.className || '').toLowerCase();
+                    var id = (ancestor.id || '').toLowerCase();
+                    
+                    // Global exclusion: NEVER auto-click anything in Quick Pick, Debug Toolbar, or Debug Sidebar
+                    // This fixes unintended periodic debugging (e.g. clicking "Run Extension" in Quick Pick or "Continue" in debug toolbar)
+                    if (cls.includes('quick-input-widget') || 
+                        cls.includes('debug-toolbar') || 
+                        cls.includes('debug-viewlet')) {
+                        shouldExclude = true;
+                        break;
+                    }
+                    
+                    // Strict exclusions for short 'run' keywords (to avoid IDE run buttons)
+                    if (isRunKeyword) {
                         if (cls.includes('terminal') || cls.includes('run-command') ||
                             cls.includes('editor-toolbar') || cls.includes('editor-actions') ||
                             cls.includes('title-actions') || cls.includes('menubar') ||
                             id.includes('terminal') || id.includes('workbench.parts.editor')) {
-                            inTerminalOrEditor = true;
+                            shouldExclude = true;
                             break;
                         }
-                        ancestor = ancestor.parentElement;
                     }
-                    if (inTerminalOrEditor) {
-                        continue;
-                    }
+                    ancestor = ancestor.parentElement;
+                }
+                
+                if (shouldExclude) {
+                    continue;
                 }
                 
                 var isValidButton = tag2 === 'button' || tag2.includes('button') || clickable.getAttribute('role') === 'button' ||
