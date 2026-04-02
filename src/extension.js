@@ -164,9 +164,10 @@ function connectTelegram(context) {
 
     // 텔레그램 → 플러그인: /task 명령 수신 시 idle이면 즉시 실행, 아니면 큐에 추가
     telegramService.onTaskRequest = async (text) => {
-        const state = ralphLoop.getState();
+        const isIdle = !ralphLoop.isBusy();
 
-        if (state === LoopState.IDLE) {
+        if (isIdle) {
+            ralphLoop.setStandaloneRunning(true);
             // Git 세션 초기화
             _initGitSessionIfIdle(text);
 
@@ -175,16 +176,18 @@ function connectTelegram(context) {
 
             // Ralph Loop가 idle이면 즉시 대화 프롬프트로 전달
             try {
+                ralphLoop.setStandaloneRunning(true);
                 log(`[Telegram] 📤 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(text, []);
                 telegramService.sendMessage(`${t('tg.executing_now')} ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ 즉시 실행 프롬프트 전송 완료`);
 
                 // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
-                _waitAndSendImages(imagesBefore);
+                _waitAndSendImages(imagesBefore).finally(() => { ralphLoop.setStandaloneRunning(false); });
             } catch (err) {
                 log(`[Telegram] ❌ 즉시 실행 프롬프트 전송 실패: ${err.message}`);
                 telegramService.sendMessage(`${t('tg.execute_failed')} ${err.message}`);
+                ralphLoop.setStandaloneRunning(false);
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가 (text 그대로 저장)
@@ -208,13 +211,17 @@ function connectTelegram(context) {
 
             // Ralph Loop가 idle이면 즉시 /write-prd 워크플로우로 실행
             try {
+                ralphLoop.setStandaloneRunning(true);
                 log(`[Telegram] 📤 PRD 즉시 실행 프롬프트 전송: ${text.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, []);
                 telegramService.sendMessage(`${t('tg.prd_executing')} ${text.substring(0, 80)}`);
                 log(`[Telegram] ✅ PRD 즉시 실행 프롬프트 전송 완료`);
+                await ralphLoop._waitForAgentCompletion();
             } catch (err) {
                 log(`[Telegram] ❌ PRD 즉시 실행 프롬프트 전송 실패: ${err.message}`);
                 telegramService.sendMessage(`${t('tg.prd_execute_failed')} ${err.message}`);
+            } finally {
+                ralphLoop.setStandaloneRunning(false);
             }
         } else if (sidebarProvider) {
             // Ralph Loop가 실행 중이면 작업 큐에 추가 (type: 'prd'로 저장)
@@ -229,9 +236,10 @@ function connectTelegram(context) {
 
     // 텔레그램 → 플러그인: 일반 대화 메시지 수신 시 AI에 전달 후 응답 회신
     telegramService.onChatRequest = async (text) => {
-        const state = ralphLoop.getState();
+        const isIdle = !ralphLoop.isBusy();
 
-        if (state === LoopState.IDLE) {
+        if (isIdle) {
+            ralphLoop.setStandaloneRunning(true);
             // Git 세션 초기화
             _initGitSessionIfIdle(text);
 
@@ -254,7 +262,9 @@ function connectTelegram(context) {
                     telegramService.sendMessage(t('tg.chat_extract_fail'));
                     log(`[Telegram] ⚠ 대화 응답 추출 실패`);
                 }
+                ralphLoop.setStandaloneRunning(false);
             } catch (err) {
+                ralphLoop.setStandaloneRunning(false);
                 log(`[Telegram] ❌ 일반 대화 처리 실패: ${err.message}`);
                 telegramService.sendMessage(`${t('tg.chat_failed')} ${err.message}`);
             }
@@ -400,21 +410,26 @@ function connectTelegram(context) {
     // 텔레그램 → 플러그인: 동적 워크플로우 명령어 수신
     telegramService.onWorkflowRequest = async (workflowName, argsText) => {
         const prompt = argsText ? `/${workflowName} ${argsText}` : `/${workflowName}`;
-        const state = ralphLoop.getState();
+        const isIdle = !ralphLoop.isBusy();
 
-        if (state === LoopState.IDLE) {
+        if (isIdle) {
+            ralphLoop.setStandaloneRunning(true);
             // Git 세션 초기화 (워크플로우도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(workflowName);
 
             // Ralph Loop가 idle이면 즉시 실행
             try {
+                ralphLoop.setStandaloneRunning(true);
                 log(`[Telegram] 📤 워크플로우 프롬프트 전송: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, []);
                 telegramService.sendMessage(`${t('tg.workflow_executing')} /${workflowName}`);
                 log(`[Telegram] ✅ 워크플로우 프롬프트 전송 완료`);
+                await ralphLoop._waitForAgentCompletion();
             } catch (err) {
                 log(`[Telegram] ❌ 워크플로우 프롬프트 전송 실패: ${err.message}`);
                 telegramService.sendMessage(`${t('tg.workflow_failed')} ${err.message}`);
+            } finally {
+                ralphLoop.setStandaloneRunning(false);
             }
         } else {
             // Ralph Loop가 실행 중이면 작업 큐에 추가
@@ -481,9 +496,10 @@ function connectTelegram(context) {
             ? `${captionText}\n\n${t('tg.media_attach_label')}\n${mediaRefs}`
             : `${t('tg.media_analyze')}\n\n${t('tg.media_attach_label')}\n${mediaRefs}`;
 
-        const state = ralphLoop.getState();
+        const isIdle = !ralphLoop.isBusy();
 
-        if (state === LoopState.IDLE) {
+        if (isIdle) {
+            ralphLoop.setStandaloneRunning(true);
             // Git 세션 초기화 (미디어 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(captionText || t('tg.media_session_label'));
 
@@ -492,16 +508,18 @@ function connectTelegram(context) {
 
             // idle이면 즉시 대화 프롬프트로 전달
             try {
+                ralphLoop.setStandaloneRunning(true);
                 log(`[Telegram] 📤 미디어 포함 즉시 실행: ${prompt.substring(0, 80)}`);
                 await ralphLoop._sendToAgent(prompt, downloadedPaths);
                 telegramService.sendMessage(`${t('tg.media_executing')} (${downloadedPaths.length}): ${captionText.substring(0, 60) || t('tg.media_no_caption')}`);
                 log(`[Telegram] ✅ 미디어 포함 즉시 실행 완료`);
 
                 // 에이전트 완료 대기 후 생성된 이미지 텔레그램 전송 (비동기, 에러 무시)
-                _waitAndSendImages(imagesBefore);
+                _waitAndSendImages(imagesBefore).finally(() => { ralphLoop.setStandaloneRunning(false); });
             } catch (err) {
                 log(`[Telegram] ❌ 미디어 포함 즉시 실행 실패: ${err.message}`);
                 telegramService.sendMessage(`${t('tg.media_failed')} ${err.message}`);
+                ralphLoop.setStandaloneRunning(false);
             }
         } else if (sidebarProvider) {
             // 실행 중이면 큐에 추가 (텍스트 + 미디어 경로, type: 'task')
@@ -634,6 +652,7 @@ function activate(context) {
 
             // 큐 작업에 의한 PRD 변경 시 autoStart 무관하게 자동 시작되도록 플래그 설정
             ralphLoop._forceNextAutoStart = true;
+            ralphLoop.setStandaloneRunning(true);
 
             // Git 세션 초기화 (큐 작업도 세션 브랜치에서 진행)
             _initGitSessionIfIdle(nextTask);
@@ -642,9 +661,22 @@ function activate(context) {
             const prompt = (itemType === 'task' || itemType === 'chat') ? nextTask : `/write-prd ${nextTask}`;
             const promptLabel = (itemType === 'task' || itemType === 'chat') ? '대화 프롬프트' : 'write-prd 워크플로우 프롬프트';
             try {
+                ralphLoop.setStandaloneRunning(true);
                 log(`[Queue] 📤 ${promptLabel} 전송 중...`);
                 await ralphLoop._sendToAgent(prompt, nextMediaPaths);
                 log(`[Queue] ✅ ${promptLabel} 전송 완료`);
+
+                if (telegramService && typeof telegramService.sendMessage === 'function') {
+                    const emoji = itemType === 'chat' ? '💬' : itemType === 'task' ? '💬' : '📬';
+                    telegramService.sendMessage(`${emoji} ${t('tg.queue_auto_exec')} ${nextTask.substring(0, 80)}`);
+                }
+                
+                if (itemType !== 'chat') {
+                    // For non-chat tasks from queue, we wait for completion inside agent logic? No wait!
+                    // _sendToAgent only sends prompt. We need to await _waitForAgentCompletion to know it's done!
+                }
+
+                await ralphLoop._waitForAgentCompletion();
 
                 // autoStart 설정이 false이면 일회성 watcher 설정 (prd 타입만 — task/chat는 대화 직접 전달이므로 watcher 불필요)
                 if (itemType !== 'task' && itemType !== 'chat') {
@@ -656,15 +688,9 @@ function activate(context) {
                     }
                 }
 
-                if (telegramService && typeof telegramService.sendMessage === 'function') {
-                    const emoji = itemType === 'chat' ? '💬' : itemType === 'task' ? '💬' : '📬';
-                    telegramService.sendMessage(`${emoji} ${t('tg.queue_auto_exec')} ${nextTask.substring(0, 80)}`);
-                }
-
-                // chat 타입: 에이전트 완료 대기 후 응답 추출 → 텔레그램 전송
+                // chat 타입: 응답 추출 → 텔레그램 전송
                 if (itemType === 'chat') {
                     try {
-                        await ralphLoop._waitForAgentCompletion();
                         const response = await ralphLoop._getLastAgentResponse();
                         if (response && telegramService) {
                             telegramService.sendMessage(`🤖 ${response}`);
@@ -676,12 +702,16 @@ function activate(context) {
                         log(`[Queue] ⚠ 대화 응답 추출 실패: ${chatErr.message}`);
                     }
                 }
+                ralphLoop.setStandaloneRunning(false);
             } catch (err) {
                 log(`[Queue] ❌ ${promptLabel} 전송 실패: ${err.message}`);
                 ralphLoop._forceNextAutoStart = false; // 전송 실패 시 플래그 리셋
+                ralphLoop.setStandaloneRunning(false);
                 if (telegramService && typeof telegramService.sendMessage === 'function') {
                     telegramService.sendMessage(`${t('tg.queue_exec_failed')} ${err.message}`);
                 }
+            } finally {
+                ralphLoop.setStandaloneRunning(false);
             }
         }
     };

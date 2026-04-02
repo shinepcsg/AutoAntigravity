@@ -82,6 +82,7 @@ class RalphLoopManager {
         this._codeReviewWatcherTimer = null;
         this._codeReviewWatcherLastBusy = false; // 이전 폴링 상태
         this._codeReviewRunning = false; // 리뷰 실행 중 중복 방지
+        this._standaloneRunning = false; // 단일 작업 등 에이전트 독립 실행 상태
     }
 
     /**
@@ -98,6 +99,15 @@ class RalphLoopManager {
      */
     getState() {
         return this.state;
+    }
+
+    isBusy() {
+        return this.state !== LoopState.IDLE || this._standaloneRunning || this._codeReviewRunning;
+    }
+
+    setStandaloneRunning(active) {
+        this._standaloneRunning = active;
+        this._notifyStateChange();
     }
 
     /**
@@ -2402,6 +2412,7 @@ class RalphLoopManager {
         const { isFromWatcher = false } = options;
 
         this._addLog('[Ralph] 📝 ═══ 코드 리뷰 시작 ═══');
+        this._codeReviewRunning = true;
 
         // 0. Git 변경사항 사전 확인
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -2482,9 +2493,11 @@ class RalphLoopManager {
                 }
             }
 
+            this._codeReviewRunning = false;
             this._addLog('[Ralph] 📝 ═══ 코드 리뷰 완료 ═══');
         }
     }
 }
 
 module.exports = { RalphLoopManager, LoopState };
+

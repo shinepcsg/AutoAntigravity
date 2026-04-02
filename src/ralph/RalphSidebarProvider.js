@@ -412,7 +412,7 @@ class RalphSidebarProvider {
                 case 'enqueueTask': {
                     const text = message.text;
                     if (text) {
-                        const isIdle = this.ralphLoop && this.ralphLoop.getState() === 'idle';
+                        const isIdle = this.ralphLoop && !this.ralphLoop.isBusy();
                         if (isIdle) {
                             // idle 상태 → 큐에 넣지 않고 즉시 실행 (작업 판단 + 코드 리뷰 포함)
                             this._log(`[Sidebar] 🚀 독립 작업 실행 (idle): ${text.substring(0, 50)}...`);
@@ -487,7 +487,7 @@ class RalphSidebarProvider {
         const state = {
             version: this._context.extension.packageJSON.version || 'unknown',
             autoAcceptEnabled: this.autoAccept ? this.autoAccept.isEnabled : false,
-            ralphState: this.ralphLoop ? this.ralphLoop.getState() : 'idle',
+            ralphState: this.ralphLoop ? (this.ralphLoop.isBusy() ? 'running' : this.ralphLoop.getState()) : 'idle',
             currentIteration: this.ralphLoop ? this.ralphLoop.currentIteration : 0,
             maxIterations: config.get('ralphLoop.maxIterations', 50),
             iterationDelay: config.get('ralphLoop.iterationDelayMs', 1500),
