@@ -2,7 +2,7 @@
     "name": "auto-antigravity",
     "displayName": "%ext.displayName%",
     "description": "%ext.description%",
-    "version": "1.8.162",
+    "version": "1.8.163",
     "publisher": "shinepcs",
     "icon": "images/icon.png",
     "engines": {
@@ -175,7 +175,14 @@
                 "autoAntigravity.codeReview.model": {
                     "type": "string",
                     "default": "flash",
-                    "enum": ["flash", "gemini pro", "gemini pro high", "opus", "sonnet", "gpt"],
+                    "enum": [
+                        "flash",
+                        "gemini pro",
+                        "gemini pro high",
+                        "opus",
+                        "sonnet",
+                        "gpt"
+                    ],
                     "enumDescriptions": [
                         "Gemini Flash",
                         "Gemini Pro",
