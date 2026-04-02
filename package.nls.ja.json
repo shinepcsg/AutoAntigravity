@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loopの停止",
     "cmd.selectTaskFile": "AutoAntigravity: タスクファイルの選択",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Ralph Loop",
+    "view.ralphLoop": "コントロールパネル",
     "cfg.pollInterval": "Auto Acceptのポーリング間隔（ミリ秒）",
     "cfg.customButtonTexts": "自動クリックする追加ボタンテキスト",
     "cfg.cdpPort": "CDPリモートデバッグポート（デフォルト: 9559）",

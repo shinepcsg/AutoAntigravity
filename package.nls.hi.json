@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "ऑटोएंटिग्रैविटी: राल्फ लूप रोकें",
     "cmd.selectTaskFile": "ऑटोएंटिग्रैविटी: कार्य फ़ाइल का चयन करें",
     "cmd.pushNow": "ऑटोएंटिग्रैविटी: गिट पुश (Git Push)",
-    "view.ralphLoop": "राल्फ लूप",
+    "view.ralphLoop": "नियंत्रण कक्ष",
     "cfg.pollInterval": "स्वचालित मतदान अंतराल (एमएस)",
     "cfg.customButtonTexts": "अतिरिक्त बटन पाठ",
     "cfg.cdpPort": "CDP पोर्ट (डिफ़ॉल्ट: 9559)",

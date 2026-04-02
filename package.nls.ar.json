@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "إيقاف حلقة رالف",
     "cmd.selectTaskFile": "تحديد ملف المهام",
     "cmd.pushNow": "Git Push دفع لـ",
-    "view.ralphLoop": "حلقة رالف (Ralph Loop)",
+    "view.ralphLoop": "لوحة التحكم",
     "cfg.pollInterval": "الفاصل الزمني بالملي ثانية",
     "cfg.customButtonTexts": "نصوص أخرى للأزرار لضغطها تلقائياً",
     "cfg.cdpPort": "CDP منفذ (افتراضي: 9559)",

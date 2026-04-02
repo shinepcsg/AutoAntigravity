@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop stoppen",
     "cmd.selectTaskFile": "AutoAntigravity: Aufgabendatei auswählen",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Ralph Schleife",
+    "view.ralphLoop": "Kontrollzentrum",
     "cfg.pollInterval": "Polling-Intervall (ms)",
     "cfg.customButtonTexts": "Zusätzliche Button-Texte",
     "cfg.cdpPort": "CDP-Port (Standard: 9559)",

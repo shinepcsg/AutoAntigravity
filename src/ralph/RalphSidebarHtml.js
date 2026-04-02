@@ -7,7 +7,7 @@ const translations = {
         update_now: "⬆ Update Now",
         error_occurred: "❌ Error Occurred",
         on_auto_accept: "ON - Auto Accept Active",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -58,14 +58,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Iteration %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     ko: {
         update_available: "🆕 업데이트 가능",
         update_now: "⬆ 지금 업데이트",
         error_occurred: "❌ 오류 발생",
         on_auto_accept: "ON — 자동 수락 활성",
-        off: "OFF",
+        off: "자동 수락 OFF",
         idle: "대기 중 (IDLE)",
         running: "실행 중 (RUNNING)",
         quota_paused: "할당량 일시정지",
@@ -116,14 +117,15 @@ const translations = {
         media_attached: " <span style=\"opacity:0.6;\" title=\"첨부 미디어 %cnt개\">📎%cnt</span>",
         iteration_log: "반복 %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     ja: {
         update_available: "🆕 アップデート利用可能",
         update_now: "⬆ 今すぐアップデート",
         error_occurred: "❌ エラー発生",
         on_auto_accept: "ON — 自動承認アクティブ",
-        off: "OFF",
+        off: "自動承認 OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -174,14 +176,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "反復 %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     "zh-cn": {
         update_available: "🆕 有可用更新",
         update_now: "⬆ 立即更新",
         error_occurred: "❌ 发生错误",
         on_auto_accept: "ON — 自动接受激活",
-        off: "OFF",
+        off: "自动接受 OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -232,14 +235,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "迭代 %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     "zh-tw": {
         update_available: "🆕 有可用更新",
         update_now: "⬆ 立即更新",
         error_occurred: "❌ 發生錯誤",
         on_auto_accept: "ON — 自動接受啟用",
-        off: "OFF",
+        off: "自動接受 OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -290,14 +294,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "迭代 %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     es: {
         update_available: "🆕 Actualización Disponible",
         update_now: "⬆ Actualizar Ahora",
         error_occurred: "❌ Ocurrió un Error",
         on_auto_accept: "ON - Aceptación Automática",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -348,14 +353,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Iteración %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     fr: {
         update_available: "🆕 Mise à jour disponible",
         update_now: "⬆ Mettre à jour",
         error_occurred: "❌ Erreur survenue",
         on_auto_accept: "ON - Acceptation Auto",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -406,14 +412,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Itération %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     de: {
         update_available: "🆕 Update verfügbar",
         update_now: "⬆ Jetzt aktualisieren",
         error_occurred: "❌ Fehler aufgetreten",
         on_auto_accept: "ON - Auto Accept aktiv",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -464,14 +471,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Iteration %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     ru: {
         update_available: "🆕 Доступно обновление",
         update_now: "⬆ Обновить сейчас",
         error_occurred: "❌ Произошла ошибка",
         on_auto_accept: "ON - Авто-принятие",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -522,14 +530,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Итерация %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     "pt-br": {
         update_available: "🆕 Atualização Disponível",
         update_now: "⬆ Atualizar Agora",
         error_occurred: "❌ Ocorreu um Erro",
         on_auto_accept: "ON - Aceite Automático",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -580,14 +589,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "Iteração %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     hi: {
         update_available: "🆕 अपडेट उपलब्ध",
         update_now: "⬆ अभी अपडेट करें",
         error_occurred: "❌ त्रुटि हुई",
         on_auto_accept: "ON - ऑटो एक्सेप्ट",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -638,14 +648,15 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "पुनरावृत्ति %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     },
     ar: {
         update_available: "تحديث متاح 🆕",
         update_now: "تحديث الآن ⬆",
         error_occurred: "حدث خطأ ❌",
         on_auto_accept: "نشط - قبول تلقائي ON",
-        off: "OFF",
+        off: "Auto Accept OFF",
         idle: "IDLE",
         running: "RUNNING",
         quota_paused: "QUOTA PAUSED",
@@ -696,7 +707,8 @@ const translations = {
         media_attached: " 📎%cnt",
         iteration_log: "التكرار %iter",
         added_log: "+%add",
-        removed_log: "-%rem"
+        removed_log: "-%rem",
+        ralph_loop_section: "🔄 Ralph Loop"
     }
 };
 
@@ -1278,6 +1290,41 @@ function getSidebarHtml(webview, langId = 'en') {
         padding: 8px;
         font-size: 11px;
     }
+
+    /* ─── Collapsible Section ─── */
+    .collapsible-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 8px 4px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        transition: background 0.15s;
+        user-select: none;
+    }
+    .collapsible-header:hover {
+        background: rgba(128,128,128,0.1);
+    }
+    .collapsible-header .section-title {
+        margin-bottom: 0;
+    }
+    .collapsible-chevron {
+        font-size: 10px;
+        opacity: 0.5;
+        transition: transform 0.25s ease;
+    }
+    .collapsible-header.open .collapsible-chevron {
+        transform: rotate(90deg);
+    }
+    .collapsible-body {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+    .collapsible-body.open {
+        max-height: 3000px;
+    }
 </style>
 </head>
 <body>
@@ -1298,87 +1345,6 @@ function getSidebarHtml(webview, langId = 'en') {
         </button>
     </div>
 
-    <!-- ═══ Ralph Loop Section ═══ -->
-    <div class="section">
-        <div class="section-title">🔄 Ralph Loop</div>
-
-        <!-- Status -->
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <span id="ralphStatus" class="status-pill idle">
-                <span class="dot"></span>
-                <span id="ralphStatusText">IDLE</span>
-            </span>
-        </div>
-
-        <!-- Iteration Counter -->
-        <div id="iterationArea" style="display:none;">
-            <div class="iteration-label">${t('current_iteration')}</div>
-            <div id="iterationCount" class="iteration-display">0</div>
-        </div>
-
-        <!-- Progress -->
-        <div id="progressArea" style="display:none;">
-            <div class="progress-bar-container">
-                <div id="progressFill" class="progress-bar-fill" style="width:0%"></div>
-            </div>
-            <div id="progressText" class="progress-text">0 / 0 tasks</div>
-        </div>
-
-        <!-- Controls -->
-        <button id="btnStartRalph" class="btn btn-success">
-            ${t('start')}
-        </button>
-        <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
-            ${t('stop')}
-        </button>
-    </div>
-
-    <!-- ═══ Task Queue Section ═══ -->
-    <div class="section">
-        <div class="section-title">${t('task_queue')}</div>
-        <textarea id="inputTaskQueue" class="task-queue-textarea" rows="3" placeholder="${t('task_placeholder')}"></textarea>
-        <button id="btnEnqueueTask" class="btn btn-primary">${t('enqueue_task')}</button>
-        <div id="taskQueueList" class="task-queue-list"></div>
-    </div>
-
-    <!-- ═══ Task File Section ═══ -->
-    <div class="section">
-        <div class="section-title">${t('task_file')}</div>
-        <div style="display:flex; align-items:center; gap:4px; margin-bottom:6px;">
-            <div id="taskFileName" class="task-file-name" style="flex:1; margin-bottom:0;">${t('not_selected')}</div>
-            <button id="btnSelectTaskFile" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px;">📂</button>
-        </div>
-        <button id="btnGenerateSamplePrd" class="btn btn-secondary">
-            ${t('sample_prd')}
-        </button>
-    </div>
-
-    <!-- ═══ PRD Changes Section ═══ -->
-    <div id="prdChangesSection" class="section" style="display:none;">
-        <div class="section-title">${t('prd_changes')}</div>
-        <div id="prdChangesPanel" class="log-panel" style="max-height:140px;"></div>
-    </div>
-
-    <!-- ═══ Log Panel Section ═══ -->
-    <div class="section">
-        <div class="section-title">${t('live_logs')}</div>
-        <div id="logPanel" class="log-panel">
-            <div class="log-empty">${t('no_logs')}</div>
-        </div>
-    </div>
-
-    <!-- ═══ AI Quota Section ═══ -->
-    <div id="quotaSection" class="section">
-        <div class="quota-header">
-            <div class="section-title">${t('ai_quota')}</div>
-            <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
-        </div>
-        <div id="quotaStatus" class="quota-status">${t('connecting')}</div>
-        <div id="quotaList" class="quota-list">
-            <div class="quota-empty">${t('loading_data')}</div>
-        </div>
-    </div>
-
     <!-- ═══ Telegram Section ═══ -->
     <div class="section telegram-section">
         <button id="btnToggleTelegram" class="btn btn-toggle">
@@ -1397,47 +1363,137 @@ function getSidebarHtml(webview, langId = 'en') {
         </label>
     </div>
 
-    <!-- ═══ Settings Section ═══ -->
-    <div class="section">
-        <div class="section-title">${t('settings')}</div>
-        <div class="form-row">
-            <label>${t('max_iter')}</label>
-            <input id="inputMaxIter" type="number" min="1" max="999" value="50" />
+    <!-- ═══ Ralph Loop Collapsible Section ═══ -->
+    <div class="section" style="padding-bottom:0;">
+        <div id="ralphCollapsibleHeader" class="collapsible-header">
+            <div class="section-title">${t('ralph_loop_section')}</div>
+            <span class="collapsible-chevron">▶</span>
         </div>
-        <div class="form-row">
-            <label>${t('iter_delay')}</label>
-            <input id="inputDelay" type="number" min="0.5" max="120" step="0.5" value="1.5" />
+        <div id="ralphCollapsibleBody" class="collapsible-body">
+
+        <!-- Ralph Loop Status & Controls -->
+        <div style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <!-- Status -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span id="ralphStatus" class="status-pill idle">
+                    <span class="dot"></span>
+                    <span id="ralphStatusText">IDLE</span>
+                </span>
+            </div>
+
+            <!-- Iteration Counter -->
+            <div id="iterationArea" style="display:none;">
+                <div class="iteration-label">${t('current_iteration')}</div>
+                <div id="iterationCount" class="iteration-display">0</div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progressArea" style="display:none;">
+                <div class="progress-bar-container">
+                    <div id="progressFill" class="progress-bar-fill" style="width:0%"></div>
+                </div>
+                <div id="progressText" class="progress-text">0 / 0 tasks</div>
+            </div>
+
+            <!-- Controls -->
+            <button id="btnStartRalph" class="btn btn-success">
+                ${t('start')}
+            </button>
+            <button id="btnStopRalph" class="btn btn-secondary" style="display:none;">
+                ${t('stop')}
+            </button>
         </div>
 
-        <label id="labelAllowPrdMod" class="toggle-row">
-            <input id="chkAllowPrdMod" type="checkbox" />
-            ${t('allow_prd_mod')}
-        </label>
+        <!-- Task Queue -->
+        <div style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <div class="section-title">${t('task_queue')}</div>
+            <textarea id="inputTaskQueue" class="task-queue-textarea" rows="3" placeholder="${t('task_placeholder')}"></textarea>
+            <button id="btnEnqueueTask" class="btn btn-primary">${t('enqueue_task')}</button>
+            <div id="taskQueueList" class="task-queue-list"></div>
+        </div>
 
-        <label id="labelAutoStart" class="toggle-row">
-            <input id="chkAutoStart" type="checkbox" />
-            ${t('auto_start')}
-        </label>
-        <label id="labelAutoCommit" class="toggle-row">
-            <input id="chkAutoCommit" type="checkbox" />
-            ${t('auto_commit')}
-        </label>
-        <label id="labelAutoDeleteBranch" class="toggle-row">
-            <input id="chkAutoDeleteBranch" type="checkbox" />
-            ${t('auto_del_branch')}
-        </label>
-        <label id="labelEnableCodeReview" class="toggle-row">
-            <input id="chkEnableCodeReview" type="checkbox" />
-            ${t('code_review')}
-        </label>
+        <!-- Task File -->
+        <div style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <div class="section-title">${t('task_file')}</div>
+            <div style="display:flex; align-items:center; gap:4px; margin-bottom:6px;">
+                <div id="taskFileName" class="task-file-name" style="flex:1; margin-bottom:0;">${t('not_selected')}</div>
+                <button id="btnSelectTaskFile" class="btn btn-secondary" style="width:auto; flex-shrink:0; padding:4px 8px;">📂</button>
+            </div>
+            <button id="btnGenerateSamplePrd" class="btn btn-secondary">
+                ${t('sample_prd')}
+            </button>
+        </div>
 
-        <label id="labelAutoPush" class="toggle-row">
-            <input id="chkAutoPush" type="checkbox" />
-            ${t('auto_push')}
-        </label>
+        <!-- PRD Changes -->
+        <div id="prdChangesSection" style="display:none; padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <div class="section-title">${t('prd_changes')}</div>
+            <div id="prdChangesPanel" class="log-panel" style="max-height:140px;"></div>
+        </div>
 
-        <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">${t('write_prd_ws')}</button>
-    </div>
+        <!-- Live Logs -->
+        <div style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <div class="section-title">${t('live_logs')}</div>
+            <div id="logPanel" class="log-panel">
+                <div class="log-empty">${t('no_logs')}</div>
+            </div>
+        </div>
+
+        <!-- AI Quota -->
+        <div id="quotaSection" style="padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:16px;">
+            <div class="quota-header">
+                <div class="section-title">${t('ai_quota')}</div>
+                <button id="btnRefreshQuota" class="quota-refresh-btn" title="새로고침">🔄</button>
+            </div>
+            <div id="quotaStatus" class="quota-status">${t('connecting')}</div>
+            <div id="quotaList" class="quota-list">
+                <div class="quota-empty">${t('loading_data')}</div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div style="padding-bottom:8px;">
+            <div class="section-title">${t('settings')}</div>
+            <div class="form-row">
+                <label>${t('max_iter')}</label>
+                <input id="inputMaxIter" type="number" min="1" max="999" value="50" />
+            </div>
+            <div class="form-row">
+                <label>${t('iter_delay')}</label>
+                <input id="inputDelay" type="number" min="0.5" max="120" step="0.5" value="1.5" />
+            </div>
+
+            <label id="labelAllowPrdMod" class="toggle-row">
+                <input id="chkAllowPrdMod" type="checkbox" />
+                ${t('allow_prd_mod')}
+            </label>
+
+            <label id="labelAutoStart" class="toggle-row">
+                <input id="chkAutoStart" type="checkbox" />
+                ${t('auto_start')}
+            </label>
+            <label id="labelAutoCommit" class="toggle-row">
+                <input id="chkAutoCommit" type="checkbox" />
+                ${t('auto_commit')}
+            </label>
+            <label id="labelAutoDeleteBranch" class="toggle-row">
+                <input id="chkAutoDeleteBranch" type="checkbox" />
+                ${t('auto_del_branch')}
+            </label>
+            <label id="labelEnableCodeReview" class="toggle-row">
+                <input id="chkEnableCodeReview" type="checkbox" />
+                ${t('code_review')}
+            </label>
+
+            <label id="labelAutoPush" class="toggle-row">
+                <input id="chkAutoPush" type="checkbox" />
+                ${t('auto_push')}
+            </label>
+
+            <button id="btnSetWritePrdWorkspace" class="btn btn-secondary">${t('write_prd_ws')}</button>
+        </div>
+
+        </div><!-- end collapsible-body -->
+    </div><!-- end Ralph Loop collapsible section -->
 
     <!-- ═══ Version Footer ═══ -->
     <div class="version-footer">
@@ -1460,6 +1516,20 @@ function getSidebarHtml(webview, langId = 'en') {
     }
     const vscodeApi = acquireVsCodeApi();
     let currentTaskFilePath = null;
+
+    // ─── Collapsible Ralph Loop Section ─────
+    const _ralphHeader = document.getElementById('ralphCollapsibleHeader');
+    const _ralphBody = document.getElementById('ralphCollapsibleBody');
+    _ralphHeader.addEventListener('click', () => {
+        _ralphHeader.classList.toggle('open');
+        _ralphBody.classList.toggle('open');
+    });
+    function _ensureRalphOpen() {
+        if (!_ralphBody.classList.contains('open')) {
+            _ralphHeader.classList.add('open');
+            _ralphBody.classList.add('open');
+        }
+    }
 
     // ─── Event Bindings (CSP-safe, no inline onclick) ─────
     document.getElementById('btnToggleAutoAccept').addEventListener('click', () => {
@@ -1589,6 +1659,7 @@ function getSidebarHtml(webview, langId = 'en') {
 
          switch (s.ralphState) {
             case 'running':
+                _ensureRalphOpen();
                 pill.style.display = '';
                 statusText.textContent = t('running');
                 iterArea.style.display = 'block';

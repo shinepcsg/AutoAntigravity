@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Stop Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Select Task File",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Ralph Loop",
+    "view.ralphLoop": "Control Panel",
     "cfg.pollInterval": "Auto Accept polling interval in milliseconds",
     "cfg.customButtonTexts": "Extra button texts to auto-click (for i18n or custom UI)",
     "cfg.cdpPort": "CDP remote-debugging-port (default 9559 avoids browser control conflict)",

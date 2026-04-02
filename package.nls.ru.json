@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Остановить цикл",
     "cmd.selectTaskFile": "AutoAntigravity: Выбрать файл задач",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Цикл Ralph",
+    "view.ralphLoop": "Панель управления",
     "cfg.pollInterval": "Интервал авто-принятия (мс)",
     "cfg.customButtonTexts": "Дополнительные тексты для нажатия",
     "cfg.cdpPort": "CDP Порт (по умолчанию: 9559)",

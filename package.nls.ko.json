@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Ralph Loop 정지",
     "cmd.selectTaskFile": "AutoAntigravity: 작업 파일(PRD) 선택",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Ralph Loop",
+    "view.ralphLoop": "제어판",
     "cfg.pollInterval": "Auto Accept 폴링 주기(ms)",
     "cfg.customButtonTexts": "자동 수락을 위한 추가 버튼 텍스트 목록",
     "cfg.cdpPort": "CDP 포트 (기본: 9559)",

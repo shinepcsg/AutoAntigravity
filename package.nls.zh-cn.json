@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: 停止 Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: 选择任务文件",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Ralph Loop",
+    "view.ralphLoop": "控制面板",
     "cfg.pollInterval": "自动接受轮询间隔（毫秒）",
     "cfg.customButtonTexts": "额外要自动点击的按钮文本",
     "cfg.cdpPort": "CDP 远程调试端口（默认: 9559）",

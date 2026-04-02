@@ -6,7 +6,7 @@
     "cmd.stopRalphLoop": "AutoAntigravity: Arrêter Ralph Loop",
     "cmd.selectTaskFile": "AutoAntigravity: Sélectionner le fichier de tâches",
     "cmd.pushNow": "AutoAntigravity: Git Push",
-    "view.ralphLoop": "Boucle Ralph",
+    "view.ralphLoop": "Panneau de Contrôle",
     "cfg.pollInterval": "Intervalle de sondage (ms)",
     "cfg.customButtonTexts": "Boutons supplémentaires à accepter",
     "cfg.cdpPort": "Port CDP (défaut : 9559)",
