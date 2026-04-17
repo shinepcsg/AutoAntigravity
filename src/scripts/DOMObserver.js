@@ -294,6 +294,30 @@ function buildDOMObserverScript(customTexts) {
         }
     }
 
+    // Fallback: querySelectorAll('button') approach for buttons that TreeWalker might miss
+    // after IDE updates that change DOM structure, shadow DOM boundaries, etc.
+    function findButtonByQuerySelector(actionTexts) {
+        try {
+            var buttons = document.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) {
+                var btn = buttons[i];
+                var btnText = (btn.textContent || '').trim().toLowerCase();
+                if (!btnText || btnText.length > 50 || btn.disabled || btn.getAttribute('aria-disabled') === 'true') continue;
+                if (btn.classList.contains('loading') || btn.querySelector('.codicon-loading')) continue;
+
+                for (var j = 0; j < actionTexts.length; j++) {
+                    if (btnText === actionTexts[j] || btnText.includes(actionTexts[j])) {
+                        var key = _domPath(btn) + ':' + btnText.substring(0, 30);
+                        var lastClick = clickCooldowns[key] || 0;
+                        if (lastClick && (Date.now() - lastClick < COOLDOWN_MS)) continue;
+                        return btn;
+                    }
+                }
+            }
+        } catch(e) {}
+        return null;
+    }
+
     function scanAndClick() {
         pruneCooldowns();
         var match = findMatchingButton(document.body, BUTTON_TEXTS, EXPAND_TEXTS);
@@ -303,6 +327,15 @@ function buildDOMObserverScript(customTexts) {
             clickCooldowns[key] = Date.now();
             btn.click();
             return 'clicked:' + match.text;
+        }
+
+        // Fallback: if TreeWalker-based findButton missed, try querySelectorAll approach
+        var fallbackBtn = findButtonByQuerySelector(BUTTON_TEXTS);
+        if (fallbackBtn) {
+            var key2 = _domPath(fallbackBtn) + ':' + (fallbackBtn.textContent || '').trim().toLowerCase().substring(0, 30);
+            clickCooldowns[key2] = Date.now();
+            fallbackBtn.click();
+            return 'clicked-fallback:' + (fallbackBtn.textContent || '').trim().toLowerCase();
         }
         return null;
     }
