@@ -221,7 +221,7 @@ class ConnectionManager {
         this.sessions = new Map();
         this.ignoredTargets = new Set();
         this.activeCdpPort = null;
-        this.devToolsWsPath = null;
+        this.devToolsInfo = null; // { port, wsPath } from DevToolsActivePort, when that is how the port was found
 
         this.isRunning = false;
         this.isConnecting = false;
@@ -648,38 +648,23 @@ class ConnectionManager {
     }
 
     _getBrowserWsUrl(port) {
+        // DevToolsActivePort also records the browser endpoint — only valid for the port it came from
+        const dt = this.devToolsInfo;
+        const fallback = dt && dt.port === port && dt.wsPath ? `ws://127.0.0.1:${port}${dt.wsPath}` : null;
         return new Promise((resolve, reject) => {
+            const fail = (err) => fallback ? resolve(fallback) : reject(err);
             const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version', timeout: 800 }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
                         const info = JSON.parse(data);
-                        resolve(info.webSocketDebuggerUrl || null);
-                    } catch (e) {
-                        if (this.devToolsWsPath) {
-                            resolve(`ws://127.0.0.1:${port}${this.devToolsWsPath}`);
-                        } else {
-                            reject(e);
-                        }
-                    }
+                        resolve(info.webSocketDebuggerUrl || fallback);
+                    } catch (e) { fail(e); }
                 });
             });
-            req.on('error', (err) => {
-                if (this.devToolsWsPath) {
-                    resolve(`ws://127.0.0.1:${port}${this.devToolsWsPath}`);
-                } else {
-                    reject(err);
-                }
-            });
-            req.on('timeout', () => {
-                req.destroy();
-                if (this.devToolsWsPath) {
-                    resolve(`ws://127.0.0.1:${port}${this.devToolsWsPath}`);
-                } else {
-                    reject(new Error('timeout'));
-                }
-            });
+            req.on('error', fail);
+            req.on('timeout', () => { req.destroy(); fail(new Error('timeout')); });
         });
     }
 
@@ -688,22 +673,22 @@ class ConnectionManager {
             return this.activeCdpPort;
         }
 
-        // 1. Try reading DevToolsActivePort generated dynamically by Chromium/Electron.
-        // This recovers situations where port 9559 is held in a ghost/zombie LISTEN state
-        // and Electron picked an alternative ephemeral port (e.g. 9558).
+        const configPort = this.getPort();
+        if (await this._pingPort(configPort)) {
+            this.activeCdpPort = configPort;
+            return configPort;
+        }
+
+        // DevToolsActivePort (written by Chromium/Electron) recovers a zombie/occupied configured
+        // port or a dynamic one. Checked after the configured port: the file outlives the process,
+        // so a stale entry must never override a port that works.
         const searchDirs = typeof this.getDevToolsDirs === 'function' ? this.getDevToolsDirs() : null;
         const devToolsInfo = devToolsActivePort.getDevToolsActivePort(searchDirs);
         if (devToolsInfo && await this._pingPort(devToolsInfo.port)) {
             this.log(`[CDP] ✓ Discovered active port ${devToolsInfo.port} from DevToolsActivePort (${devToolsInfo.filePath})`);
             this.activeCdpPort = devToolsInfo.port;
-            this.devToolsWsPath = devToolsInfo.wsPath;
+            this.devToolsInfo = devToolsInfo;
             return devToolsInfo.port;
-        }
-
-        const configPort = this.getPort();
-        if (await this._pingPort(configPort)) {
-            this.activeCdpPort = configPort;
-            return configPort;
         }
 
         // Electron sometimes opens the debug port on a different port than requested.

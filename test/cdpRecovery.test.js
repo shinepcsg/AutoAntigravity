@@ -59,8 +59,9 @@ test('parseDevToolsActivePort rejects invalid ports, negative numbers, or non-nu
 test('getCandidateDirectories returns non-empty list of paths for current platform', () => {
     const dirs = getCandidateDirectories();
     assert.ok(Array.isArray(dirs));
-    assert.ok(dirs.length >= 3);
-    assert.ok(dirs.some(d => d.includes('Antigravity')));
+    assert.ok(dirs.length >= 1);
+    // Only Antigravity's own dir: another IDE's DevToolsActivePort would attach AutoAccept to that IDE
+    assert.ok(dirs.every(d => path.basename(d) === 'Antigravity'));
 });
 
 test('getDevToolsActivePort reads and resolves port from temporary test directory', () => {
@@ -100,22 +101,44 @@ test('ConnectionManager _findActivePort prioritizes DevToolsActivePort when conf
 
         assert.strictEqual(activePort, 9558);
         assert.strictEqual(cm.activeCdpPort, 9558);
-        assert.strictEqual(cm.devToolsWsPath, '/devtools/browser/test-cm-uuid');
+        assert.strictEqual(cm.devToolsInfo.wsPath, '/devtools/browser/test-cm-uuid');
         assert.ok(logs.some(l => l.includes('✓ Discovered active port 9558 from DevToolsActivePort')));
     } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
     }
 });
 
-test('ConnectionManager _getBrowserWsUrl falls back to devToolsWsPath if /json/version fails', async () => {
+test('ConnectionManager _findActivePort keeps a working configured port over a (possibly stale) DevToolsActivePort', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aa-cm-test-'));
+    fs.writeFileSync(path.join(tempDir, 'DevToolsActivePort'), '54344\n/devtools/browser/stale\n', 'utf8');
+    try {
+        const cm = new ConnectionManager({
+            log: () => {},
+            getPort: () => 9559,
+            getCustomTexts: () => [],
+            getDevToolsDirs: () => [tempDir]
+        });
+        cm._pingPort = async () => true;
+
+        assert.strictEqual(await cm._findActivePort(), 9559);
+        assert.strictEqual(cm.devToolsInfo, null);
+    } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+});
+
+test('ConnectionManager _getBrowserWsUrl falls back to the DevToolsActivePort wsPath (same port only) if /json/version fails', async () => {
     const cm = new ConnectionManager({
         log: () => {},
         getPort: () => 9558,
         getCustomTexts: () => []
     });
-    cm.devToolsWsPath = '/devtools/browser/fallback-uuid';
+    cm.devToolsInfo = { port: 59999, wsPath: '/devtools/browser/fallback-uuid' };
 
     // Mock http request failure by pointing to an unopen port
     const url = await cm._getBrowserWsUrl(59999);
     assert.strictEqual(url, 'ws://127.0.0.1:59999/devtools/browser/fallback-uuid');
+
+    // A wsPath recorded for another port must not be glued onto this one
+    await assert.rejects(cm._getBrowserWsUrl(59998));
 });

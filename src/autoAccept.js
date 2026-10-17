@@ -4,6 +4,7 @@
 const vscode = require('vscode');
 const cp = require('child_process');
 const http = require('http');
+const path = require('path');
 const { ConnectionManager } = require('./cdp/ConnectionManager');
 const { getDevToolsActivePort } = require('./cdp/devToolsActivePort');
 const { t } = require('./i18n');
@@ -71,11 +72,17 @@ class AutoAcceptManager {
 
     initialize(context) {
         this._extensionContext = context || null;
+        // DevToolsActivePort lives in the running IDE's own userData dir:
+        // globalStorageUri = <userData>/User/globalStorage/<ext-id>. Never guess other IDEs' dirs.
+        this._devToolsDirs = context && context.globalStorageUri
+            ? [path.resolve(context.globalStorageUri.fsPath, '..', '..', '..')]
+            : null;
         this.connectionManager = new ConnectionManager({
             log: this.log,
             getPort: () => this._getConfiguredPort(),
             getCustomTexts: () => vscode.workspace.getConfiguration('autoAntigravity')
-                .get('autoAccept.customButtonTexts', [])
+                .get('autoAccept.customButtonTexts', []),
+            getDevToolsDirs: () => this._devToolsDirs
         });
     }
 
@@ -93,7 +100,7 @@ class AutoAcceptManager {
         }
 
         // 1. Try DevToolsActivePort before scanning or patching Windows shortcuts
-        const devToolsInfo = getDevToolsActivePort();
+        const devToolsInfo = getDevToolsActivePort(this._devToolsDirs);
         if (devToolsInfo && await this._pingPort(devToolsInfo.port)) {
             this.log(`[CDP] ✓ Auto-discovered active CDP port ${devToolsInfo.port} from DevToolsActivePort (${devToolsInfo.filePath})`);
             this.cdpAvailable = true;

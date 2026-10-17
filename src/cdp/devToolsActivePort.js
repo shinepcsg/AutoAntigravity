@@ -28,8 +28,8 @@ function parseDevToolsActivePort(content) {
 }
 
 /**
- * Returns candidate user data directories where Antigravity IDE or VS Code
- * may store its DevToolsActivePort file.
+ * Returns the default Antigravity user data directory for this platform
+ * (fallback when the running IDE's own userData dir is unknown).
  *
  * @param {string|null} customDir - Optional user-specified directory
  * @returns {string[]}
@@ -42,7 +42,8 @@ function getCandidateDirectories(customDir = null) {
 
     const home = os.homedir();
     const platform = process.platform;
-    const appNames = ['Antigravity IDE', 'antigravity', 'Code', 'Code - Insiders', 'Cursor', 'Windsurf'];
+    // Antigravity only: reading another IDE's file could attach AutoAccept to that IDE.
+    const appNames = ['Antigravity'];
 
     if (platform === 'win32') {
         const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
