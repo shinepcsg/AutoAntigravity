@@ -15,16 +15,37 @@ const os = require('os');
  */
 function parseDevToolsActivePort(content) {
     if (typeof content !== 'string') return null;
-    const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lines = content.split(/\r?\n/).map(l => l.trim());
     if (lines.length === 0) return null;
 
-    const port = parseInt(lines[0], 10);
-    if (isNaN(port) || port <= 0 || port > 65535) {
+    const port = parsePort(lines[0]);
+    if (port === null) {
         return null;
     }
 
-    const wsPath = lines[1] && lines[1].startsWith('/') ? lines[1] : null;
+    const wsPath = isBrowserPath(lines[1]) ? lines[1] : null;
     return { port, wsPath };
+}
+
+function parsePort(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    if (!/^\d+$/.test(String(value))) return null;
+    const port = Number(value);
+    return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+}
+
+function isBrowserPath(value) {
+    return typeof value === 'string' && /^\/devtools\/browser\/[A-Za-z0-9_-]+$/.test(value);
+}
+
+function validateBrowserWsUrl(value, port) {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'ws:' || url.username || url.password || url.search || url.hash) return null;
+        if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return null;
+        if (Number(url.port || 80) !== port || !isBrowserPath(url.pathname)) return null;
+        return url.href;
+    } catch (_) { return null; }
 }
 
 /**
@@ -72,10 +93,16 @@ function getCandidateDirectories(customDir = null) {
  * @returns {{ port: number, wsPath: string|null, filePath: string }|null}
  */
 function getDevToolsActivePort(customDirs = null) {
+    return getDevToolsActivePorts(customDirs)[0] || null;
+}
+
+// Return all explicitly supplied candidates so a stale first file cannot mask a live one.
+function getDevToolsActivePorts(customDirs = null) {
     const searchDirs = Array.isArray(customDirs)
         ? customDirs
         : (customDirs ? [customDirs] : getCandidateDirectories());
 
+    const results = [];
     for (const dir of searchDirs) {
         try {
             const portFile = path.join(dir, 'DevToolsActivePort');
@@ -83,11 +110,11 @@ function getDevToolsActivePort(customDirs = null) {
                 const content = fs.readFileSync(portFile, 'utf8');
                 const parsed = parseDevToolsActivePort(content);
                 if (parsed) {
-                    return {
+                    results.push({
                         port: parsed.port,
                         wsPath: parsed.wsPath,
                         filePath: portFile
-                    };
+                    });
                 }
             }
         } catch (e) {
@@ -95,11 +122,15 @@ function getDevToolsActivePort(customDirs = null) {
         }
     }
 
-    return null;
+    return results;
 }
 
 module.exports = {
     parseDevToolsActivePort,
     getCandidateDirectories,
-    getDevToolsActivePort
+    getDevToolsActivePort,
+    getDevToolsActivePorts,
+    parsePort,
+    isBrowserPath,
+    validateBrowserWsUrl
 };

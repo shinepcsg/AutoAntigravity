@@ -20,7 +20,8 @@ class MiniWebSocket extends EventEmitter {
         const port = parsed.port || 80;
 
         const net = require('net');
-        this._socket = net.createConnection({ host: parsed.hostname, port }, () => {
+        const host = parsed.hostname === 'localhost' ? '127.0.0.1' : parsed.hostname.replace(/^\[|\]$/g, '');
+        this._socket = net.createConnection({ host, port }, () => {
             const path = parsed.pathname + parsed.search;
             const req = [
                 `GET ${path} HTTP/1.1`,
@@ -45,7 +46,10 @@ class MiniWebSocket extends EventEmitter {
                 if (headerEnd === -1) return;
 
                 const header = this._buffer.slice(0, headerEnd).toString();
-                if (!header.includes('101')) {
+                const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+                const headers = header.split('\r\n');
+                if (!/^HTTP\/1\.[01] 101(?: |$)/.test(headers[0]) ||
+                    !headers.some(line => line.toLowerCase().startsWith('sec-websocket-accept:') && line.slice(line.indexOf(':') + 1).trim() === accept)) {
                     this.readyState = 3;
                     this.emit('error', new Error('WebSocket upgrade failed'));
                     this._socket.destroy();
@@ -221,6 +225,7 @@ class ConnectionManager {
         this.sessions = new Map();
         this.ignoredTargets = new Set();
         this.activeCdpPort = null;
+        this._activeWsUrl = null;
         this.devToolsInfo = null; // { port, wsPath } from DevToolsActivePort, when that is how the port was found
 
         this.isRunning = false;
@@ -302,12 +307,13 @@ class ConnectionManager {
 
         try {
             const port = await this._findActivePort();
+            if (!this.isRunning) return;
             if (!port) {
                 this._scheduleReconnect();
                 return;
             }
 
-            const wsUrl = await this._getBrowserWsUrl(port);
+            const wsUrl = this._activeWsUrl;
             if (!wsUrl) {
                 this._scheduleReconnect();
                 return;
@@ -636,85 +642,89 @@ class ConnectionManager {
 
     // ─── Port Discovery ───────────────────────────────────────────────
 
-    _pingPort(port) {
+    _getBrowserWsUrl(port) {
+        port = devToolsActivePort.parsePort(port);
+        if (port === null) return Promise.resolve(null);
         return new Promise((resolve) => {
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version', timeout: 800 }, (res) => {
-                res.on('data', () => { });
-                res.on('end', () => resolve(true));
+            let settled = false;
+            const finish = (value) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(value);
+            };
+            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version' }, (res) => {
+                let data = '';
+                res.on('data', chunk => {
+                    data += chunk;
+                    if (data.length > 65536) { finish(null); req.destroy(); }
+                });
+                res.on('error', () => finish(null));
+                res.on('aborted', () => finish(null));
+                res.on('end', () => {
+                    if (res.statusCode !== 200) return finish(null);
+                    try {
+                        finish(devToolsActivePort.validateBrowserWsUrl(JSON.parse(data)?.webSocketDebuggerUrl, port));
+                    } catch (_) { finish(null); }
+                });
             });
-            req.on('error', () => resolve(false));
-            req.on('timeout', () => { req.destroy(); resolve(false); });
+            const timer = setTimeout(() => { finish(null); req.destroy(); }, 800);
+            req.on('error', () => finish(null));
         });
     }
 
-    _getBrowserWsUrl(port) {
-        // DevToolsActivePort also records the browser endpoint — only valid for the port it came from
-        const dt = this.devToolsInfo;
-        const fallback = dt && dt.port === port && dt.wsPath ? `ws://127.0.0.1:${port}${dt.wsPath}` : null;
-        return new Promise((resolve, reject) => {
-            const fail = (err) => fallback ? resolve(fallback) : reject(err);
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version', timeout: 800 }, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        const info = JSON.parse(data);
-                        resolve(info.webSocketDebuggerUrl || fallback);
-                    } catch (e) { fail(e); }
-                });
-            });
-            req.on('error', fail);
-            req.on('timeout', () => { req.destroy(); fail(new Error('timeout')); });
+    _probeBrowserWsUrl(url) {
+        return new Promise(resolve => {
+            const ws = new MiniWebSocket(url);
+            let settled = false;
+            const finish = (ok) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                ws.close();
+                ws._socket.destroy();
+                resolve(ok);
+            };
+            const timer = setTimeout(() => finish(false), 800);
+            ws.once('open', () => finish(true));
+            ws.once('error', () => finish(false));
+            ws.once('close', () => finish(false));
         });
     }
 
     async _findActivePort() {
-        if (this.activeCdpPort && await this._pingPort(this.activeCdpPort)) {
-            return this.activeCdpPort;
-        }
+        // Re-read configuration and files on every attempt. Neither cached ports nor paths
+        // may outrank a newly working configured endpoint or survive a file/port change.
+        this.activeCdpPort = null;
+        this.devToolsInfo = null;
+        this._activeWsUrl = null;
+        const select = (port, wsUrl, info = null) => {
+            this.activeCdpPort = port;
+            this._activeWsUrl = wsUrl;
+            this.devToolsInfo = info;
+            return port;
+        };
+        const configPort = devToolsActivePort.parsePort(this.getPort());
+        const configUrl = await this._getBrowserWsUrl(configPort);
+        if (configUrl && await this._probeBrowserWsUrl(configUrl)) return select(configPort, configUrl);
 
-        const configPort = this.getPort();
-        if (await this._pingPort(configPort)) {
-            this.activeCdpPort = configPort;
-            return configPort;
-        }
-
-        // DevToolsActivePort (written by Chromium/Electron) recovers a zombie/occupied configured
-        // port or a dynamic one. Checked after the configured port: the file outlives the process,
-        // so a stale entry must never override a port that works.
-        const searchDirs = typeof this.getDevToolsDirs === 'function' ? this.getDevToolsDirs() : null;
-        const devToolsInfo = devToolsActivePort.getDevToolsActivePort(searchDirs);
-        if (devToolsInfo && await this._pingPort(devToolsInfo.port)) {
-            this.log(`[CDP] ✓ Discovered active port ${devToolsInfo.port} from DevToolsActivePort (${devToolsInfo.filePath})`);
-            this.activeCdpPort = devToolsInfo.port;
-            this.devToolsInfo = devToolsInfo;
-            return devToolsInfo.port;
-        }
-
-        // Electron sometimes opens the debug port on a different port than requested.
-        // Scan a small range around the configured port to find the actual CDP endpoint.
-        const scanRange = 20;
-        const startPort = Math.max(1024, configPort - scanRange);
-        const endPort = Math.min(65535, configPort + scanRange);
-        const batchSize = 10;
-
-        for (let base = startPort; base <= endPort; base += batchSize) {
-            const ports = [];
-            for (let p = base; p < Math.min(base + batchSize, endPort + 1); p++) {
-                if (p === configPort) continue; // Already tried
-                ports.push(p);
-            }
-            const results = await Promise.all(
-                ports.map(async (p) => ({ port: p, ok: await this._pingPort(p) }))
-            );
-            const found = results.find(r => r.ok);
-            if (found) {
-                this.log(`[CDP] ✓ Discovered CDP on port ${found.port} (configured: ${configPort})`);
-                this.activeCdpPort = found.port;
-                return found.port;
+        // Only the running IDE's supplied userData directories are trusted. Do not scan
+        // nearby ports: another IDE or unrelated service could be listening there.
+        const dirs = typeof this.getDevToolsDirs === 'function' ? this.getDevToolsDirs() : [];
+        const candidates = devToolsActivePort.getDevToolsActivePorts(dirs || []);
+        for (const info of candidates) {
+            const httpUrl = info.port === configPort ? null : await this._getBrowserWsUrl(info.port);
+            // A stale file's port may have been reused by another process. When the
+            // file records a browser identity, HTTP must agree with that identity.
+            if (httpUrl && (!info.wsPath || new URL(httpUrl).pathname === info.wsPath) &&
+                await this._probeBrowserWsUrl(httpUrl)) return select(info.port, httpUrl, info);
+            const fallback = devToolsActivePort.validateBrowserWsUrl(
+                info.wsPath ? `ws://127.0.0.1:${info.port}${info.wsPath}` : null, info.port);
+            if (fallback && await this._probeBrowserWsUrl(fallback)) {
+                this.log(`[CDP] ✓ Discovered active port ${info.port} from DevToolsActivePort (${info.filePath})`);
+                return select(info.port, fallback, info);
             }
         }
-
         return null;
     }
 

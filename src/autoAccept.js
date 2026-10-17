@@ -3,10 +3,8 @@
 
 const vscode = require('vscode');
 const cp = require('child_process');
-const http = require('http');
 const path = require('path');
 const { ConnectionManager } = require('./cdp/ConnectionManager');
-const { getDevToolsActivePort } = require('./cdp/devToolsActivePort');
 const { t } = require('./i18n');
 
 // Antigravity-specific accept commands (always polled every cycle).
@@ -76,7 +74,7 @@ class AutoAcceptManager {
         // globalStorageUri = <userData>/User/globalStorage/<ext-id>. Never guess other IDEs' dirs.
         this._devToolsDirs = context && context.globalStorageUri
             ? [path.resolve(context.globalStorageUri.fsPath, '..', '..', '..')]
-            : null;
+            : [];
         this.connectionManager = new ConnectionManager({
             log: this.log,
             getPort: () => this._getConfiguredPort(),
@@ -89,40 +87,10 @@ class AutoAcceptManager {
     async checkAndFixCDP(extensionMode) {
         const configPort = this._getConfiguredPort();
 
-        if (await this._pingPort(configPort)) {
-            this.log(`[CDP] Debug port ${configPort} active ✓`);
-            this.cdpAvailable = true;
-            // CDP가 정상 작동하면 패치 기록 초기화 (다음에 포트가 안 열리면 다시 알림 가능)
-            if (this._extensionContext) {
-                this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', false);
-            }
-            return true;
-        }
-
-        // 1. Try DevToolsActivePort before scanning or patching Windows shortcuts
-        const devToolsInfo = getDevToolsActivePort(this._devToolsDirs);
-        if (devToolsInfo && await this._pingPort(devToolsInfo.port)) {
-            this.log(`[CDP] ✓ Auto-discovered active CDP port ${devToolsInfo.port} from DevToolsActivePort (${devToolsInfo.filePath})`);
-            this.cdpAvailable = true;
-            if (this._extensionContext) {
-                this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', false);
-            }
-            return true;
-        }
-
-        // 포트 병렬 스캔 (connectionManager.start() 없이 — isRunning 오염 방지)
-        this.log(`[CDP] Port ${configPort} not responding — scanning nearby ports...`);
-        const scanRange = 20;
-        const portsToScan = [];
-        for (let p = Math.max(1024, configPort - scanRange); p <= Math.min(65535, configPort + scanRange); p++) {
-            if (p !== configPort) portsToScan.push(p);
-        }
-        const results = await Promise.all(
-            portsToScan.map(p => this._pingPort(p).then(ok => ({ p, ok })))
-        );
-        const found = results.find(r => r.ok);
-        if (found) {
-            this.log(`[CDP] ✓ Auto-discovered CDP on port ${found.p}`);
+        // Use the same endpoint discovery as connect(), including file WebSocket recovery.
+        const port = this.connectionManager ? await this.connectionManager._findActivePort() : null;
+        if (port) {
+            this.log(`[CDP] Debug endpoint on port ${port} available ✓`);
             this.cdpAvailable = true;
             if (this._extensionContext) {
                 this._extensionContext.globalState.update('autoAntigravity.shortcutPatched', false);
@@ -319,17 +287,6 @@ class AutoAcceptManager {
             this.connectionManager.stop();
         }
         this.log('[AutoAccept] Polling stopped');
-    }
-
-    _pingPort(port) {
-        return new Promise((resolve) => {
-            const req = http.get({ hostname: '127.0.0.1', port, path: '/json/version', timeout: 800 }, (res) => {
-                res.on('data', () => { });
-                res.on('end', () => resolve(true));
-            });
-            req.on('error', () => resolve(false));
-            req.on('timeout', () => { req.destroy(); resolve(false); });
-        });
     }
 
     _applyWindowsPatch(targetPort) {
